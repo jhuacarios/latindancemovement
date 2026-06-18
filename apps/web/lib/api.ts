@@ -69,6 +69,7 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   const token = getAccessToken();
   const res = await fetch(`${BASE}${path}`, {
     method: opts.method ?? 'GET',
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -106,6 +107,7 @@ export async function uploadFile<T>(path: string, file: File): Promise<T> {
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const token = getAccessToken();
   const res = await fetch(`${BASE}${path}`, {
+    cache: 'no-store',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
