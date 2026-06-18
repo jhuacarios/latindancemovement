@@ -1,0 +1,24 @@
+{
+  "name": "baile-latino",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@baile-latino/api",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "db:generate": "pnpm --filter @baile-latino/api db:generate",
+    "db:migrate": "pnpm --filter @baile-latino/api db:migrate",
+    "db:push": "pnpm --filter @baile-latino/api db:push",
+    "db:seed": "pnpm --filter @baile-latino/api db:seed",
+    "db:studio": "pnpm --filter @baile-latino/api db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

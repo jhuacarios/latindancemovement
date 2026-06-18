@@ -1,0 +1,129 @@
+// Baile Latino Platform — schema de la API.
+// Dev: SQLite (file:./dev.db). Prod: PostgreSQL (cambiar provider + DATABASE_URL).
+//
+// NOTA: SQLite no soporta enums ni arrays nativos en Prisma. Los campos "enum"
+// se guardan como String validados contra los arrays de @baile-latino/types,
+// y las listas (p. ej. estilos del usuario) se guardan como CSV.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Prisma 7: la URL ya no va aquí. Para migraciones vive en prisma.config.ts;
+  // en runtime el cliente se conecta vía driver adapter (libsql) — ver prisma.service.ts.
+  provider = "sqlite"
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  name            String
+  role            String   @default("BAILARIN") // UserRole
+  city            String?
+  instagramHandle String?
+  styles          String   @default("") // CSV de DanceStyle
+  refreshTokenHash String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tracksCreated  Track[]        @relation("TrackCreatedBy")
+  tracksAsArtist Track[]        @relation("TrackArtist")
+  playlists      Playlist[]
+  songRequests   SongRequest[]
+  requestVotes   RequestVote[]
+
+  @@index([role])
+}
+
+model Track {
+  id             String   @id @default(cuid())
+  title          String
+  artist         String
+  style          String // DanceStyle
+  substyle       String? // DanceSubstyle
+  bpm            Int?
+  year           Int?
+  source         String // TrackSource: SPOTIFY | YOUTUBE
+  sourceId       String
+  coverUrl       String?
+  durationSec    Int?
+  isRelease      Boolean  @default(false)
+  approvalStatus String   @default("APROBADA") // TrackApprovalStatus
+  artistUserId   String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  artistUser    User?          @relation("TrackArtist", fields: [artistUserId], references: [id], onDelete: SetNull)
+  createdBy     User           @relation("TrackCreatedBy", fields: [createdById], references: [id])
+  playlistItems PlaylistItem[]
+  songRequests  SongRequest[]
+
+  @@unique([source, sourceId])
+  @@index([style])
+  @@index([substyle])
+  @@index([bpm])
+}
+
+model Playlist {
+  id               String   @id @default(cuid())
+  name             String
+  eventId          String? // FK lógica al futuro EventsModule (sin constraint aún)
+  status           String   @default("BORRADOR") // PlaylistStatus
+  visibility       String   @default("SOLO_ENTRADA") // PlaylistVisibility
+  targetBachataPct Int? // 0-100; resto se asume salsa
+  ownerId          String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  owner User           @relation(fields: [ownerId], references: [id])
+  items PlaylistItem[]
+
+  @@index([ownerId])
+  @@index([eventId])
+}
+
+model PlaylistItem {
+  id         String  @id @default(cuid())
+  playlistId String
+  trackId    String
+  position   Int
+  isWarmup   Boolean @default(false)
+  addedById  String
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, trackId])
+  @@index([playlistId])
+}
+
+model SongRequest {
+  id          String   @id @default(cuid())
+  eventId     String?
+  trackId     String
+  requesterId String
+  status      String   @default("PENDIENTE") // SongRequestStatus
+  createdAt   DateTime @default(now())
+
+  track     Track         @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  requester User          @relation(fields: [requesterId], references: [id])
+  votes     RequestVote[]
+
+  @@index([eventId])
+  @@index([trackId])
+}
+
+model RequestVote {
+  id        String   @id @default(cuid())
+  requestId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  request SongRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id])
+
+  @@unique([requestId, userId])
+}

@@ -1,0 +1,5 @@
+{
+  "// nota": "Forzar que VS Code use la TypeScript del proyecto (node_modules), no la del editor ni la del Nightly. Evita avisos de deprecación falsos por desajuste de versión.",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}

@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11 rechaza por defecto paquetes recién publicados (anti supply-chain).
+# 0 = sin espera (comportamiento clásico). Súbelo (p.ej. "1d") si quieres la protección.
+minimumReleaseAge: 0
+
+# pnpm 10+ no ejecuta los scripts postinstall de dependencias salvo que se aprueben.
+# Prisma los necesita para generar/descargar sus engines; @nestjs/core solo muestra
+# un mensaje de donación, no hace falta.
+allowBuilds:
+  "@nestjs/core": false
+  "@prisma/client": true
+  "@prisma/engines": true
+  "prisma": true
+  "esbuild": true

@@ -1,0 +1,78 @@
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
+import {
+  DANCE_STYLES,
+  DANCE_SUBSTYLES,
+  TRACK_APPROVAL_STATUSES,
+  TRACK_SOURCES,
+  type DanceStyle,
+  type DanceSubstyle,
+  type TrackApprovalStatus,
+  type TrackSource,
+} from '@baile-latino/types';
+
+export class QueryTracksDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsIn(DANCE_STYLES)
+  style?: DanceStyle;
+
+  @IsOptional()
+  @IsIn(DANCE_SUBSTYLES)
+  substyle?: DanceSubstyle;
+
+  @IsOptional()
+  @IsIn(TRACK_SOURCES)
+  source?: TrackSource;
+
+  @IsOptional()
+  @IsIn(TRACK_APPROVAL_STATUSES)
+  approvalStatus?: TrackApprovalStatus;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isRelease?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(40)
+  @Max(260)
+  bpmMin?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(40)
+  @Max(260)
+  bpmMax?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  pageSize?: number = 50;
+
+  @IsOptional()
+  @IsIn(['recent', 'title', 'artist', 'bpm', 'popularity'])
+  sort?: 'recent' | 'title' | 'artist' | 'bpm' | 'popularity' = 'recent';
+}

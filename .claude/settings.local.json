@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(echo \"npm: $\\(npm -v 2>/dev/null || echo NO\\)\")",
+      "Bash(pnpm -v)",
+      "Bash(echo \"pnpm: $\\(pnpm -v 2>/dev/null || echo NO\\)\")",
+      "Bash(git --version)",
+      "Bash(corepack pnpm *)",
+      "Bash(npm config *)"
+    ]
+  }
+}
