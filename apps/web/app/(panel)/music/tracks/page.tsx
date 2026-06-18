@@ -12,6 +12,10 @@ import { api } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { usePlayer } from '@/components/player';
 import { SourceLink } from '@/components/source-link';
+import {
+  ConfirmDialog,
+  type ConfirmOptions,
+} from '@/components/confirm-dialog';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 20;
@@ -25,6 +29,7 @@ export default function MyTracksPage() {
   const [showForm, setShowForm] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -119,7 +124,21 @@ export default function MyTracksPage() {
           <Button
             variant="danger"
             disabled={selected.size === 0 || bulkRemove.isPending}
-            onClick={() => bulkRemove.mutate(Array.from(selected))}
+            onClick={() =>
+              setConfirm({
+                title: 'Quitar seleccionadas',
+                danger: true,
+                confirmLabel: `Quitar ${selected.size}`,
+                message: (
+                  <>
+                    ¿Quitar {selected.size} canción
+                    {selected.size === 1 ? '' : 'es'} de tu selección? Las
+                    personales se eliminarán por completo.
+                  </>
+                ),
+                onConfirm: () => bulkRemove.mutate(Array.from(selected)),
+              })
+            }
           >
             {bulkRemove.isPending
               ? 'Quitando…'
@@ -259,7 +278,23 @@ export default function MyTracksPage() {
                       <SourceLink track={t} />
                       <button
                         className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
-                        onClick={() => remove.mutate(t.id)}
+                        onClick={() =>
+                          setConfirm({
+                            title: 'Quitar canción',
+                            danger: true,
+                            confirmLabel: 'Quitar',
+                            message: (
+                              <>
+                                ¿Quitar <b>{t.title}</b> de tus canciones?
+                                <br />
+                                {t.scope === 'PERSONAL'
+                                  ? 'Es una canción personal: se eliminará por completo.'
+                                  : 'Se quitará de tu selección (seguirá en el catálogo).'}
+                              </>
+                            ),
+                            onConfirm: () => remove.mutate(t.id),
+                          })
+                        }
                         title="Quitar de mis canciones"
                         aria-label="Quitar de mis canciones"
                       >
@@ -305,6 +340,8 @@ export default function MyTracksPage() {
           </Button>
         </div>
       )}
+
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }
