@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,10 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -18,6 +20,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../../auth/auth.types';
 import { TracksService } from './tracks.service';
 import { TracksExportService } from './tracks-export.service';
+import { TracksImportExcelService } from './tracks-import-excel.service';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { QueryTracksDto } from './dto/query-tracks.dto';
@@ -29,6 +32,7 @@ export class TracksController {
   constructor(
     private readonly tracks: TracksService,
     private readonly exporter: TracksExportService,
+    private readonly excelImporter: TracksImportExcelService,
   ) {}
 
   @Get()
@@ -47,6 +51,29 @@ export class TracksController {
       )
       .header('Content-Disposition', 'attachment; filename="canciones.xlsx"')
       .send(buffer);
+  }
+
+  /** Descarga una plantilla .xlsx para importar canciones. */
+  @Get('template.xlsx')
+  async template(@Res() reply: FastifyReply) {
+    const buffer = await this.exporter.toTemplateBuffer();
+    reply
+      .header(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      )
+      .header('Content-Disposition', 'attachment; filename="plantilla-canciones.xlsx"')
+      .send(buffer);
+  }
+
+  /** Carga masiva subiendo un archivo Excel (.xlsx). */
+  @Post('import-excel')
+  @Roles('DJ', 'ORGANIZADOR')
+  async importExcel(@Req() req: FastifyRequest, @CurrentUser() user: AuthUser) {
+    const file = await req.file();
+    if (!file) throw new BadRequestException('No se recibió ningún archivo.');
+    const buffer = await file.toBuffer();
+    return this.excelImporter.importBuffer(buffer, user.id);
   }
 
   @Get(':id')

@@ -88,6 +88,20 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   return (await res.json()) as T;
 }
 
+/** Sube un archivo (multipart) a un endpoint protegido y devuelve el JSON. */
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const token = getAccessToken();
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  if (!res.ok) throw new ApiError(res.status, await parseError(res));
+  return (await res.json()) as T;
+}
+
 /** Descarga un archivo protegido (p. ej. el Excel) y dispara el guardado. */
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const token = getAccessToken();

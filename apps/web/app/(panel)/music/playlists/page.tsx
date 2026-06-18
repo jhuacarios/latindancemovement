@@ -37,7 +37,7 @@ export default function PlaylistsPage() {
         )}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {data?.map((p) => (
-            <Link key={p.id} href={`/playlists/${p.id}`}>
+            <Link key={p.id} href={`/music/playlists/${p.id}`}>
               <Card className="h-full transition hover:border-brand/60">
                 <div className="font-semibold">{p.name}</div>
                 <div className="mt-1 text-sm text-neutral-400">
@@ -191,7 +191,7 @@ function Generator() {
             <span>Mix real: {result.summary.actualBachataPct}% bachata</span>
             {result.playlist && (
               <Link
-                href={`/playlists/${result.playlist.id}`}
+                href={`/music/playlists/${result.playlist.id}`}
                 className="text-brand hover:underline"
               >
                 guardada ✓ ver detalle ↗

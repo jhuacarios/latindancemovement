@@ -173,6 +173,14 @@ export interface ImportResult {
   errors: { index: number; reason: string }[];
 }
 
+/** Resultado de importar canciones desde un archivo Excel. */
+export interface ExcelImportResult {
+  totalRows: number;
+  created: number;
+  updated: number;
+  errors: { row: number; reason: string }[];
+}
+
 export interface PlaylistGenerationSummary {
   requested: { bachataPct: number; maxTracks: number; byPopularity: boolean };
   trackCount: number;

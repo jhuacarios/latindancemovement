@@ -4,15 +4,13 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { Button, Spinner } from '@/components/ui';
+import { Button, Card, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
-
-const NAV = [
-  { href: '/', label: 'Inicio' },
-  { href: '/tracks', label: 'Canciones' },
-  { href: '/playlists', label: 'Playlists' },
-  { href: '/reports', label: 'Reportes' },
-];
+import {
+  accessibleModules,
+  canAccess,
+  moduleForPath,
+} from '@/lib/modules';
 
 export default function PanelLayout({
   children,
@@ -35,31 +33,67 @@ export default function PanelLayout({
     );
   }
 
+  const myModules = accessibleModules(user.role);
+  const activeModule = moduleForPath(pathname);
+  const blocked = activeModule && !canAccess(user.role, activeModule);
+
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 p-4">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 p-4">
         <div className="mb-6 px-2 text-lg font-bold">
           Baile<span className="text-brand">Latino</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-1">
-          {NAV.map((item) => {
-            const active =
-              item.href === '/'
-                ? pathname === '/'
-                : pathname.startsWith(item.href);
+
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+          <NavLink href="/" label="🏠 Inicio" active={pathname === '/'} />
+
+          <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Módulos
+          </div>
+
+          {myModules.map((m) => {
+            const isActive =
+              pathname === m.href || pathname.startsWith(`${m.href}/`);
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={clsx(
-                  'rounded-lg px-3 py-2 text-sm transition',
-                  active
-                    ? 'bg-brand/15 text-brand'
-                    : 'text-neutral-300 hover:bg-neutral-800',
+              <div key={m.key}>
+                <Link
+                  href={m.href}
+                  className={clsx(
+                    'flex items-center justify-between rounded-lg px-3 py-2 text-sm transition',
+                    isActive
+                      ? 'bg-brand/15 text-brand'
+                      : 'text-neutral-300 hover:bg-neutral-800',
+                  )}
+                >
+                  <span>
+                    {m.icon} {m.title}
+                  </span>
+                  {m.status === 'soon' && (
+                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">
+                      pronto
+                    </span>
+                  )}
+                </Link>
+
+                {isActive && m.children && (
+                  <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-neutral-800 pl-3">
+                    {m.children.map((c) => (
+                      <Link
+                        key={c.href}
+                        href={c.href}
+                        className={clsx(
+                          'rounded-md px-2 py-1 text-sm transition',
+                          pathname === c.href
+                            ? 'text-brand'
+                            : 'text-neutral-400 hover:text-neutral-200',
+                        )}
+                      >
+                        {c.label}
+                      </Link>
+                    ))}
+                  </div>
                 )}
-              >
-                {item.label}
-              </Link>
+              </div>
             );
           })}
         </nav>
@@ -67,7 +101,9 @@ export default function PanelLayout({
 
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-neutral-800 px-6 py-3">
-          <div className="text-sm text-neutral-400">Panel de música y DJs</div>
+          <div className="text-sm text-neutral-400">
+            {activeModule ? `${activeModule.icon} ${activeModule.title}` : 'Panel'}
+          </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-neutral-300">
               {user.name}{' '}
@@ -80,8 +116,50 @@ export default function PanelLayout({
             </Button>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+
+        <main className="flex-1 overflow-auto p-6">
+          {blocked ? (
+            <Card className="mx-auto mt-10 max-w-md text-center">
+              <div className="mb-2 text-4xl">🚫</div>
+              <h2 className="text-lg font-semibold">Sin acceso</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                Tu rol ({user.role}) no tiene acceso al módulo{' '}
+                {activeModule?.title}.
+              </p>
+              <Link
+                href="/"
+                className="mt-4 inline-block text-sm text-brand hover:underline"
+              >
+                ← Volver al inicio
+              </Link>
+            </Card>
+          ) : (
+            children
+          )}
+        </main>
       </div>
     </div>
+  );
+}
+
+function NavLink({
+  href,
+  label,
+  active,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={clsx(
+        'rounded-lg px-3 py-2 text-sm transition',
+        active ? 'bg-brand/15 text-brand' : 'text-neutral-300 hover:bg-neutral-800',
+      )}
+    >
+      {label}
+    </Link>
   );
 }

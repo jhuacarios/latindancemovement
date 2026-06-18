@@ -19,7 +19,7 @@ export default function PlaylistDetailPage() {
 
   return (
     <div className="space-y-5">
-      <Link href="/playlists" className="text-sm text-brand hover:underline">
+      <Link href="/music/playlists" className="text-sm text-brand hover:underline">
         ← Volver a playlists
       </Link>
 

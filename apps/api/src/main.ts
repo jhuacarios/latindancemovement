@@ -5,6 +5,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import fastifyMultipart from '@fastify/multipart';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -12,6 +13,11 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+
+  // Subida de archivos (import de Excel). Límite 10 MB.
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  });
 
   // Prefijo global de la API (convención del proyecto).
   app.setGlobalPrefix('api/v1');

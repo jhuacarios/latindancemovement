@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@baile-latino/types": "workspace:*",
+    "@fastify/multipart": "^10.0.0",
     "@libsql/client": "^0.17.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
