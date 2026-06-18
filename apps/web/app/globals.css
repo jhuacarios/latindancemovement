@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-brand: #e11d8f;
+  --color-brand-dark: #b3146f;
+  --color-bachata: #f59e0b;
+  --color-salsa: #ef4444;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-neutral-950 text-neutral-100 antialiased;
+}

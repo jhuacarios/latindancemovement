@@ -1,0 +1,82 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { ApiError } from '@/lib/api';
+import { Button, Card, Input } from '@/components/ui';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const { user, login } = useAuth();
+  const [email, setEmail] = useState('dj@bailelatino.cl');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (user) router.replace('/');
+  }, [user, router]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email, password);
+      router.replace('/');
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'No se pudo iniciar sesión',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <Card className="w-full max-w-sm">
+        <h1 className="mb-1 text-2xl font-bold">
+          Baile<span className="text-brand">Latino</span>
+        </h1>
+        <p className="mb-6 text-sm text-neutral-400">Panel de música y DJs</p>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm text-neutral-300">Email</label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-neutral-300">
+              Contraseña
+            </label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && (
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {error}
+            </p>
+          )}
+
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? 'Entrando…' : 'Iniciar sesión'}
+          </Button>
+        </form>
+      </Card>
+    </main>
+  );
+}

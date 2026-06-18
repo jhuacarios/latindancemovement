@@ -1,0 +1,106 @@
+'use client';
+
+import { clsx } from './clsx';
+
+export function Button({
+  className,
+  variant = 'primary',
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'ghost' | 'danger';
+}) {
+  const variants = {
+    primary: 'bg-brand hover:bg-brand-dark text-white disabled:opacity-50',
+    ghost: 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100',
+    danger: 'bg-red-600 hover:bg-red-700 text-white',
+  } as const;
+  return (
+    <button
+      className={clsx(
+        'rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed',
+        variants[variant],
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function Input({
+  className,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      className={clsx(
+        'w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm',
+        'placeholder:text-neutral-500 focus:border-brand focus:outline-none',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function Select({
+  className,
+  children,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      className={clsx(
+        'rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm',
+        'focus:border-brand focus:outline-none',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </select>
+  );
+}
+
+export function Card({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={clsx(
+        'rounded-xl border border-neutral-800 bg-neutral-900/60 p-5',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function StyleBadge({ style }: { style: string }) {
+  const isBachata = style.startsWith('BACHATA') || style === 'BACHATA';
+  return (
+    <span
+      className={clsx(
+        'inline-block rounded-full px-2 py-0.5 text-xs font-semibold',
+        isBachata
+          ? 'bg-amber-500/15 text-amber-300'
+          : 'bg-red-500/15 text-red-300',
+      )}
+    >
+      {style}
+    </span>
+  );
+}
+
+export function Spinner({ label }: { label?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-neutral-400">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-600 border-t-brand" />
+      {label ?? 'Cargando…'}
+    </div>
+  );
+}

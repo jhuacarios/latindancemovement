@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "dev:api": "turbo run dev --filter=@baile-latino/api",
+    "dev:web": "turbo run dev --filter=@baile-latino/web",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "db:generate": "pnpm --filter @baile-latino/api db:generate",
