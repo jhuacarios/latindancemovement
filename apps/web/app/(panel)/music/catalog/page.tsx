@@ -13,6 +13,7 @@ import { api, ApiError, downloadFile, uploadFile } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { usePlayer } from '@/components/player';
+import { SourceLink } from '@/components/source-link';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 20;
@@ -273,14 +274,7 @@ export default function CatalogPage() {
                           </button>
                         </>
                       )}
-                      <a
-                        href={t.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-brand hover:underline"
-                      >
-                        escuchar ↗
-                      </a>
+                      <SourceLink track={t} />
                       <button
                         className={
                           t.inLibrary

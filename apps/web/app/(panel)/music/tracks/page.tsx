@@ -11,6 +11,7 @@ import {
 import { api } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { usePlayer } from '@/components/player';
+import { SourceLink } from '@/components/source-link';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 20;
@@ -255,20 +256,14 @@ export default function MyTracksPage() {
                           </button>
                         </>
                       )}
-                      <a
-                        href={t.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-brand hover:underline"
-                      >
-                        escuchar ↗
-                      </a>
+                      <SourceLink track={t} />
                       <button
-                        className="text-neutral-500 hover:text-red-300"
+                        className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
                         onClick={() => remove.mutate(t.id)}
                         title="Quitar de mis canciones"
+                        aria-label="Quitar de mis canciones"
                       >
-                        quitar
+                        🗑
                       </button>
                     </div>
                   </td>
