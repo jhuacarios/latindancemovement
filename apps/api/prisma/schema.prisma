@@ -77,6 +77,14 @@ model Track {
   @@index([bpm])
 }
 
+/// Configuración global de la plataforma (clave/valor JSON). P.ej. la matriz
+/// de permisos rol×módulo (ver/editar/eliminar).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 /// Biblioteca personal: canciones (de catálogo o personales) en "Mis Canciones".
 model UserTrack {
   id        String   @id @default(cuid())

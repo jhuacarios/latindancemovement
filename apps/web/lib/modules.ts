@@ -150,11 +150,15 @@ export const MODULES: AppModule[] = [
   {
     key: 'admin',
     title: 'Administración',
-    description: 'Usuarios, roles y configuración de la plataforma.',
+    description: 'Roles, permisos y configuración de la plataforma.',
     href: '/admin',
     icon: '🛡️',
     roles: ['SUPER_ADMIN'],
-    status: 'soon',
+    status: 'ready',
+    children: [
+      { label: 'Resumen', href: '/admin' },
+      { label: 'Roles y permisos', href: '/admin/roles' },
+    ],
   },
 ];
 

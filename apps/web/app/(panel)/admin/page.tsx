@@ -1,0 +1,28 @@
+'use client';
+
+import Link from 'next/link';
+import { Card } from '@/components/ui';
+
+export default function AdminHomePage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">🛡️ Administración</h1>
+        <p className="text-sm text-neutral-400">
+          Configuración de la plataforma.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Link href="/admin/roles">
+          <Card className="h-full transition hover:border-brand/60">
+            <div className="font-semibold">Roles y permisos</div>
+            <div className="mt-1 text-sm text-neutral-400">
+              Define qué puede ver, editar y eliminar cada rol en cada módulo.
+            </div>
+          </Card>
+        </Link>
+      </div>
+    </div>
+  );
+}

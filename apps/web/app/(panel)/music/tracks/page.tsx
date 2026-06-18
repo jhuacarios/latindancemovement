@@ -16,6 +16,8 @@ import {
   ConfirmDialog,
   type ConfirmOptions,
 } from '@/components/confirm-dialog';
+import { useAuth } from '@/lib/auth';
+import { usePermissions } from '@/lib/permissions';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 20;
@@ -23,6 +25,10 @@ const PAGE_SIZE = 20;
 export default function MyTracksPage() {
   const qc = useQueryClient();
   const player = usePlayer();
+  const { user } = useAuth();
+  const perms = usePermissions();
+  const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
+  const canDelete = user ? perms.can(user.role, 'music', 'eliminar') : false;
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
   const [page, setPage] = useState(1);
@@ -104,15 +110,19 @@ export default function MyTracksPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-          >
-            {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
-          </Button>
-          <Button onClick={() => setShowForm((s) => !s)}>
-            {showForm ? 'Cerrar' : '+ Agregar mi música'}
-          </Button>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            >
+              {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
+            </Button>
+          )}
+          {canEdit && (
+            <Button onClick={() => setShowForm((s) => !s)}>
+              {showForm ? 'Cerrar' : '+ Agregar mi música'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -276,6 +286,7 @@ export default function MyTracksPage() {
                         </>
                       )}
                       <SourceLink track={t} />
+                      {canDelete && (
                       <button
                         className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
                         onClick={() =>
@@ -300,6 +311,7 @@ export default function MyTracksPage() {
                       >
                         🗑
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>

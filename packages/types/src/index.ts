@@ -252,6 +252,21 @@ export interface PlaylistReport {
 }
 
 // ---------------------------------------------------------------------------
+// Permisos (matriz rol × módulo × acción)
+// ---------------------------------------------------------------------------
+export const PERMISSION_ACTIONS = ['ver', 'editar', 'eliminar'] as const;
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
+
+export interface ModulePerms {
+  ver: boolean;
+  editar: boolean;
+  eliminar: boolean;
+}
+
+/** matriz[rol][moduleKey] = { ver, editar, eliminar }. Parcial: lo no definido cae a defaults. */
+export type PermissionsMatrix = Record<string, Record<string, ModulePerms>>;
+
+// ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
 export interface AuthTokens {

@@ -6,11 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
-import {
-  accessibleModules,
-  canAccess,
-  moduleForPath,
-} from '@/lib/modules';
+import { moduleForPath } from '@/lib/modules';
+import { usePermissions } from '@/lib/permissions';
 import { PlayerProvider } from '@/components/player';
 
 export default function PanelLayout({
@@ -19,6 +16,7 @@ export default function PanelLayout({
   children: React.ReactNode;
 }) {
   const { user, loading, logout } = useAuth();
+  const perms = usePermissions();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -34,9 +32,10 @@ export default function PanelLayout({
     );
   }
 
-  const myModules = accessibleModules(user.role);
+  const myModules = perms.accessibleModules(user.role);
   const activeModule = moduleForPath(pathname);
-  const blocked = activeModule && !canAccess(user.role, activeModule);
+  const blocked =
+    activeModule && !perms.can(user.role, activeModule.key, 'ver');
 
   return (
     <PlayerProvider>

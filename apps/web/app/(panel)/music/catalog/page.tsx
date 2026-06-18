@@ -11,6 +11,7 @@ import {
 } from '@baile-latino/types';
 import { api, ApiError, downloadFile, uploadFile } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { usePermissions } from '@/lib/permissions';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { usePlayer } from '@/components/player';
 import { SourceLink } from '@/components/source-link';
@@ -20,9 +21,11 @@ const PAGE_SIZE = 20;
 
 export default function CatalogPage() {
   const { user } = useAuth();
+  const perms = usePermissions();
   const qc = useQueryClient();
   const player = usePlayer();
   const isAdmin = user?.role === 'SUPER_ADMIN';
+  const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
 
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
@@ -108,12 +111,14 @@ export default function CatalogPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-          >
-            {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
-          </Button>
+          {canEdit && (
+            <Button
+              variant="ghost"
+              onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            >
+              {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
+            </Button>
+          )}
           {isAdmin && (
             <Button onClick={() => setShowForm((s) => !s)}>
               {showForm ? 'Cerrar' : '+ Nueva canción al catálogo'}
@@ -275,17 +280,19 @@ export default function CatalogPage() {
                         </>
                       )}
                       <SourceLink track={t} />
-                      <button
-                        className={
-                          t.inLibrary
-                            ? 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300'
-                            : 'rounded-lg bg-brand/15 px-2 py-1 text-xs text-brand hover:bg-brand/25'
-                        }
-                        disabled={toggle.isPending}
-                        onClick={() => toggle.mutate(t)}
-                      >
-                        {t.inLibrary ? '✓ En mis canciones' : '➕ Agregar'}
-                      </button>
+                      {canEdit && (
+                        <button
+                          className={
+                            t.inLibrary
+                              ? 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300'
+                              : 'rounded-lg bg-brand/15 px-2 py-1 text-xs text-brand hover:bg-brand/25'
+                          }
+                          disabled={toggle.isPending}
+                          onClick={() => toggle.mutate(t)}
+                        >
+                          {t.inLibrary ? '✓ En mis canciones' : '➕ Agregar'}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

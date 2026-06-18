@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
-import { accessibleModules } from '@/lib/modules';
+import { usePermissions } from '@/lib/permissions';
 import { Card } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 
 export default function HomePage() {
   const { user } = useAuth();
+  const perms = usePermissions();
   if (!user) return null;
 
-  const mods = accessibleModules(user.role);
+  const mods = perms.accessibleModules(user.role);
 
   return (
     <div className="space-y-6">
