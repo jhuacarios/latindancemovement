@@ -7,6 +7,7 @@ import type {
   PlaylistVisibility,
   Track,
   TrackApprovalStatus,
+  TrackScope,
   TrackSource,
 } from '@baile-latino/types';
 import type {
@@ -33,6 +34,8 @@ export function toPublicTrack(t: PrismaTrack): Track {
     durationSec: t.durationSec,
     isRelease: t.isRelease,
     approvalStatus: t.approvalStatus as TrackApprovalStatus,
+    scope: t.scope as TrackScope,
+    ownerId: t.ownerId,
     artistUserId: t.artistUserId,
     createdById: t.createdById,
     createdAt: t.createdAt.toISOString(),

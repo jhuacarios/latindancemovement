@@ -30,6 +30,8 @@ model User {
 
   tracksCreated  Track[]        @relation("TrackCreatedBy")
   tracksAsArtist Track[]        @relation("TrackArtist")
+  ownedTracks    Track[]        @relation("TrackOwner")
+  library        UserTrack[]
   playlists      Playlist[]
   songRequests   SongRequest[]
   requestVotes   RequestVote[]
@@ -51,20 +53,42 @@ model Track {
   durationSec    Int?
   isRelease      Boolean  @default(false)
   approvalStatus String   @default("APROBADA") // TrackApprovalStatus
+  scope          String   @default("CATALOG") // TrackScope: CATALOG (global) | PERSONAL (privada del DJ)
+  ownerId        String? // dueño cuando scope = PERSONAL
   artistUserId   String?
   createdById    String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  owner         User?          @relation("TrackOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   artistUser    User?          @relation("TrackArtist", fields: [artistUserId], references: [id], onDelete: SetNull)
   createdBy     User           @relation("TrackCreatedBy", fields: [createdById], references: [id])
   playlistItems PlaylistItem[]
   songRequests  SongRequest[]
+  savedBy       UserTrack[]
 
-  @@unique([source, sourceId])
+  // Sin unique global de (source,sourceId): el mismo video puede estar en el
+  // catálogo y además como copia personal de uno o más DJs. Dedupe en la app.
+  @@index([source, sourceId])
+  @@index([scope])
+  @@index([ownerId])
   @@index([style])
   @@index([substyle])
   @@index([bpm])
+}
+
+/// Biblioteca personal: canciones (de catálogo o personales) en "Mis Canciones".
+model UserTrack {
+  id        String   @id @default(cuid())
+  userId    String
+  trackId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trackId])
+  @@index([userId])
 }
 
 model Playlist {

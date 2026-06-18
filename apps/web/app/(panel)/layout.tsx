@@ -11,6 +11,7 @@ import {
   canAccess,
   moduleForPath,
 } from '@/lib/modules';
+import { PlayerProvider } from '@/components/player';
 
 export default function PanelLayout({
   children,
@@ -38,6 +39,7 @@ export default function PanelLayout({
   const blocked = activeModule && !canAccess(user.role, activeModule);
 
   return (
+    <PlayerProvider>
     <div className="flex min-h-screen">
       <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 p-4">
         <div className="mb-6 px-2 text-lg font-bold">
@@ -139,6 +141,7 @@ export default function PanelLayout({
         </main>
       </div>
     </div>
+    </PlayerProvider>
   );
 }
 

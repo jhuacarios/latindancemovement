@@ -37,9 +37,10 @@ export class TracksController {
     private readonly youtube: YoutubeMetadataService,
   ) {}
 
+  /** Lista el catálogo global (anota inLibrary para el usuario actual). */
   @Get()
-  findAll(@Query() q: QueryTracksDto) {
-    return this.tracks.findAll(q);
+  findAll(@Query() q: QueryTracksDto, @CurrentUser() user: AuthUser) {
+    return this.tracks.findAll(q, user.id);
   }
 
   /** Descarga el catálogo (filtrable) como Excel. */
@@ -76,9 +77,9 @@ export class TracksController {
       .send(buffer);
   }
 
-  /** Carga masiva subiendo un archivo Excel (.xlsx). */
+  /** Carga masiva al catálogo subiendo un archivo Excel (.xlsx). Solo admin. */
   @Post('import-excel')
-  @Roles('DJ', 'ORGANIZADOR')
+  @Roles('SUPER_ADMIN')
   async importExcel(@Req() req: FastifyRequest, @CurrentUser() user: AuthUser) {
     const file = await req.file();
     if (!file) throw new BadRequestException('No se recibió ningún archivo.');
@@ -87,31 +88,32 @@ export class TracksController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.tracks.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.tracks.findOne(id, user.id);
   }
 
+  /** Crear canción en el catálogo global. Solo admin. */
   @Post()
-  @Roles('DJ', 'ORGANIZADOR', 'ARTISTA')
+  @Roles('SUPER_ADMIN')
   create(@Body() dto: CreateTrackDto, @CurrentUser() user: AuthUser) {
     return this.tracks.create(dto, user.id);
   }
 
-  /** Carga masiva por JSON (upsert por link/fuente). */
+  /** Carga masiva al catálogo por JSON. Solo admin. */
   @Post('import')
-  @Roles('DJ', 'ORGANIZADOR')
+  @Roles('SUPER_ADMIN')
   import(@Body() dto: ImportTracksDto, @CurrentUser() user: AuthUser) {
     return this.tracks.importMany(dto.tracks, user.id);
   }
 
   @Patch(':id')
-  @Roles('DJ', 'ORGANIZADOR')
+  @Roles('SUPER_ADMIN')
   update(@Param('id') id: string, @Body() dto: UpdateTrackDto) {
     return this.tracks.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('DJ', 'ORGANIZADOR')
+  @Roles('SUPER_ADMIN')
   remove(@Param('id') id: string) {
     return this.tracks.remove(id);
   }

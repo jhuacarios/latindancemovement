@@ -1,85 +1,146 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DANCE_STYLES,
-  DANCE_SUBSTYLES,
-  TRACK_SOURCES,
-  type DanceStyle,
-  type DanceSubstyle,
-  type ExtractedTrackMetadata,
   type Paginated,
   type Track,
 } from '@baile-latino/types';
-import { api, ApiError, downloadFile } from '@/lib/api';
+import { api } from '@/lib/api';
+import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
+import { usePlayer } from '@/components/player';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 20;
 
-export default function TracksPage() {
+export default function MyTracksPage() {
   const qc = useQueryClient();
+  const player = usePlayer();
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
-  const [source, setSource] = useState('');
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const filters = { search, style, source, page };
+  function toggleSel(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['tracks', filters],
+    queryKey: ['library', { search, style, page }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (search) p.set('search', search);
       if (style) p.set('style', style);
-      if (source) p.set('source', source);
       p.set('page', String(page));
       p.set('pageSize', String(PAGE_SIZE));
-      return api<Paginated<Track>>(`/music/tracks?${p.toString()}`);
+      return api<Paginated<Track>>(`/music/library?${p.toString()}`);
     },
   });
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const remove = useMutation({
+    mutationFn: (trackId: string) =>
+      api(`/music/library/${trackId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['library'] });
+      void qc.invalidateQueries({ queryKey: ['catalog'] });
+    },
+  });
 
-  function exportExcel() {
-    const p = new URLSearchParams();
-    if (search) p.set('search', search);
-    if (style) p.set('style', style);
-    if (source) p.set('source', source);
-    void downloadFile(`/music/tracks/export.xlsx?${p.toString()}`, 'canciones.xlsx');
+  const bulkRemove = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(
+        ids.map((id) => api(`/music/library/${id}`, { method: 'DELETE' })),
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['library'] });
+      void qc.invalidateQueries({ queryKey: ['catalog'] });
+      exitSelect();
+    },
+  });
+
+  const pageIds = data?.data.map((t) => t.id) ?? [];
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  function toggleAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
   }
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Canciones</h1>
+          <h1 className="text-2xl font-bold">Mis Canciones</h1>
           <p className="text-sm text-neutral-400">
-            {data ? `${data.total} en el catálogo` : ' '}
+            {data ? `${data.total} en tu selección` : ' '} ·{' '}
+            <Link href="/music/catalog" className="text-brand hover:underline">
+              elegir del catálogo →
+            </Link>
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={exportExcel}>
-            ⬇ Exportar Excel
+          <Button
+            variant="ghost"
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+          >
+            {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
           </Button>
           <Button onClick={() => setShowForm((s) => !s)}>
-            {showForm ? 'Cerrar' : '+ Nueva canción'}
+            {showForm ? 'Cerrar' : '+ Agregar mi música'}
           </Button>
         </div>
       </div>
 
+      {selectMode && (
+        <Card className="flex items-center justify-between">
+          <span className="text-sm text-neutral-300">
+            {selected.size} seleccionada{selected.size === 1 ? '' : 's'}
+          </span>
+          <Button
+            variant="danger"
+            disabled={selected.size === 0 || bulkRemove.isPending}
+            onClick={() => bulkRemove.mutate(Array.from(selected))}
+          >
+            {bulkRemove.isPending
+              ? 'Quitando…'
+              : `Quitar seleccionadas (${selected.size})`}
+          </Button>
+        </Card>
+      )}
+
       {showForm && (
-        <NewTrackForm
-          onCreated={() => {
+        <AddTrackForm
+          title="Agregar mi música (privada)"
+          submitLabel="Guardar en mis canciones"
+          onCreate={(body: NewTrackBody) =>
+            api('/music/library/personal', { method: 'POST', body })
+          }
+          onDone={() => {
             setShowForm(false);
-            void qc.invalidateQueries({ queryKey: ['tracks'] });
-            void qc.invalidateQueries({ queryKey: ['catalog-summary'] });
+            void qc.invalidateQueries({ queryKey: ['library'] });
           }}
         />
       )}
 
-      {/* filtros */}
       <Card className="flex flex-wrap items-end gap-3">
         <div className="grow">
           <label className="mb-1 block text-xs text-neutral-400">Buscar</label>
@@ -109,68 +170,121 @@ export default function TracksPage() {
             ))}
           </Select>
         </div>
-        <div>
-          <label className="mb-1 block text-xs text-neutral-400">Fuente</label>
-          <Select
-            value={source}
-            onChange={(e) => {
-              setSource(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">Todas</option>
-            {TRACK_SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-        </div>
       </Card>
 
-      {/* tabla */}
       {isLoading && <Spinner />}
-      {error && <p className="text-sm text-red-300">No se pudieron cargar las canciones.</p>}
+      {error && <p className="text-sm text-red-300">No se pudieron cargar tus canciones.</p>}
 
       {data && (
         <Card className="p-0">
           <table className="w-full text-sm">
             <thead className="border-b border-neutral-800 text-left text-neutral-400">
               <tr>
+                {selectMode && (
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      className="accent-[var(--color-brand)]"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      title="Seleccionar todo"
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3">Título</th>
                 <th className="px-4 py-3">Artista</th>
                 <th className="px-4 py-3">Estilo</th>
+                <th className="px-4 py-3">Origen</th>
                 <th className="px-4 py-3">BPM</th>
-                <th className="px-4 py-3">Fuente</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {data.data.map((t) => (
-                <tr key={t.id} className="border-b border-neutral-800/60 last:border-0">
+                <tr
+                  key={t.id}
+                  className={
+                    'border-b border-neutral-800/60 last:border-0 ' +
+                    (selected.has(t.id) ? 'bg-brand/5' : '')
+                  }
+                >
+                  {selectMode && (
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        className="accent-[var(--color-brand)]"
+                        checked={selected.has(t.id)}
+                        onChange={() => toggleSel(t.id)}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3 font-medium">{t.title}</td>
                   <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
                   <td className="px-4 py-3">
                     <StyleBadge style={t.substyle ?? t.style} />
                   </td>
+                  <td className="px-4 py-3">
+                    {t.scope === 'PERSONAL' ? (
+                      <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300">
+                        personal
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-neutral-700/40 px-2 py-0.5 text-xs text-neutral-400">
+                        catálogo
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-neutral-400">{t.bpm ?? '—'}</td>
-                  <td className="px-4 py-3 text-neutral-400">{t.source}</td>
                   <td className="px-4 py-3 text-right">
-                    <a
-                      href={t.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-brand hover:underline"
-                    >
-                      escuchar ↗
-                    </a>
+                    <div className="flex items-center justify-end gap-2">
+                      {player.canPlay(t) && (
+                        <>
+                          <button
+                            className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
+                            title="Reproducir audio"
+                            onClick={() => player.playAudio(t)}
+                          >
+                            🎵
+                          </button>
+                          <button
+                            className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
+                            title="Reproducir video"
+                            onClick={() => player.playVideo(t)}
+                          >
+                            🎬
+                          </button>
+                        </>
+                      )}
+                      <a
+                        href={t.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand hover:underline"
+                      >
+                        escuchar ↗
+                      </a>
+                      <button
+                        className="text-neutral-500 hover:text-red-300"
+                        onClick={() => remove.mutate(t.id)}
+                        title="Quitar de mis canciones"
+                      >
+                        quitar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
               {data.data.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
-                    Sin resultados.
+                  <td
+                    colSpan={selectMode ? 7 : 6}
+                    className="px-4 py-10 text-center text-neutral-500"
+                  >
+                    Aún no tienes canciones. Agrega tu música o{' '}
+                    <Link href="/music/catalog" className="text-brand hover:underline">
+                      elige del catálogo
+                    </Link>
+                    .
                   </td>
                 </tr>
               )}
@@ -181,11 +295,7 @@ export default function TracksPage() {
 
       {data && data.total > PAGE_SIZE && (
         <div className="flex items-center justify-between text-sm">
-          <Button
-            variant="ghost"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-          >
+          <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
             ← Anterior
           </Button>
           <span className="text-neutral-400">
@@ -201,176 +311,5 @@ export default function TracksPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function NewTrackForm({ onCreated }: { onCreated: () => void }) {
-  const [form, setForm] = useState({
-    title: '',
-    artist: '',
-    style: 'BACHATA' as DanceStyle,
-    substyle: '' as '' | DanceSubstyle,
-    bpm: '',
-    year: '',
-    coverUrl: '',
-    link: '',
-  });
-  const [err, setErr] = useState<string | null>(null);
-  const [fetching, setFetching] = useState(false);
-  const [info, setInfo] = useState<string | null>(null);
-
-  async function autofill() {
-    if (!form.link.trim()) {
-      setErr('Pega primero un link de YouTube.');
-      return;
-    }
-    setErr(null);
-    setInfo(null);
-    setFetching(true);
-    try {
-      const m = await api<ExtractedTrackMetadata>(
-        `/music/tracks/metadata?link=${encodeURIComponent(form.link)}`,
-      );
-      setForm((f) => ({
-        ...f,
-        title: m.title || f.title,
-        artist: m.artist ?? f.artist,
-        style: m.detectedStyle ?? f.style,
-        substyle: m.detectedSubstyle ?? f.substyle,
-        year: m.year ? String(m.year) : f.year,
-        coverUrl: m.coverUrl ?? f.coverUrl,
-      }));
-      const parts: string[] = [];
-      if (m.detectedStyle) parts.push(`estilo: ${m.detectedStyle}`);
-      if (m.durationSec) parts.push(`${Math.round(m.durationSec / 60)} min`);
-      parts.push(m.via === 'youtube-api' ? 'YouTube API' : 'oEmbed (básico)');
-      setInfo(`✓ Autocompletado (${parts.join(' · ')}). Revisa y guarda.`);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : 'No se pudo leer el link');
-    } finally {
-      setFetching(false);
-    }
-  }
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      api<Track>('/music/tracks', {
-        method: 'POST',
-        body: {
-          title: form.title,
-          artist: form.artist,
-          style: form.style,
-          substyle: form.substyle || undefined,
-          bpm: form.bpm ? Number(form.bpm) : undefined,
-          year: form.year ? Number(form.year) : undefined,
-          coverUrl: form.coverUrl || undefined,
-          link: form.link,
-        },
-      }),
-    onSuccess: onCreated,
-    onError: (e) =>
-      setErr(e instanceof ApiError ? e.message : 'No se pudo crear'),
-  });
-
-  const subForStyle = DANCE_SUBSTYLES.filter((s) => s.startsWith(form.style));
-
-  return (
-    <Card>
-      <h2 className="mb-3 font-semibold">Nueva canción</h2>
-      <form
-        className="grid grid-cols-1 gap-3 md:grid-cols-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setErr(null);
-          mutation.mutate();
-        }}
-      >
-        <div className="md:col-span-2">
-          <label className="mb-1 block text-xs text-neutral-400">
-            Pega un link de YouTube y autocompleta los datos
-          </label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="https://youtu.be/… o link de Spotify *"
-              required
-              value={form.link}
-              onChange={(e) => setForm({ ...form, link: e.target.value })}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              className="shrink-0"
-              disabled={fetching}
-              onClick={autofill}
-            >
-              {fetching ? 'Leyendo…' : '✨ Autocompletar'}
-            </Button>
-          </div>
-          {info && <p className="mt-1 text-xs text-emerald-300">{info}</p>}
-        </div>
-
-        <Input
-          placeholder="Título *"
-          required
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-        />
-        <Input
-          placeholder="Artista *"
-          required
-          value={form.artist}
-          onChange={(e) => setForm({ ...form, artist: e.target.value })}
-        />
-        <Select
-          value={form.style}
-          onChange={(e) =>
-            setForm({ ...form, style: e.target.value as DanceStyle, substyle: '' })
-          }
-        >
-          {DANCE_STYLES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        <Select
-          value={form.substyle}
-          onChange={(e) =>
-            setForm({ ...form, substyle: e.target.value as DanceSubstyle | '' })
-          }
-        >
-          <option value="">Sub-estilo (opcional)</option>
-          {subForStyle.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        <Input
-          type="number"
-          placeholder="BPM (opcional)"
-          value={form.bpm}
-          onChange={(e) => setForm({ ...form, bpm: e.target.value })}
-        />
-        <Input
-          type="number"
-          placeholder="Año (opcional)"
-          value={form.year}
-          onChange={(e) => setForm({ ...form, year: e.target.value })}
-        />
-
-        {err && (
-          <p className="md:col-span-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {err}
-          </p>
-        )}
-
-        <div className="md:col-span-2">
-          <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Guardando…' : 'Guardar canción'}
-          </Button>
-        </div>
-      </form>
-    </Card>
   );
 }

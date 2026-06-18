@@ -1,0 +1,122 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import type { Paginated, Track } from '@baile-latino/types';
+import { PrismaService } from '../../prisma/prisma.service';
+import { toPublicTrack } from '../mappers';
+import { TracksService } from '../tracks/tracks.service';
+import { CreateTrackDto } from '../tracks/dto/create-track.dto';
+import { QueryTracksDto } from '../tracks/dto/query-tracks.dto';
+
+@Injectable()
+export class LibraryService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tracks: TracksService,
+  ) {}
+
+  /** "Mis Canciones" = canciones de catálogo seleccionadas + canciones personales. */
+  async listMine(userId: string, q: QueryTracksDto): Promise<Paginated<Track>> {
+    const page = q.page ?? 1;
+    const pageSize = q.pageSize ?? 50;
+
+    const where: Prisma.TrackWhereInput = { savedBy: { some: { userId } } };
+    if (q.style) where.style = q.style;
+    if (q.substyle) where.substyle = q.substyle;
+    if (q.source) where.source = q.source;
+    if (q.bpmMin !== undefined || q.bpmMax !== undefined) {
+      where.bpm = {};
+      if (q.bpmMin !== undefined) where.bpm.gte = q.bpmMin;
+      if (q.bpmMax !== undefined) where.bpm.lte = q.bpmMax;
+    }
+    if (q.search) {
+      where.OR = [
+        { title: { contains: q.search } },
+        { artist: { contains: q.search } },
+      ];
+    }
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.track.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.track.count({ where }),
+    ]);
+
+    const data = rows.map(toPublicTrack);
+    for (const t of data) t.inLibrary = true;
+    return { data, total, page, pageSize };
+  }
+
+  async myTrackIds(userId: string): Promise<string[]> {
+    const rows = await this.prisma.userTrack.findMany({
+      where: { userId },
+      select: { trackId: true },
+    });
+    return rows.map((r) => r.trackId);
+  }
+
+  /** Agrega una canción del catálogo a mi biblioteca. */
+  async addCatalog(userId: string, trackId: string): Promise<{ added: true }> {
+    const track = await this.prisma.track.findFirst({
+      where: { id: trackId, scope: 'CATALOG' },
+      select: { id: true },
+    });
+    if (!track) throw new NotFoundException('Canción de catálogo no encontrada');
+    await this.prisma.userTrack.upsert({
+      where: { userId_trackId: { userId, trackId } },
+      create: { userId, trackId },
+      update: {},
+    });
+    return { added: true };
+  }
+
+  /** Agrega una canción PERSONAL (privada, no entra al catálogo) a mi biblioteca. */
+  async addPersonal(userId: string, dto: CreateTrackDto): Promise<Track> {
+    const { source, sourceId } = this.tracks.resolveSource(dto);
+
+    let track = await this.prisma.track.findFirst({
+      where: { ownerId: userId, scope: 'PERSONAL', source, sourceId },
+    });
+    if (!track) {
+      track = await this.prisma.track.create({
+        data: {
+          title: dto.title,
+          artist: dto.artist,
+          style: dto.style,
+          substyle: dto.substyle ?? null,
+          bpm: dto.bpm ?? null,
+          year: dto.year ?? null,
+          source,
+          sourceId,
+          coverUrl: dto.coverUrl ?? null,
+          durationSec: dto.durationSec ?? null,
+          scope: 'PERSONAL',
+          ownerId: userId,
+          createdById: userId,
+        },
+      });
+    }
+    await this.prisma.userTrack.upsert({
+      where: { userId_trackId: { userId, trackId: track.id } },
+      create: { userId, trackId: track.id },
+      update: {},
+    });
+    return toPublicTrack(track);
+  }
+
+  /**
+   * Quita una canción de mi biblioteca. Si es PERSONAL y mía, se elimina
+   * por completo (es privada). Si es de catálogo, solo se desvincula.
+   */
+  async remove(userId: string, trackId: string): Promise<{ removed: true }> {
+    await this.prisma.userTrack.deleteMany({ where: { userId, trackId } });
+    const track = await this.prisma.track.findUnique({ where: { id: trackId } });
+    if (track && track.scope === 'PERSONAL' && track.ownerId === userId) {
+      await this.prisma.track.delete({ where: { id: trackId } });
+    }
+    return { removed: true };
+  }
+}

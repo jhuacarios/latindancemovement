@@ -22,11 +22,12 @@ import { QueryTracksDto } from './dto/query-tracks.dto';
 export class TracksService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Crea una canción en el CATÁLOGO global (acción de admin). */
   async create(dto: CreateTrackDto, userId: string): Promise<Track> {
     const { source, sourceId } = this.resolveSource(dto);
 
-    const existing = await this.prisma.track.findUnique({
-      where: { source_sourceId: { source, sourceId } },
+    const existing = await this.prisma.track.findFirst({
+      where: { source, sourceId, scope: 'CATALOG' },
     });
     if (existing) {
       throw new ConflictException(
@@ -48,6 +49,8 @@ export class TracksService {
         durationSec: dto.durationSec ?? null,
         isRelease: dto.isRelease ?? false,
         approvalStatus: dto.approvalStatus ?? 'APROBADA',
+        scope: 'CATALOG',
+        ownerId: null,
         artistUserId: dto.artistUserId ?? null,
         createdById: userId,
       },
@@ -55,11 +58,12 @@ export class TracksService {
     return toPublicTrack(created);
   }
 
-  async findAll(q: QueryTracksDto): Promise<Paginated<Track>> {
+  /** Lista el CATÁLOGO global. Si se pasa userId, anota `inLibrary`. */
+  async findAll(q: QueryTracksDto, userId?: string): Promise<Paginated<Track>> {
     const page = q.page ?? 1;
     const pageSize = q.pageSize ?? 50;
 
-    const where: Prisma.TrackWhereInput = {};
+    const where: Prisma.TrackWhereInput = { scope: 'CATALOG' };
     if (q.style) where.style = q.style;
     if (q.substyle) where.substyle = q.substyle;
     if (q.source) where.source = q.source;
@@ -89,12 +93,26 @@ export class TracksService {
       this.prisma.track.count({ where }),
     ]);
 
-    return { data: rows.map(toPublicTrack), total, page, pageSize };
+    const data = rows.map(toPublicTrack);
+    if (userId && data.length) {
+      const saved = await this.prisma.userTrack.findMany({
+        where: { userId, trackId: { in: data.map((t) => t.id) } },
+        select: { trackId: true },
+      });
+      const set = new Set(saved.map((s) => s.trackId));
+      for (const t of data) t.inLibrary = set.has(t.id);
+    }
+
+    return { data, total, page, pageSize };
   }
 
-  async findOne(id: string): Promise<Track> {
+  /** Catálogo es visible para todos; una canción PERSONAL solo para su dueño. */
+  async findOne(id: string, userId?: string): Promise<Track> {
     const t = await this.prisma.track.findUnique({ where: { id } });
     if (!t) throw new NotFoundException('Canción no encontrada');
+    if (t.scope === 'PERSONAL' && t.ownerId !== userId) {
+      throw new NotFoundException('Canción no encontrada');
+    }
     return toPublicTrack(t);
   }
 
@@ -133,8 +151,8 @@ export class TracksService {
       const dto = rows[i];
       try {
         const { source, sourceId } = this.resolveSource(dto);
-        const existing = await this.prisma.track.findUnique({
-          where: { source_sourceId: { source, sourceId } },
+        const existing = await this.prisma.track.findFirst({
+          where: { source, sourceId, scope: 'CATALOG' },
         });
 
         const data = {
@@ -188,7 +206,7 @@ export class TracksService {
     }
   }
 
-  private resolveSource(dto: CreateTrackDto): {
+  resolveSource(dto: CreateTrackDto): {
     source: TrackSource;
     sourceId: string;
   } {

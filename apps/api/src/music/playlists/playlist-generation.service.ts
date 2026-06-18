@@ -36,8 +36,8 @@ export class PlaylistGenerationService {
     const nSalsa = maxTracks - nBachata;
 
     const [bachata, salsa] = await Promise.all([
-      this.pick('BACHATA', nBachata, dto, onlyApproved, byPopularity),
-      this.pick('SALSA', nSalsa, dto, onlyApproved, byPopularity),
+      this.pick('BACHATA', nBachata, dto, onlyApproved, byPopularity, user.id),
+      this.pick('SALSA', nSalsa, dto, onlyApproved, byPopularity, user.id),
     ]);
 
     let selected = this.interleave(bachata, salsa);
@@ -61,10 +61,15 @@ export class PlaylistGenerationService {
     dto: GeneratePlaylistDto,
     onlyApproved: boolean,
     byPopularity: boolean,
+    userId: string,
   ): Promise<PrismaTrack[]> {
     if (n <= 0) return [];
 
-    const where: Prisma.TrackWhereInput = { style };
+    // Solo de "Mis Canciones" (biblioteca del usuario).
+    const where: Prisma.TrackWhereInput = {
+      style,
+      savedBy: { some: { userId } },
+    };
     if (onlyApproved) where.approvalStatus = 'APROBADA';
 
     const subs = (dto.substyles ?? []).filter(

@@ -68,6 +68,9 @@ export type PlaylistStatus = (typeof PLAYLIST_STATUSES)[number];
 export const PLAYLIST_VISIBILITIES = ['PUBLICA', 'SOLO_ENTRADA'] as const;
 export type PlaylistVisibility = (typeof PLAYLIST_VISIBILITIES)[number];
 
+export const TRACK_SCOPES = ['CATALOG', 'PERSONAL'] as const;
+export type TrackScope = (typeof TRACK_SCOPES)[number];
+
 export const SONG_REQUEST_STATUSES = [
   'PENDIENTE',
   'ACEPTADA',
@@ -106,10 +109,15 @@ export interface Track {
   durationSec: number | null;
   isRelease: boolean;
   approvalStatus: TrackApprovalStatus;
+  /** CATALOG = base global compartida; PERSONAL = privada de un DJ. */
+  scope: TrackScope;
+  ownerId: string | null;
   artistUserId: string | null;
   createdById: string;
   createdAt: string;
   updatedAt: string;
+  /** Solo en vistas de catálogo: si está en la biblioteca del usuario actual. */
+  inLibrary?: boolean;
 }
 
 export interface PlaylistItem {
