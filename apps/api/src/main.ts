@@ -33,7 +33,11 @@ async function bootstrap() {
   );
 
   const webUrl = process.env.WEB_URL ?? 'http://localhost:3001';
-  app.enableCors({ origin: [webUrl], credentials: true });
+  app.enableCors({
+    origin: [webUrl],
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
 
   // Las respuestas del API nunca se cachean (evita listas desactualizadas).
   app
