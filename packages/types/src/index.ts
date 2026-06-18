@@ -173,6 +173,23 @@ export interface ImportResult {
   errors: { index: number; reason: string }[];
 }
 
+/** Metadata extraída de un link (YouTube) para autocompletar una canción. */
+export interface ExtractedTrackMetadata {
+  source: TrackSource;
+  sourceId: string;
+  url: string;
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+  coverUrl: string | null;
+  channelTitle: string | null;
+  detectedStyle: DanceStyle | null;
+  detectedSubstyle: DanceSubstyle | null;
+  /** De dónde salió la info: API de YouTube (completa) u oEmbed (básica). */
+  via: 'youtube-api' | 'oembed';
+}
+
 /** Resultado de importar canciones desde un archivo Excel. */
 export interface ExcelImportResult {
   totalRows: number;

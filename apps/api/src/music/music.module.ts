@@ -3,6 +3,7 @@ import { TracksController } from './tracks/tracks.controller';
 import { TracksService } from './tracks/tracks.service';
 import { TracksExportService } from './tracks/tracks-export.service';
 import { TracksImportExcelService } from './tracks/tracks-import-excel.service';
+import { YoutubeMetadataService } from './tracks/youtube-metadata.service';
 import { PlaylistsController } from './playlists/playlists.controller';
 import { PlaylistsService } from './playlists/playlists.service';
 import { PlaylistGenerationService } from './playlists/playlist-generation.service';
@@ -15,6 +16,7 @@ import { ReportsService } from './reports/reports.service';
     TracksService,
     TracksExportService,
     TracksImportExcelService,
+    YoutubeMetadataService,
     PlaylistsService,
     PlaylistGenerationService,
     ReportsService,

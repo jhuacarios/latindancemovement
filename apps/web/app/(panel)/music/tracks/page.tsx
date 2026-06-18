@@ -8,6 +8,7 @@ import {
   TRACK_SOURCES,
   type DanceStyle,
   type DanceSubstyle,
+  type ExtractedTrackMetadata,
   type Paginated,
   type Track,
 } from '@baile-latino/types';
@@ -210,9 +211,46 @@ function NewTrackForm({ onCreated }: { onCreated: () => void }) {
     style: 'BACHATA' as DanceStyle,
     substyle: '' as '' | DanceSubstyle,
     bpm: '',
+    year: '',
+    coverUrl: '',
     link: '',
   });
   const [err, setErr] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+
+  async function autofill() {
+    if (!form.link.trim()) {
+      setErr('Pega primero un link de YouTube.');
+      return;
+    }
+    setErr(null);
+    setInfo(null);
+    setFetching(true);
+    try {
+      const m = await api<ExtractedTrackMetadata>(
+        `/music/tracks/metadata?link=${encodeURIComponent(form.link)}`,
+      );
+      setForm((f) => ({
+        ...f,
+        title: m.title || f.title,
+        artist: m.artist ?? f.artist,
+        style: m.detectedStyle ?? f.style,
+        substyle: m.detectedSubstyle ?? f.substyle,
+        year: m.year ? String(m.year) : f.year,
+        coverUrl: m.coverUrl ?? f.coverUrl,
+      }));
+      const parts: string[] = [];
+      if (m.detectedStyle) parts.push(`estilo: ${m.detectedStyle}`);
+      if (m.durationSec) parts.push(`${Math.round(m.durationSec / 60)} min`);
+      parts.push(m.via === 'youtube-api' ? 'YouTube API' : 'oEmbed (básico)');
+      setInfo(`✓ Autocompletado (${parts.join(' · ')}). Revisa y guarda.`);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : 'No se pudo leer el link');
+    } finally {
+      setFetching(false);
+    }
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -224,6 +262,8 @@ function NewTrackForm({ onCreated }: { onCreated: () => void }) {
           style: form.style,
           substyle: form.substyle || undefined,
           bpm: form.bpm ? Number(form.bpm) : undefined,
+          year: form.year ? Number(form.year) : undefined,
+          coverUrl: form.coverUrl || undefined,
           link: form.link,
         },
       }),
@@ -245,6 +285,30 @@ function NewTrackForm({ onCreated }: { onCreated: () => void }) {
           mutation.mutate();
         }}
       >
+        <div className="md:col-span-2">
+          <label className="mb-1 block text-xs text-neutral-400">
+            Pega un link de YouTube y autocompleta los datos
+          </label>
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://youtu.be/… o link de Spotify *"
+              required
+              value={form.link}
+              onChange={(e) => setForm({ ...form, link: e.target.value })}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              className="shrink-0"
+              disabled={fetching}
+              onClick={autofill}
+            >
+              {fetching ? 'Leyendo…' : '✨ Autocompletar'}
+            </Button>
+          </div>
+          {info && <p className="mt-1 text-xs text-emerald-300">{info}</p>}
+        </div>
+
         <Input
           placeholder="Título *"
           required
@@ -289,10 +353,10 @@ function NewTrackForm({ onCreated }: { onCreated: () => void }) {
           onChange={(e) => setForm({ ...form, bpm: e.target.value })}
         />
         <Input
-          placeholder="Link de Spotify o YouTube *"
-          required
-          value={form.link}
-          onChange={(e) => setForm({ ...form, link: e.target.value })}
+          type="number"
+          placeholder="Año (opcional)"
+          value={form.year}
+          onChange={(e) => setForm({ ...form, year: e.target.value })}
         />
 
         {err && (

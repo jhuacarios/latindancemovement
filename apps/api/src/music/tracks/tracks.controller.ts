@@ -21,6 +21,7 @@ import type { AuthUser } from '../../auth/auth.types';
 import { TracksService } from './tracks.service';
 import { TracksExportService } from './tracks-export.service';
 import { TracksImportExcelService } from './tracks-import-excel.service';
+import { YoutubeMetadataService } from './youtube-metadata.service';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { QueryTracksDto } from './dto/query-tracks.dto';
@@ -33,6 +34,7 @@ export class TracksController {
     private readonly tracks: TracksService,
     private readonly exporter: TracksExportService,
     private readonly excelImporter: TracksImportExcelService,
+    private readonly youtube: YoutubeMetadataService,
   ) {}
 
   @Get()
@@ -51,6 +53,14 @@ export class TracksController {
       )
       .header('Content-Disposition', 'attachment; filename="canciones.xlsx"')
       .send(buffer);
+  }
+
+  /** Extrae metadata de un link de YouTube para autocompletar (no guarda). */
+  @Get('metadata')
+  @Roles('DJ', 'ORGANIZADOR', 'ARTISTA')
+  metadata(@Query('link') link: string) {
+    if (!link) throw new BadRequestException('Falta el parámetro "link".');
+    return this.youtube.extract(link);
   }
 
   /** Descarga una plantilla .xlsx para importar canciones. */
