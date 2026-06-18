@@ -67,14 +67,16 @@ interface RequestOptions {
 
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const token = getAccessToken();
+  const hasBody = opts.body !== undefined;
   const res = await fetch(`${BASE}${path}`, {
     method: opts.method ?? 'GET',
     cache: 'no-store',
     headers: {
-      'Content-Type': 'application/json',
+      // Solo enviar Content-Type cuando hay body (Fastify rechaza JSON vacío).
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    body: hasBody ? JSON.stringify(opts.body) : undefined,
   });
 
   if (res.status === 401 && !opts._retried) {
