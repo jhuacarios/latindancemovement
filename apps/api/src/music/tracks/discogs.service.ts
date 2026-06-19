@@ -20,32 +20,41 @@ export class DiscogsService {
   private static readonly UA = 'BaileLatino/1.0 (+https://baile-latino.app)';
 
   get enabled(): boolean {
-    return Boolean(process.env.DISCOGS_TOKEN);
+    return Boolean(this.authHeader());
   }
 
-  /** Busca la canción y deriva estilo + sub-estilo del campo "Style". */
+  /**
+   * Discogs acepta dos formas de auth para búsquedas sin contexto de usuario:
+   * un personal access token, o el par consumer key+secret de una app.
+   */
+  private authHeader(): string | null {
+    const token = process.env.DISCOGS_TOKEN;
+    if (token) return `Discogs token=${token}`;
+    const key = process.env.DISCOGS_CONSUMER_KEY;
+    const secret = process.env.DISCOGS_CONSUMER_SECRET;
+    if (key && secret) return `Discogs key=${key}, secret=${secret}`;
+    return null;
+  }
+
+  /**
+   * Busca la canción y deriva estilo + sub-estilo del campo "Style".
+   * Prueba varias queries (combinada → título → artista), quitando acentos,
+   * y devuelve el primer match con estilo. Robusto ante metadata sucia.
+   */
   async lookup(title: string, artist: string | null): Promise<DiscogsMatch | null> {
-    if (!this.enabled) return null;
+    const auth = this.authHeader();
+    if (!auth) return null;
+    const candidates = [[artist, title].filter(Boolean).join(' '), title, artist ?? '']
+      .map(stripDiacritics)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const seen = new Set<string>();
     try {
-      const token = process.env.DISCOGS_TOKEN as string;
-      const q = encodeURIComponent([artist, title].filter(Boolean).join(' '));
-      const url = `https://api.discogs.com/database/search?q=${q}&type=release&per_page=5`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Discogs token=${token}`,
-          'User-Agent': DiscogsService.UA,
-        },
-      });
-      if (!res.ok) return null;
-      const json = (await res.json()) as any;
-      const results: any[] = json.results ?? [];
-      // Tomamos el primer resultado cuyo "style" mapee a un estilo de baile.
-      for (const r of results) {
-        const styles: string[] = Array.isArray(r.style) ? r.style : [];
-        const guess = mapDiscogsStyles(styles);
-        if (guess.style) {
-          return { ...guess, year: parseYear(r.year) };
-        }
+      for (const q of candidates) {
+        if (seen.has(q)) continue;
+        seen.add(q);
+        const match = await this.searchOnce(q, auth);
+        if (match?.style) return match;
       }
       return null;
     } catch (e) {
@@ -55,6 +64,27 @@ export class DiscogsService {
       return null;
     }
   }
+
+  private async searchOnce(q: string, auth: string): Promise<DiscogsMatch | null> {
+    const url = `https://api.discogs.com/database/search?q=${encodeURIComponent(q)}&type=release&per_page=5`;
+    const res = await fetch(url, {
+      headers: { Authorization: auth, 'User-Agent': DiscogsService.UA },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as any;
+    const results: any[] = json.results ?? [];
+    for (const r of results) {
+      const styles: string[] = Array.isArray(r.style) ? r.style : [];
+      const guess = mapDiscogsStyles(styles);
+      if (guess.style) return { ...guess, year: parseYear(r.year) };
+    }
+    return null;
+  }
+}
+
+/** Quita tildes/diacríticos para que la búsqueda no falle por acentos. */
+function stripDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
 function parseYear(year?: string | number): number | null {
@@ -69,6 +99,8 @@ const DISCOGS_CUBAN = [
   'son',
   'son montuno',
   'son cubano',
+  'cubano',
+  'afro-cuban',
   'guaracha',
   'charanga',
   'songo',
