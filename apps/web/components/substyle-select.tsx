@@ -23,7 +23,7 @@ export function SubstyleFilterSelect({
     queryFn: () => api<Tag[]>('/music/tags'),
   });
   const names = (vocab ?? [])
-    .filter((t) => t.style === style || t.style == null)
+    .filter((t) => t.style === style)
     .map((t) => t.name);
 
   return (
@@ -47,7 +47,7 @@ export function SubstyleMultiSelect({
   value,
   onChange,
 }: {
-  style: DanceStyle;
+  style: DanceStyle | '';
   value: string[];
   onChange: (names: string[]) => void;
 }) {
@@ -56,9 +56,18 @@ export function SubstyleMultiSelect({
     queryFn: () => api<Tag[]>('/music/tags'),
   });
 
-  // Opciones para este estilo (del estilo o "general") + las ya seleccionadas.
+  // Sin estilo aún: no se muestran opciones.
+  if (!style) {
+    return (
+      <p className="text-xs text-neutral-500">
+        Selecciona primero el estilo para elegir sub-estilos.
+      </p>
+    );
+  }
+
+  // Solo sub-estilos del estilo seleccionado + los ya elegidos.
   const options = (vocab ?? [])
-    .filter((t) => t.style === style || t.style == null)
+    .filter((t) => t.style === style)
     .map((t) => t.name);
   const all = Array.from(new Set([...options, ...value]));
 

@@ -268,6 +268,7 @@ export default function CatalogPage() {
                 <th className="px-4 py-3">Artista</th>
                 <th className="px-4 py-3">Estilo</th>
                 <th className="px-4 py-3">BPM</th>
+                <th className="px-4 py-3">Año</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -306,6 +307,7 @@ export default function CatalogPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-neutral-400">{t.bpm ?? '—'}</td>
+                  <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {player.canPlay(t) && (
@@ -381,7 +383,7 @@ export default function CatalogPage() {
               {data.data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={selectMode ? 6 : 5}
+                    colSpan={selectMode ? 7 : 6}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
                     El catálogo está vacío.
