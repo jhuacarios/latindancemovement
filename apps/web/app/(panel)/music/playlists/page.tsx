@@ -202,7 +202,7 @@ function Generator() {
             {result.tracks.map((t, i) => (
               <li key={t.id} className="flex items-center gap-2">
                 <span className="w-6 text-right text-neutral-500">{i + 1}.</span>
-                <StyleBadge style={t.substyle ?? t.style} />
+                <StyleBadge style={t.style} />
                 <span className="font-medium">{t.title}</span>
                 <span className="text-neutral-500">— {t.artist}</span>
               </li>

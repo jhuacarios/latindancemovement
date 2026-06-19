@@ -1,6 +1,5 @@
 import type {
   DanceStyle,
-  DanceSubstyle,
   Playlist,
   PlaylistItem,
   PlaylistStatus,
@@ -24,7 +23,9 @@ export function toPublicTrack(t: PrismaTrack): Track {
     title: t.title,
     artist: t.artist,
     style: t.style as DanceStyle,
-    substyle: (t.substyle as DanceSubstyle | null) ?? null,
+    substyles: t.substyle
+      ? t.substyle.split(',').map((s) => s.trim()).filter(Boolean)
+      : [],
     bpm: t.bpm,
     year: t.year,
     source: t.source as TrackSource,

@@ -22,6 +22,13 @@ import { QueryTracksDto } from './dto/query-tracks.dto';
 export class TracksService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Une hasta 3 sub-estilos en un CSV para guardar en la columna `substyle`. */
+  private joinSubstyles(arr?: string[]): string | null {
+    if (!arr || !arr.length) return null;
+    const clean = arr.map((s) => s.trim()).filter(Boolean).slice(0, 3);
+    return clean.length ? clean.join(', ') : null;
+  }
+
   /** Crea una canción en el CATÁLOGO global (acción de admin). */
   async create(dto: CreateTrackDto, userId: string): Promise<Track> {
     const { source, sourceId } = this.resolveSource(dto);
@@ -40,7 +47,7 @@ export class TracksService {
         title: dto.title,
         artist: dto.artist,
         style: dto.style,
-        substyle: dto.substyle ?? null,
+        substyle: this.joinSubstyles(dto.substyles),
         bpm: dto.bpm ?? null,
         year: dto.year ?? null,
         source,
@@ -65,7 +72,7 @@ export class TracksService {
 
     const where: Prisma.TrackWhereInput = { scope: 'CATALOG' };
     if (q.style) where.style = q.style;
-    if (q.substyle) where.substyle = q.substyle;
+    if (q.substyle) where.substyle = { contains: q.substyle };
     if (q.source) where.source = q.source;
     if (q.approvalStatus) where.approvalStatus = q.approvalStatus;
     if (q.isRelease !== undefined) where.isRelease = q.isRelease;
@@ -106,6 +113,36 @@ export class TracksService {
     return { data, total, page, pageSize };
   }
 
+  /** Crea o actualiza una canción del catálogo (por link/fuente). Devuelve id + si fue creada. */
+  async upsertCatalog(
+    dto: CreateTrackDto,
+    userId: string,
+  ): Promise<{ id: string; created: boolean }> {
+    const { source, sourceId } = this.resolveSource(dto);
+    const data = {
+      title: dto.title,
+      artist: dto.artist,
+      style: dto.style,
+      substyle: this.joinSubstyles(dto.substyles),
+      bpm: dto.bpm ?? null,
+      year: dto.year ?? null,
+      coverUrl: dto.coverUrl ?? null,
+      durationSec: dto.durationSec ?? null,
+    };
+    const existing = await this.prisma.track.findFirst({
+      where: { source, sourceId, scope: 'CATALOG' },
+      select: { id: true },
+    });
+    if (existing) {
+      await this.prisma.track.update({ where: { id: existing.id }, data });
+      return { id: existing.id, created: false };
+    }
+    const created = await this.prisma.track.create({
+      data: { ...data, source, sourceId, scope: 'CATALOG', createdById: userId },
+    });
+    return { id: created.id, created: true };
+  }
+
   /** Catálogo es visible para todos; una canción PERSONAL solo para su dueño. */
   async findOne(id: string, userId?: string): Promise<Track> {
     const t = await this.prisma.track.findUnique({ where: { id } });
@@ -118,22 +155,48 @@ export class TracksService {
 
   async update(id: string, dto: UpdateTrackDto): Promise<Track> {
     await this.ensureExists(id);
-    const updated = await this.prisma.track.update({
-      where: { id },
-      data: {
-        title: dto.title,
-        artist: dto.artist,
-        style: dto.style,
-        substyle: dto.substyle,
-        bpm: dto.bpm,
-        year: dto.year,
-        coverUrl: dto.coverUrl,
-        durationSec: dto.durationSec,
-        isRelease: dto.isRelease,
-        approvalStatus: dto.approvalStatus,
-        artistUserId: dto.artistUserId,
-      },
-    });
+
+    const data: Prisma.TrackUpdateInput = {
+      title: dto.title,
+      artist: dto.artist,
+      style: dto.style,
+      substyle:
+        dto.substyles !== undefined ? this.joinSubstyles(dto.substyles) : undefined,
+      bpm: dto.bpm,
+      year: dto.year,
+      coverUrl: dto.coverUrl,
+      durationSec: dto.durationSec,
+      isRelease: dto.isRelease,
+      approvalStatus: dto.approvalStatus,
+    };
+
+    // Si se cambia el link, re-resolvemos la fuente y evitamos duplicados.
+    if (dto.link) {
+      const parsed = parseTrackLink(dto.link);
+      if (!parsed) {
+        throw new BadRequestException(
+          'No se pudo reconocer el link (esperado Spotify o YouTube).',
+        );
+      }
+      const dup = await this.prisma.track.findFirst({
+        where: {
+          source: parsed.source,
+          sourceId: parsed.sourceId,
+          scope: 'CATALOG',
+          NOT: { id },
+        },
+        select: { id: true },
+      });
+      if (dup) {
+        throw new ConflictException(
+          'Ya existe otra canción en el catálogo con ese link.',
+        );
+      }
+      data.source = parsed.source;
+      data.sourceId = parsed.sourceId;
+    }
+
+    const updated = await this.prisma.track.update({ where: { id }, data });
     return toPublicTrack(updated);
   }
 
@@ -159,7 +222,7 @@ export class TracksService {
           title: dto.title,
           artist: dto.artist,
           style: dto.style,
-          substyle: dto.substyle ?? null,
+          substyle: this.joinSubstyles(dto.substyles),
           bpm: dto.bpm ?? null,
           year: dto.year ?? null,
           coverUrl: dto.coverUrl ?? null,

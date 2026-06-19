@@ -106,14 +106,16 @@ export class TracksController {
     return this.tracks.importMany(dto.tracks, user.id);
   }
 
+  /** Editar canción del catálogo (sujeto al permiso 'editar' del perfil). */
   @Patch(':id')
-  @Roles('SUPER_ADMIN')
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
   update(@Param('id') id: string, @Body() dto: UpdateTrackDto) {
     return this.tracks.update(id, dto);
   }
 
+  /** Eliminar canción del catálogo (sujeto al permiso 'eliminar' del perfil). */
   @Delete(':id')
-  @Roles('SUPER_ADMIN')
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
   remove(@Param('id') id: string) {
     return this.tracks.remove(id);
   }

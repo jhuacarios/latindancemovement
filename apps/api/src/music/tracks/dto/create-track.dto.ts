@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -11,11 +13,9 @@ import {
 } from 'class-validator';
 import {
   DANCE_STYLES,
-  DANCE_SUBSTYLES,
   TRACK_APPROVAL_STATUSES,
   TRACK_SOURCES,
   type DanceStyle,
-  type DanceSubstyle,
   type TrackApprovalStatus,
   type TrackSource,
 } from '@baile-latino/types';
@@ -35,8 +35,10 @@ export class CreateTrackDto {
   style!: DanceStyle;
 
   @IsOptional()
-  @IsIn(DANCE_SUBSTYLES)
-  substyle?: DanceSubstyle;
+  @IsArray()
+  @ArrayMaxSize(3)
+  @IsString({ each: true })
+  substyles?: string[];
 
   @IsOptional()
   @IsInt()

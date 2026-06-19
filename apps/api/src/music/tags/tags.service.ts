@@ -156,6 +156,24 @@ export class TagsService {
     return this.getTrackTags(trackId, userId);
   }
 
+  /** Crea (o reutiliza) tags por nombre y los asocia al usuario en una canción. */
+  async addTagsByName(
+    trackId: string,
+    userId: string,
+    names: string[],
+  ): Promise<void> {
+    for (const raw of names) {
+      const name = raw.trim();
+      if (!name) continue;
+      const tag = await this.create(name, null, userId);
+      await this.prisma.trackTag.upsert({
+        where: { trackId_userId_tagId: { trackId, userId, tagId: tag.id } },
+        create: { trackId, userId, tagId: tag.id },
+        update: {},
+      });
+    }
+  }
+
   /** Mapa trackId -> tags del usuario (para listar Mis Canciones). */
   async tagsForTracks(
     userId: string,

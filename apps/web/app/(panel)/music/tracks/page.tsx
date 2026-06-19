@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DANCE_STYLES,
-  DANCE_SUBSTYLES,
+  type DanceStyle,
   type Paginated,
   type Track,
 } from '@baile-latino/types';
@@ -14,6 +14,7 @@ import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { usePlayer } from '@/components/player';
 import { SourceLink } from '@/components/source-link';
 import { TagEditor } from '@/components/tag-editor';
+import { SubstyleFilterSelect } from '@/components/substyle-select';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -211,20 +212,14 @@ export default function MyTracksPage() {
             <label className="mb-1 block text-xs text-neutral-400">
               Sub-estilo
             </label>
-            <Select
+            <SubstyleFilterSelect
+              style={style as DanceStyle}
               value={substyle}
-              onChange={(e) => {
-                setSubstyle(e.target.value);
+              onChange={(v) => {
+                setSubstyle(v);
                 setPage(1);
               }}
-            >
-              <option value="">Todos</option>
-              {DANCE_SUBSTYLES.filter((s) => s.startsWith(style)).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
+            />
           </div>
         )}
       </Card>

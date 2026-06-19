@@ -23,7 +23,7 @@ export class LibraryService {
 
     const where: Prisma.TrackWhereInput = { savedBy: { some: { userId } } };
     if (q.style) where.style = q.style;
-    if (q.substyle) where.substyle = q.substyle;
+    if (q.substyle) where.substyle = { contains: q.substyle };
     if (q.source) where.source = q.source;
     if (q.bpmMin !== undefined || q.bpmMax !== undefined) {
       where.bpm = {};
@@ -95,7 +95,10 @@ export class LibraryService {
           title: dto.title,
           artist: dto.artist,
           style: dto.style,
-          substyle: dto.substyle ?? null,
+          substyle:
+            dto.substyles && dto.substyles.length
+              ? dto.substyles.map((s) => s.trim()).filter(Boolean).slice(0, 3).join(', ')
+              : null,
           bpm: dto.bpm ?? null,
           year: dto.year ?? null,
           source,

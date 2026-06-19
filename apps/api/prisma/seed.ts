@@ -26,12 +26,12 @@ async function main() {
   });
 
   const sample = [
-    { title: 'Propuesta Indecente', artist: 'Romeo Santos', style: 'BACHATA', substyle: 'BACHATA_SENSUAL', bpm: 130, year: 2013, source: 'YOUTUBE', sourceId: 'e_Vym6fEPdo' },
-    { title: 'Obsesión', artist: 'Aventura', style: 'BACHATA', substyle: 'BACHATA_TRADICIONAL', bpm: 125, year: 2002, source: 'YOUTUBE', sourceId: 'kv7yK-PgZ7w' },
-    { title: 'Vivir Mi Vida', artist: 'Marc Anthony', style: 'SALSA', substyle: 'SALSA_ON1', bpm: 95, year: 2013, source: 'YOUTUBE', sourceId: 'YXnjy5YlDwk' },
-    { title: 'La Vida Es Un Carnaval', artist: 'Celia Cruz', style: 'SALSA', substyle: 'SALSA_CUBANA', bpm: 100, year: 1998, source: 'YOUTUBE', sourceId: 'CMPdAVS_DfA' },
-    { title: 'Eres Mía', artist: 'Romeo Santos', style: 'BACHATA', substyle: 'BACHATA_SENSUAL', bpm: 128, year: 2014, source: 'YOUTUBE', sourceId: 'NHkHQHGSdGw' },
-    { title: 'Idilio', artist: 'Willie Colón', style: 'SALSA', substyle: 'SALSA_ON2', bpm: 92, year: 1979, source: 'YOUTUBE', sourceId: 'D5w7e4D9NkM' },
+    { title: 'Propuesta Indecente', artist: 'Romeo Santos', style: 'BACHATA', substyle: 'Sensual', bpm: 130, year: 2013, source: 'YOUTUBE', sourceId: 'e_Vym6fEPdo' },
+    { title: 'Obsesión', artist: 'Aventura', style: 'BACHATA', substyle: 'Tradicional', bpm: 125, year: 2002, source: 'YOUTUBE', sourceId: 'kv7yK-PgZ7w' },
+    { title: 'Vivir Mi Vida', artist: 'Marc Anthony', style: 'SALSA', substyle: 'On1', bpm: 95, year: 2013, source: 'YOUTUBE', sourceId: 'YXnjy5YlDwk' },
+    { title: 'La Vida Es Un Carnaval', artist: 'Celia Cruz', style: 'SALSA', substyle: 'Cubana', bpm: 100, year: 1998, source: 'YOUTUBE', sourceId: 'CMPdAVS_DfA' },
+    { title: 'Eres Mía', artist: 'Romeo Santos', style: 'BACHATA', substyle: 'Sensual', bpm: 128, year: 2014, source: 'YOUTUBE', sourceId: 'NHkHQHGSdGw' },
+    { title: 'Idilio', artist: 'Willie Colón', style: 'SALSA', substyle: 'On2', bpm: 92, year: 1979, source: 'YOUTUBE', sourceId: 'D5w7e4D9NkM' },
   ] as const;
 
   for (const t of sample) {

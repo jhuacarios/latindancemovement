@@ -12,9 +12,9 @@ export class TracksExportService {
 
   /** Genera un .xlsx con el catálogo de canciones (respeta los filtros). */
   async toExcelBuffer(q: QueryTracksDto): Promise<Buffer> {
-    const where: Prisma.TrackWhereInput = {};
+    const where: Prisma.TrackWhereInput = { scope: 'CATALOG' };
     if (q.style) where.style = q.style;
-    if (q.substyle) where.substyle = q.substyle;
+    if (q.substyle) where.substyle = { contains: q.substyle };
     if (q.source) where.source = q.source;
     if (q.approvalStatus) where.approvalStatus = q.approvalStatus;
     if (q.isRelease !== undefined) where.isRelease = q.isRelease;
@@ -35,6 +35,18 @@ export class TracksExportService {
       orderBy: [{ style: 'asc' }, { artist: 'asc' }, { title: 'asc' }],
     });
 
+    // Tags (distintos) usados en cada canción, en cualquier biblioteca de DJ.
+    const tagRows = await this.prisma.trackTag.findMany({
+      where: { trackId: { in: tracks.map((t) => t.id) } },
+      include: { tag: true },
+    });
+    const tagsByTrack = new Map<string, Set<string>>();
+    for (const r of tagRows) {
+      const set = tagsByTrack.get(r.trackId) ?? new Set<string>();
+      set.add(r.tag.name);
+      tagsByTrack.set(r.trackId, set);
+    }
+
     const wb = new Workbook();
     wb.creator = 'Baile Latino Platform';
     const ws = wb.addWorksheet('Canciones');
@@ -43,7 +55,7 @@ export class TracksExportService {
       { header: 'Título', key: 'title', width: 36 },
       { header: 'Artista', key: 'artist', width: 28 },
       { header: 'Estilo', key: 'style', width: 12 },
-      { header: 'Sub-estilo', key: 'substyle', width: 20 },
+      { header: 'Tags', key: 'tags', width: 28 },
       { header: 'BPM', key: 'bpm', width: 8 },
       { header: 'Año', key: 'year', width: 8 },
       { header: 'Duración (s)', key: 'durationSec', width: 12 },
@@ -61,7 +73,7 @@ export class TracksExportService {
         title: t.title,
         artist: t.artist,
         style: t.style,
-        substyle: t.substyle ?? '',
+        tags: [...(tagsByTrack.get(t.id) ?? [])].join(', '),
         bpm: t.bpm ?? '',
         year: t.year ?? '',
         durationSec: t.durationSec ?? '',
@@ -88,7 +100,7 @@ export class TracksExportService {
       { header: 'Título', key: 'title', width: 36 },
       { header: 'Artista', key: 'artist', width: 28 },
       { header: 'Estilo', key: 'style', width: 12 },
-      { header: 'Sub-estilo', key: 'substyle', width: 22 },
+      { header: 'Tags', key: 'tags', width: 28 },
       { header: 'BPM', key: 'bpm', width: 8 },
       { header: 'Año', key: 'year', width: 8 },
       { header: 'Link', key: 'link', width: 50 },
@@ -100,7 +112,7 @@ export class TracksExportService {
       title: 'Propuesta Indecente',
       artist: 'Romeo Santos',
       style: 'BACHATA',
-      substyle: 'BACHATA_SENSUAL',
+      tags: 'Sensual, Romántica',
       bpm: 130,
       year: 2013,
       link: 'https://www.youtube.com/watch?v=e_Vym6fEPdo',
@@ -114,7 +126,7 @@ export class TracksExportService {
       ['Título', 'Sí', 'Texto'],
       ['Artista', 'Sí', 'Texto'],
       ['Estilo', 'Sí', 'BACHATA | SALSA'],
-      ['Sub-estilo', 'No', 'BACHATA_SENSUAL, BACHATA_TRADICIONAL, BACHATA_URBANA, SALSA_ON1, SALSA_ON2, SALSA_CUBANA'],
+      ['Tags', 'No', 'Uno o varios separados por coma (ej: Sensual, Romántica). Se crean/normalizan en el vocabulario y se asocian a tu biblioteca.'],
       ['BPM', 'No', 'Número (ej: 130)'],
       ['Año', 'No', 'Número (ej: 2013)'],
       ['Link', 'Sí', 'URL de Spotify o YouTube'],

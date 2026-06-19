@@ -4,8 +4,8 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DANCE_STYLES,
-  DANCE_SUBSTYLES,
   TRACK_SOURCES,
+  type DanceStyle,
   type ExcelImportResult,
   type Paginated,
   type Track,
@@ -16,6 +16,12 @@ import { usePermissions } from '@/lib/permissions';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { usePlayer } from '@/components/player';
 import { SourceLink } from '@/components/source-link';
+import { EditTrackModal } from '@/components/edit-track-modal';
+import { SubstyleFilterSelect } from '@/components/substyle-select';
+import {
+  ConfirmDialog,
+  type ConfirmOptions,
+} from '@/components/confirm-dialog';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 20;
@@ -27,6 +33,9 @@ export default function CatalogPage() {
   const player = usePlayer();
   const isAdmin = user?.role === 'SUPER_ADMIN';
   const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
+  const canDelete = user ? perms.can(user.role, 'music', 'eliminar') : false;
+  const [editTrack, setEditTrack] = useState<Track | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
 
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
@@ -87,6 +96,15 @@ export default function CatalogPage() {
       void qc.invalidateQueries({ queryKey: ['catalog'] });
       void qc.invalidateQueries({ queryKey: ['library'] });
       exitSelect();
+    },
+  });
+
+  const removeTrack = useMutation({
+    mutationFn: (id: string) => api(`/music/tracks/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog'] });
+      void qc.invalidateQueries({ queryKey: ['catalog-summary'] });
+      void qc.invalidateQueries({ queryKey: ['library'] });
     },
   });
 
@@ -198,20 +216,14 @@ export default function CatalogPage() {
             <label className="mb-1 block text-xs text-neutral-400">
               Sub-estilo
             </label>
-            <Select
+            <SubstyleFilterSelect
+              style={style as DanceStyle}
               value={substyle}
-              onChange={(e) => {
-                setSubstyle(e.target.value);
+              onChange={(v) => {
+                setSubstyle(v);
                 setPage(1);
               }}
-            >
-              <option value="">Todos</option>
-              {DANCE_SUBSTYLES.filter((s) => s.startsWith(style)).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
+            />
           </div>
         )}
         <div>
@@ -281,7 +293,17 @@ export default function CatalogPage() {
                   <td className="px-4 py-3 font-medium">{t.title}</td>
                   <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
                   <td className="px-4 py-3">
-                    <StyleBadge style={t.substyle ?? t.style} />
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StyleBadge style={t.style} />
+                      {t.substyles?.map((s) => (
+                        <span
+                          key={s}
+                          className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-neutral-400">{t.bpm ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
@@ -305,6 +327,40 @@ export default function CatalogPage() {
                         </>
                       )}
                       <SourceLink track={t} />
+                      {canEdit && (
+                        <button
+                          className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
+                          title="Editar canción"
+                          aria-label="Editar canción"
+                          onClick={() => setEditTrack(t)}
+                        >
+                          ✏️
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
+                          title="Eliminar del catálogo"
+                          aria-label="Eliminar del catálogo"
+                          onClick={() =>
+                            setConfirm({
+                              title: 'Eliminar del catálogo',
+                              danger: true,
+                              confirmLabel: 'Eliminar',
+                              message: (
+                                <>
+                                  ¿Eliminar <b>{t.title}</b> del catálogo? Se
+                                  quitará de las bibliotecas y playlists de todos
+                                  los DJs. Esta acción no se puede deshacer.
+                                </>
+                              ),
+                              onConfirm: () => removeTrack.mutate(t.id),
+                            })
+                          }
+                        >
+                          🗑
+                        </button>
+                      )}
                       {canEdit && (
                         <button
                           className={
@@ -354,6 +410,20 @@ export default function CatalogPage() {
           </Button>
         </div>
       )}
+
+      {editTrack && (
+        <EditTrackModal
+          track={editTrack}
+          onClose={() => setEditTrack(null)}
+          onSaved={() => {
+            setEditTrack(null);
+            void qc.invalidateQueries({ queryKey: ['catalog'] });
+            void qc.invalidateQueries({ queryKey: ['library'] });
+          }}
+        />
+      )}
+
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }

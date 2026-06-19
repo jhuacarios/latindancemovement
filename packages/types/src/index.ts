@@ -98,7 +98,8 @@ export interface Track {
   title: string;
   artist: string;
   style: DanceStyle;
-  substyle: DanceSubstyle | null;
+  /** Sub-estilos (tags del vocabulario), hasta 3, a nivel de catálogo. */
+  substyles: string[];
   bpm: number | null;
   year: number | null;
   source: TrackSource;

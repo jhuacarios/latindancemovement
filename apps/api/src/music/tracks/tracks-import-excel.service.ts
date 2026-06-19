@@ -2,20 +2,19 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Workbook } from 'exceljs';
 import {
   DANCE_STYLES,
-  DANCE_SUBSTYLES,
   type DanceStyle,
-  type DanceSubstyle,
   type ExcelImportResult,
 } from '@baile-latino/types';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { TracksService } from './tracks.service';
+import { TagsService } from '../tags/tags.service';
 
 /** Encabezados aceptados por campo (normalizados: minúscula, sin acentos). */
 const HEADER_ALIASES: Record<string, string[]> = {
   title: ['titulo', 'title', 'nombre', 'cancion', 'tema'],
   artist: ['artista', 'artist', 'interprete'],
   style: ['estilo', 'style', 'genero'],
-  substyle: ['subestilo', 'sub estilo', 'substyle'],
+  tags: ['tags', 'etiquetas', 'tag', 'subestilos', 'sub estilos'],
   bpm: ['bpm', 'tempo'],
   year: ['ano', 'year', 'anio'],
   link: ['link', 'url', 'enlace'],
@@ -32,9 +31,18 @@ function normalize(s: string): string {
     .toLowerCase();
 }
 
+interface ParsedRow {
+  dto: CreateTrackDto;
+  tags: string[];
+  excelRow: number;
+}
+
 @Injectable()
 export class TracksImportExcelService {
-  constructor(private readonly tracks: TracksService) {}
+  constructor(
+    private readonly tracks: TracksService,
+    private readonly tags: TagsService,
+  ) {}
 
   async importBuffer(buffer: Buffer, userId: string): Promise<ExcelImportResult> {
     const wb = new Workbook();
@@ -55,9 +63,8 @@ export class TracksImportExcelService {
       );
     }
 
-    const dtos: CreateTrackDto[] = [];
-    const excelRows: number[] = [];
-    const parseErrors: { row: number; reason: string }[] = [];
+    const rows: ParsedRow[] = [];
+    const errors: { row: number; reason: string }[] = [];
     let totalRows = 0;
 
     ws.eachRow((row, rowNumber) => {
@@ -73,44 +80,60 @@ export class TracksImportExcelService {
 
       const style = this.parseStyle(rawStyle);
       if (!title || !artist) {
-        parseErrors.push({ row: rowNumber, reason: 'Falta título o artista' });
+        errors.push({ row: rowNumber, reason: 'Falta título o artista' });
         return;
       }
       if (!style) {
-        parseErrors.push({
+        errors.push({
           row: rowNumber,
           reason: `Estilo inválido: "${rawStyle}" (usa BACHATA o SALSA)`,
         });
         return;
       }
 
-      const dto: CreateTrackDto = {
-        title,
-        artist,
-        style,
-        substyle: this.parseSubstyle(get(cols.substyle)),
-        bpm: this.parseNum(get(cols.bpm)),
-        year: this.parseNum(get(cols.year)),
-        durationSec: this.parseNum(get(cols.durationSec)),
-        link: get(cols.link) || undefined,
-        source: this.parseSource(get(cols.source)),
-        sourceId: get(cols.sourceId) || undefined,
-      };
-      dtos.push(dto);
-      excelRows.push(rowNumber);
+      rows.push({
+        dto: {
+          title,
+          artist,
+          style,
+          bpm: this.parseNum(get(cols.bpm)),
+          year: this.parseNum(get(cols.year)),
+          durationSec: this.parseNum(get(cols.durationSec)),
+          link: get(cols.link) || undefined,
+          source: this.parseSource(get(cols.source)),
+          sourceId: get(cols.sourceId) || undefined,
+        },
+        tags: get(cols.tags)
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+        excelRow: rowNumber,
+      });
     });
 
-    const res = await this.tracks.importMany(dtos, userId);
-    const importErrors = res.errors.map((e) => ({
-      row: excelRows[e.index] ?? 0,
-      reason: e.reason,
-    }));
+    let created = 0;
+    let updated = 0;
+    for (const r of rows) {
+      try {
+        const res = await this.tracks.upsertCatalog(r.dto, userId);
+        if (res.created) created++;
+        else updated++;
+        if (r.tags.length) {
+          await this.tags.addTagsByName(res.id, userId, r.tags);
+        }
+      } catch (e) {
+        errors.push({
+          row: r.excelRow,
+          reason: e instanceof Error ? e.message : 'error desconocido',
+        });
+      }
+    }
 
     return {
       totalRows,
-      created: res.created,
-      updated: res.updated,
-      errors: [...parseErrors, ...importErrors].sort((a, b) => a.row - b.row),
+      created,
+      updated,
+      errors: errors.sort((a, b) => a.row - b.row),
     };
   }
 
@@ -132,14 +155,6 @@ export class TracksImportExcelService {
     const n = normalize(raw).toUpperCase();
     return (DANCE_STYLES as readonly string[]).includes(n)
       ? (n as DanceStyle)
-      : undefined;
-  }
-
-  private parseSubstyle(raw: string): DanceSubstyle | undefined {
-    if (!raw) return undefined;
-    const n = normalize(raw).toUpperCase().replace(/[\s-]+/g, '_');
-    return (DANCE_SUBSTYLES as readonly string[]).includes(n)
-      ? (n as DanceSubstyle)
       : undefined;
   }
 

@@ -10,11 +10,9 @@ import {
 } from 'class-validator';
 import {
   DANCE_STYLES,
-  DANCE_SUBSTYLES,
   TRACK_APPROVAL_STATUSES,
   TRACK_SOURCES,
   type DanceStyle,
-  type DanceSubstyle,
   type TrackApprovalStatus,
   type TrackSource,
 } from '@baile-latino/types';
@@ -29,8 +27,8 @@ export class QueryTracksDto {
   style?: DanceStyle;
 
   @IsOptional()
-  @IsIn(DANCE_SUBSTYLES)
-  substyle?: DanceSubstyle;
+  @IsString()
+  substyle?: string;
 
   @IsOptional()
   @IsIn(TRACK_SOURCES)

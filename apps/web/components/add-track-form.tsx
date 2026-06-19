@@ -3,19 +3,18 @@
 import { useState } from 'react';
 import {
   DANCE_STYLES,
-  DANCE_SUBSTYLES,
   type DanceStyle,
-  type DanceSubstyle,
   type ExtractedTrackMetadata,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Select } from './ui';
+import { SubstyleMultiSelect } from './substyle-select';
 
 export interface NewTrackBody {
   title: string;
   artist: string;
   style: DanceStyle;
-  substyle?: DanceSubstyle;
+  substyles?: string[];
   bpm?: number;
   year?: number;
   coverUrl?: string;
@@ -41,7 +40,7 @@ export function AddTrackForm({
     title: '',
     artist: '',
     style: 'BACHATA' as DanceStyle,
-    substyle: '' as '' | DanceSubstyle,
+    substyles: [] as string[],
     bpm: '',
     year: '',
     coverUrl: '',
@@ -51,8 +50,6 @@ export function AddTrackForm({
   const [info, setInfo] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const subForStyle = DANCE_SUBSTYLES.filter((s) => s.startsWith(form.style));
 
   async function autofill() {
     if (!form.link.trim()) {
@@ -71,7 +68,6 @@ export function AddTrackForm({
         title: m.title || f.title,
         artist: m.artist ?? f.artist,
         style: m.detectedStyle ?? f.style,
-        substyle: m.detectedSubstyle ?? f.substyle,
         year: m.year ? String(m.year) : f.year,
         coverUrl: m.coverUrl ?? f.coverUrl,
       }));
@@ -96,7 +92,7 @@ export function AddTrackForm({
         title: form.title,
         artist: form.artist,
         style: form.style,
-        substyle: form.substyle || undefined,
+        substyles: form.substyles,
         bpm: form.bpm ? Number(form.bpm) : undefined,
         year: form.year ? Number(form.year) : undefined,
         coverUrl: form.coverUrl || undefined,
@@ -153,23 +149,10 @@ export function AddTrackForm({
         <Select
           value={form.style}
           onChange={(e) =>
-            setForm({ ...form, style: e.target.value as DanceStyle, substyle: '' })
+            setForm({ ...form, style: e.target.value as DanceStyle, substyles: [] })
           }
         >
           {DANCE_STYLES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        <Select
-          value={form.substyle}
-          onChange={(e) =>
-            setForm({ ...form, substyle: e.target.value as DanceSubstyle | '' })
-          }
-        >
-          <option value="">Sub-estilo (opcional)</option>
-          {subForStyle.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -187,6 +170,16 @@ export function AddTrackForm({
           value={form.year}
           onChange={(e) => setForm({ ...form, year: e.target.value })}
         />
+        <div className="md:col-span-2">
+          <label className="mb-1 block text-xs text-neutral-400">
+            Sub-estilos (máx 3)
+          </label>
+          <SubstyleMultiSelect
+            style={form.style}
+            value={form.substyles}
+            onChange={(substyles) => setForm({ ...form, substyles })}
+          />
+        </div>
 
         {err && (
           <p className="md:col-span-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">

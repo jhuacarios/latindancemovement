@@ -68,7 +68,7 @@ export default function PlaylistDetailPage() {
                     </td>
                     <td className="px-4 py-3">
                       {item.track && (
-                        <StyleBadge style={item.track.substyle ?? item.track.style} />
+                        <StyleBadge style={item.track.style} />
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
