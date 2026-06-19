@@ -158,6 +158,7 @@ export const MODULES: AppModule[] = [
     children: [
       { label: 'Resumen', href: '/admin' },
       { label: 'Roles y permisos', href: '/admin/roles' },
+      { label: 'Estilos y sub-estilos', href: '/admin/tags' },
     ],
   },
 ];

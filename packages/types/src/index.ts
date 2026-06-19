@@ -118,6 +118,8 @@ export interface Track {
   updatedAt: string;
   /** Solo en vistas de catálogo: si está en la biblioteca del usuario actual. */
   inLibrary?: boolean;
+  /** Tags del usuario actual para esta canción (en "Mis Canciones"). */
+  tags?: TagRef[];
 }
 
 export interface PlaylistItem {
@@ -249,6 +251,37 @@ export interface PlaylistReport {
   actualBachataPct: number;
   targetBachataPct: number | null;
   estimatedMinutes: number;
+}
+
+// ---------------------------------------------------------------------------
+// Tags (vocabulario de sub-estilos)
+// ---------------------------------------------------------------------------
+export interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  style: DanceStyle | null;
+  /** Nº de asociaciones (canción×DJ) que usan este tag. */
+  usageCount?: number;
+}
+
+/** Resumen mínimo de un tag (para chips). */
+export interface TagRef {
+  id: string;
+  name: string;
+  style: DanceStyle | null;
+}
+
+/** Sugerencia de tag para una canción: cuántos DJs lo usaron en ella. */
+export interface TrackTagSuggestion extends TagRef {
+  count: number;
+}
+
+export interface TrackTagsResponse {
+  /** IDs de tags que el usuario actual asoció a la canción. */
+  mine: string[];
+  /** Tags usados en esta canción por cualquier DJ, de más a menos usado. */
+  suggestions: TrackTagSuggestion[];
 }
 
 // ---------------------------------------------------------------------------

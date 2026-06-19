@@ -4,6 +4,7 @@ import type { Paginated, Track } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toPublicTrack } from '../mappers';
 import { TracksService } from '../tracks/tracks.service';
+import { TagsService } from '../tags/tags.service';
 import { CreateTrackDto } from '../tracks/dto/create-track.dto';
 import { QueryTracksDto } from '../tracks/dto/query-tracks.dto';
 
@@ -12,6 +13,7 @@ export class LibraryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tracks: TracksService,
+    private readonly tags: TagsService,
   ) {}
 
   /** "Mis Canciones" = canciones de catálogo seleccionadas + canciones personales. */
@@ -46,7 +48,14 @@ export class LibraryService {
     ]);
 
     const data = rows.map(toPublicTrack);
-    for (const t of data) t.inLibrary = true;
+    const tagMap = await this.tags.tagsForTracks(
+      userId,
+      data.map((t) => t.id),
+    );
+    for (const t of data) {
+      t.inLibrary = true;
+      t.tags = tagMap.get(t.id) ?? [];
+    }
     return { data, total, page, pageSize };
   }
 

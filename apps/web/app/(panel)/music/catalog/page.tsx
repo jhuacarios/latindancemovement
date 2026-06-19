@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DANCE_STYLES,
+  DANCE_SUBSTYLES,
   TRACK_SOURCES,
   type ExcelImportResult,
   type Paginated,
@@ -29,6 +30,7 @@ export default function CatalogPage() {
 
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
+  const [substyle, setSubstyle] = useState('');
   const [source, setSource] = useState('');
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
@@ -49,11 +51,12 @@ export default function CatalogPage() {
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['catalog', { search, style, source, page }],
+    queryKey: ['catalog', { search, style, substyle, source, page }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (search) p.set('search', search);
       if (style) p.set('style', style);
+      if (substyle) p.set('substyle', substyle);
       if (source) p.set('source', source);
       p.set('page', String(page));
       p.set('pageSize', String(PAGE_SIZE));
@@ -178,6 +181,7 @@ export default function CatalogPage() {
             value={style}
             onChange={(e) => {
               setStyle(e.target.value);
+              setSubstyle('');
               setPage(1);
             }}
           >
@@ -189,6 +193,27 @@ export default function CatalogPage() {
             ))}
           </Select>
         </div>
+        {style && (
+          <div>
+            <label className="mb-1 block text-xs text-neutral-400">
+              Sub-estilo
+            </label>
+            <Select
+              value={substyle}
+              onChange={(e) => {
+                setSubstyle(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Todos</option>
+              {DANCE_SUBSTYLES.filter((s) => s.startsWith(style)).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-xs text-neutral-400">Fuente</label>
           <Select

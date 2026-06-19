@@ -22,6 +22,14 @@ export default function AdminHomePage() {
             </div>
           </Card>
         </Link>
+        <Link href="/admin/tags">
+          <Card className="h-full transition hover:border-brand/60">
+            <div className="font-semibold">Estilos y sub-estilos</div>
+            <div className="mt-1 text-sm text-neutral-400">
+              Vocabulario de tags que los DJs asocian a sus canciones.
+            </div>
+          </Card>
+        </Link>
       </div>
     </div>
   );

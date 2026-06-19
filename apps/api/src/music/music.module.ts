@@ -11,6 +11,8 @@ import { ReportsController } from './reports/reports.controller';
 import { ReportsService } from './reports/reports.service';
 import { LibraryController } from './library/library.controller';
 import { LibraryService } from './library/library.service';
+import { TagsController } from './tags/tags.controller';
+import { TagsService } from './tags/tags.service';
 
 @Module({
   controllers: [
@@ -18,6 +20,7 @@ import { LibraryService } from './library/library.service';
     PlaylistsController,
     ReportsController,
     LibraryController,
+    TagsController,
   ],
   providers: [
     TracksService,
@@ -28,6 +31,7 @@ import { LibraryService } from './library/library.service';
     PlaylistGenerationService,
     ReportsService,
     LibraryService,
+    TagsService,
   ],
 })
 export class MusicModule {}

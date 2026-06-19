@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DANCE_STYLES,
+  DANCE_SUBSTYLES,
   type Paginated,
   type Track,
 } from '@baile-latino/types';
@@ -12,6 +13,7 @@ import { api } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { usePlayer } from '@/components/player';
 import { SourceLink } from '@/components/source-link';
+import { TagEditor } from '@/components/tag-editor';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -31,11 +33,13 @@ export default function MyTracksPage() {
   const canDelete = user ? perms.can(user.role, 'music', 'eliminar') : false;
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
+  const [substyle, setSubstyle] = useState('');
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+  const [tagTrack, setTagTrack] = useState<Track | null>(null);
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -51,11 +55,12 @@ export default function MyTracksPage() {
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['library', { search, style, page }],
+    queryKey: ['library', { search, style, substyle, page }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (search) p.set('search', search);
       if (style) p.set('style', style);
+      if (substyle) p.set('substyle', substyle);
       p.set('page', String(page));
       p.set('pageSize', String(PAGE_SIZE));
       return api<Paginated<Track>>(`/music/library?${p.toString()}`);
@@ -189,6 +194,7 @@ export default function MyTracksPage() {
             value={style}
             onChange={(e) => {
               setStyle(e.target.value);
+              setSubstyle('');
               setPage(1);
             }}
           >
@@ -200,6 +206,27 @@ export default function MyTracksPage() {
             ))}
           </Select>
         </div>
+        {style && (
+          <div>
+            <label className="mb-1 block text-xs text-neutral-400">
+              Sub-estilo
+            </label>
+            <Select
+              value={substyle}
+              onChange={(e) => {
+                setSubstyle(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Todos</option>
+              {DANCE_SUBSTYLES.filter((s) => s.startsWith(style)).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
       </Card>
 
       {isLoading && <Spinner />}
@@ -251,7 +278,17 @@ export default function MyTracksPage() {
                   <td className="px-4 py-3 font-medium">{t.title}</td>
                   <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
                   <td className="px-4 py-3">
-                    <StyleBadge style={t.substyle ?? t.style} />
+                    <div className="flex flex-wrap items-center gap-1">
+                      <StyleBadge style={t.style} />
+                      {t.tags?.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     {t.scope === 'PERSONAL' ? (
@@ -284,6 +321,16 @@ export default function MyTracksPage() {
                             🎬
                           </button>
                         </>
+                      )}
+                      {canEdit && (
+                        <button
+                          className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
+                          title="Editar tags"
+                          aria-label="Editar tags"
+                          onClick={() => setTagTrack(t)}
+                        >
+                          🏷
+                        </button>
                       )}
                       <SourceLink track={t} />
                       {canDelete && (
@@ -354,6 +401,14 @@ export default function MyTracksPage() {
       )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+
+      {tagTrack && (
+        <TagEditor
+          trackId={tagTrack.id}
+          title={`${tagTrack.title} — ${tagTrack.artist}`}
+          onClose={() => setTagTrack(null)}
+        />
+      )}
     </div>
   );
 }

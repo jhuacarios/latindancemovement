@@ -35,14 +35,47 @@ async function main() {
   ] as const;
 
   for (const t of sample) {
-    await prisma.track.upsert({
-      where: { source_sourceId: { source: t.source, sourceId: t.sourceId } },
+    const exists = await prisma.track.findFirst({
+      where: { source: t.source, sourceId: t.sourceId, scope: 'CATALOG' },
+      select: { id: true },
+    });
+    if (!exists) {
+      await prisma.track.create({
+        data: { ...t, scope: 'CATALOG', createdById: dj.id, approvalStatus: 'APROBADA' },
+      });
+    }
+  }
+
+  // Vocabulario inicial de tags (sub-estilos).
+  const slugify = (s: string) =>
+    s
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ');
+
+  const tags = [
+    { name: 'Sensual', style: 'BACHATA' },
+    { name: 'Tradicional', style: 'BACHATA' },
+    { name: 'Urbana', style: 'BACHATA' },
+    { name: 'On1', style: 'SALSA' },
+    { name: 'On2', style: 'SALSA' },
+    { name: 'Cubana', style: 'SALSA' },
+  ];
+  for (const tag of tags) {
+    const slug = slugify(tag.name);
+    await prisma.tag.upsert({
+      where: { slug },
       update: {},
-      create: { ...t, createdById: dj.id, approvalStatus: 'APROBADA' },
+      create: { name: tag.name, slug, style: tag.style, createdById: dj.id },
     });
   }
 
-  console.log(`Seed OK. DJ: ${dj.email} / password123. Tracks: ${sample.length}`);
+  console.log(
+    `Seed OK. DJ: ${dj.email} / password123. Tracks: ${sample.length}. Tags: ${tags.length}`,
+  );
 }
 
 main()

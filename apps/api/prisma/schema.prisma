@@ -32,6 +32,7 @@ model User {
   tracksAsArtist Track[]        @relation("TrackArtist")
   ownedTracks    Track[]        @relation("TrackOwner")
   library        UserTrack[]
+  trackTags      TrackTag[]
   playlists      Playlist[]
   songRequests   SongRequest[]
   requestVotes   RequestVote[]
@@ -66,6 +67,7 @@ model Track {
   playlistItems PlaylistItem[]
   songRequests  SongRequest[]
   savedBy       UserTrack[]
+  trackTags     TrackTag[]
 
   // Sin unique global de (source,sourceId): el mismo video puede estar en el
   // catálogo y además como copia personal de uno o más DJs. Dedupe en la app.
@@ -83,6 +85,38 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+/// Vocabulario global de tags (sub-estilos). Único por `slug` normalizado
+/// (sin distinguir mayúsculas/acentos/puntuación). Lo administra el SUPER_ADMIN,
+/// pero un DJ también puede crear uno nuevo al etiquetar.
+model Tag {
+  id          String   @id @default(cuid())
+  name        String // texto a mostrar
+  slug        String   @unique // normalizado para deduplicar
+  style       String? // categoría opcional: BACHATA | SALSA
+  createdById String
+  createdAt   DateTime @default(now())
+
+  tracks TrackTag[]
+}
+
+/// Asociación DJ↔canción↔tag (cada DJ etiqueta según su apreciación).
+model TrackTag {
+  id        String   @id @default(cuid())
+  trackId   String
+  userId    String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, userId, tagId])
+  @@index([trackId])
+  @@index([tagId])
+  @@index([userId])
 }
 
 /// Biblioteca personal: canciones (de catálogo o personales) en "Mis Canciones".
