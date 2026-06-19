@@ -9,17 +9,41 @@ import {
   type PlaylistImportResult,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Input, Select, Spinner, StyleBadge } from './ui';
+import { Button, Input, Select, Spinner } from './ui';
 
 export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [link, setLink] = useState('');
   const [defaultStyle, setDefaultStyle] = useState<DanceStyle>('BACHATA');
   const [items, setItems] = useState<ExtractedTrackMetadata[] | null>(null);
+  /** Estilo elegido por fila (sourceId -> estilo). Editable en el preview. */
+  const [rowStyles, setRowStyles] = useState<Record<string, DanceStyle>>({});
+  /** Filas que el usuario tocó a mano (no las pisa el "estilo por defecto"). */
+  const [touched, setTouched] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<PlaylistImportResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  function applyDefault(style: DanceStyle) {
+    setDefaultStyle(style);
+    // El default solo pisa filas sin estilo detectado y no editadas a mano.
+    if (!items) return;
+    setRowStyles((prev) => {
+      const next = { ...prev };
+      for (const it of items) {
+        if (!it.detectedStyle && !touched.has(it.sourceId)) {
+          next[it.sourceId] = style;
+        }
+      }
+      return next;
+    });
+  }
+
+  function setRowStyle(sourceId: string, style: DanceStyle) {
+    setRowStyles((prev) => ({ ...prev, [sourceId]: style }));
+    setTouched((prev) => new Set(prev).add(sourceId));
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -42,6 +66,11 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
         { method: 'POST', body: { link } },
       );
       setItems(res);
+      // Estilo inicial por fila: el detectado, o el por defecto si no hay.
+      const init: Record<string, DanceStyle> = {};
+      for (const it of res) init[it.sourceId] = it.detectedStyle ?? defaultStyle;
+      setRowStyles(init);
+      setTouched(new Set());
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'No se pudo leer la playlist');
     } finally {
@@ -55,7 +84,7 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
     try {
       const res = await api<PlaylistImportResult>(
         '/music/tracks/import-playlist',
-        { method: 'POST', body: { link, defaultStyle } },
+        { method: 'POST', body: { link, defaultStyle, overrides: rowStyles } },
       );
       setResult(res);
       void qc.invalidateQueries({ queryKey: ['catalog'] });
@@ -122,7 +151,7 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
                 </span>
                 <Select
                   value={defaultStyle}
-                  onChange={(e) => setDefaultStyle(e.target.value as DanceStyle)}
+                  onChange={(e) => applyDefault(e.target.value as DanceStyle)}
                 >
                   {DANCE_STYLES.map((s) => (
                     <option key={s} value={s}>
@@ -154,12 +183,27 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
                         {it.artist ?? it.channelTitle ?? '—'}
                       </td>
                       <td className="px-3 py-2">
-                        <StyleBadge style={it.detectedStyle ?? defaultStyle} />
-                        {!it.detectedStyle && (
-                          <span className="ml-1 text-[10px] text-neutral-500">
-                            (defecto)
+                        <div className="flex items-center gap-1">
+                          <Select
+                            value={rowStyles[it.sourceId] ?? defaultStyle}
+                            onChange={(e) =>
+                              setRowStyle(it.sourceId, e.target.value as DanceStyle)
+                            }
+                          >
+                            {DANCE_STYLES.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </Select>
+                          <span className="text-[10px] text-neutral-500">
+                            {touched.has(it.sourceId)
+                              ? '(manual)'
+                              : it.detectedStyle
+                                ? '(auto)'
+                                : '(defecto)'}
                           </span>
-                        )}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-neutral-400">
                         {it.year ?? '—'}

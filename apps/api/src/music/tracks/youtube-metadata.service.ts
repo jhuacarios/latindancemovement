@@ -6,6 +6,7 @@ import type {
   YoutubeDetails,
 } from '@baile-latino/types';
 import { buildTrackUrl, parseTrackLink } from '../track-url.util';
+import { SpotifyService } from './spotify.service';
 
 /** Palabras de adorno típicas en títulos de YouTube que conviene limpiar. */
 const NOISE = [
@@ -34,6 +35,8 @@ const NOISE = [
 export class YoutubeMetadataService {
   private readonly logger = new Logger(YoutubeMetadataService.name);
 
+  constructor(private readonly spotify: SpotifyService) {}
+
   async extract(link: string): Promise<ExtractedTrackMetadata> {
     const parsed = parseTrackLink(link);
     if (!parsed) {
@@ -50,7 +53,7 @@ export class YoutubeMetadataService {
       ? await this.fromDataApi(parsed.sourceId, apiKey)
       : await this.fromOembed(parsed.sourceId);
 
-    return this.toExtracted(parsed.sourceId, base);
+    return this.applySpotifyStyle(this.toExtracted(parsed.sourceId, base));
   }
 
   /** Lee una playlist pública de YouTube y devuelve la metadata de cada video. */
@@ -87,7 +90,42 @@ export class YoutubeMetadataService {
         out.push(this.toExtracted(String(item.id), this.buildVideoData(item)));
       }
     }
-    return out;
+    return this.enrichManyWithSpotify(out);
+  }
+
+  /**
+   * Fuente autoritativa de estilo: si Spotify lo reconoce, su resultado
+   * pisa al detectado por las señales de YouTube. Se procesa por lotes
+   * para no saturar la API. Si Spotify está deshabilitado, no hace nada.
+   */
+  private async enrichManyWithSpotify(
+    items: ExtractedTrackMetadata[],
+  ): Promise<ExtractedTrackMetadata[]> {
+    if (!this.spotify.enabled || !items.length) return items;
+    const CHUNK = 5;
+    const result = [...items];
+    for (let i = 0; i < result.length; i += CHUNK) {
+      const slice = result.slice(i, i + CHUNK);
+      const enriched = await Promise.all(
+        slice.map((it) => this.applySpotifyStyle(it)),
+      );
+      for (let j = 0; j < enriched.length; j++) result[i + j] = enriched[j];
+    }
+    return result;
+  }
+
+  private async applySpotifyStyle(
+    item: ExtractedTrackMetadata,
+  ): Promise<ExtractedTrackMetadata> {
+    const guess = await this.spotify.detectStyle(item.title, item.artist);
+    if (guess?.style) {
+      return {
+        ...item,
+        detectedStyle: guess.style,
+        detectedSubstyle: guess.substyle ?? item.detectedSubstyle,
+      };
+    }
+    return item;
   }
 
   /** Normaliza un "base" (de la API/oEmbed) a la forma extraída final. */
@@ -95,7 +133,16 @@ export class YoutubeMetadataService {
     sourceId: string,
     base: VideoBase,
   ): ExtractedTrackMetadata {
-    const haystack = [base.rawTitle, base.channelTitle, base.tags?.join(' ')]
+    const topics = (base.details.topicCategories ?? [])
+      .map(decodeTopicUrl)
+      .join(' ');
+    const haystack = [
+      base.rawTitle,
+      base.channelTitle,
+      base.tags?.join(' '),
+      base.details.description,
+      topics,
+    ]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
@@ -312,6 +359,16 @@ export class YoutubeMetadataService {
         substyle = 'SALSA_ON1';
     }
     return { style, substyle };
+  }
+}
+
+/** "https://en.wikipedia.org/wiki/Salsa_music" -> "salsa music". */
+function decodeTopicUrl(url: string): string {
+  const seg = url.split('/wiki/')[1] ?? '';
+  try {
+    return decodeURIComponent(seg).replace(/_/g, ' ');
+  } catch {
+    return seg.replace(/_/g, ' ');
   }
 }
 

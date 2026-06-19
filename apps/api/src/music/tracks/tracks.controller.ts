@@ -103,7 +103,12 @@ export class TracksController {
     @CurrentUser() user: AuthUser,
   ) {
     const items = await this.youtube.extractPlaylist(dto.link);
-    return this.tracks.importPlaylistItems(items, dto.defaultStyle, user.id);
+    return this.tracks.importPlaylistItems(
+      items,
+      dto.defaultStyle,
+      user.id,
+      dto.overrides,
+    );
   }
 
   @Get(':id')

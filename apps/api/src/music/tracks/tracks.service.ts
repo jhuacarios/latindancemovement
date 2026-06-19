@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { DANCE_STYLES } from '@baile-latino/types';
 import type {
   DanceStyle,
   ExtractedTrackMetadata,
@@ -262,6 +263,7 @@ export class TracksService {
     items: ExtractedTrackMetadata[],
     defaultStyle: DanceStyle,
     userId: string,
+    overrides?: Record<string, DanceStyle>,
   ): Promise<PlaylistImportResult> {
     let created = 0;
     let updated = 0;
@@ -269,11 +271,16 @@ export class TracksService {
 
     for (const it of items) {
       try {
+        const override = overrides?.[it.sourceId];
+        const style: DanceStyle =
+          override && DANCE_STYLES.includes(override)
+            ? override
+            : (it.detectedStyle ?? defaultStyle);
         const res = await this.upsertCatalog(
           {
             title: it.title,
             artist: it.artist ?? it.channelTitle ?? 'Desconocido',
-            style: it.detectedStyle ?? defaultStyle,
+            style,
             source: 'YOUTUBE',
             sourceId: it.sourceId,
             year: it.year ?? undefined,
