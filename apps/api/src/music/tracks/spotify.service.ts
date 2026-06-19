@@ -6,6 +6,14 @@ interface StyleGuess {
   substyle: DanceSubstyle | null;
 }
 
+/** Resultado de buscar un track en Spotify: estilo inferido + año real del álbum. */
+export interface SpotifyMatch {
+  style: DanceStyle | null;
+  substyle: DanceSubstyle | null;
+  /** Año de lanzamiento real (de `album.release_date`), no el de subida a YouTube. */
+  year: number | null;
+}
+
 /**
  * Cliente liviano de la Spotify Web API (flujo client-credentials).
  * Se usa como fuente autoritativa de género: busca el track por
@@ -28,41 +36,41 @@ export class SpotifyService {
     );
   }
 
-  /** Devuelve el estilo/sub-estilo inferido vía Spotify, o null si no se pudo. */
-  async detectStyle(title: string, artist: string | null): Promise<StyleGuess | null> {
+  /**
+   * Busca el track en Spotify y devuelve estilo (de los géneros del artista)
+   * + año real (del álbum), o null si no hay match / Spotify deshabilitado.
+   */
+  async lookup(title: string, artist: string | null): Promise<SpotifyMatch | null> {
     if (!this.enabled) return null;
     try {
-      const genres = await this.genresForTrack(title, artist);
-      if (!genres.length) return null;
-      const guess = mapGenresToStyle(genres);
-      return guess.style ? guess : null;
+      const token = await this.getToken();
+      const q = encodeURIComponent([title, artist].filter(Boolean).join(' '));
+      const url = `https://api.spotify.com/v1/search?q=${q}&type=track&limit=3`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        if (res.status === 401) this.token = null; // forzar refresh la próxima
+        return null;
+      }
+      const json = (await res.json()) as any;
+      const track = json.tracks?.items?.[0];
+      if (!track) return null;
+
+      const year = parseYear(track.album?.release_date);
+      const artistId: string | undefined = track.artists?.[0]?.id;
+      let guess: StyleGuess = { style: null, substyle: null };
+      if (artistId) {
+        const genres = await this.genresForArtist(artistId, token);
+        if (genres.length) guess = mapGenresToStyle(genres);
+      }
+      return { style: guess.style, substyle: guess.substyle, year };
     } catch (e) {
       this.logger.warn(
         `Spotify falló para "${title}": ${e instanceof Error ? e.message : e}`,
       );
       return null;
     }
-  }
-
-  private async genresForTrack(
-    title: string,
-    artist: string | null,
-  ): Promise<string[]> {
-    const token = await this.getToken();
-    const q = encodeURIComponent([title, artist].filter(Boolean).join(' '));
-    const url = `https://api.spotify.com/v1/search?q=${q}&type=track&limit=3`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      if (res.status === 401) this.token = null; // forzar refresh la próxima
-      return [];
-    }
-    const json = (await res.json()) as any;
-    const artistId: string | undefined =
-      json.tracks?.items?.[0]?.artists?.[0]?.id;
-    if (!artistId) return [];
-    return this.genresForArtist(artistId, token);
   }
 
   private async genresForArtist(artistId: string, token: string): Promise<string[]> {
@@ -104,6 +112,13 @@ export class SpotifyService {
     };
     return this.token.value;
   }
+}
+
+/** "2021-05-10" | "2021-05" | "2021" -> 2021 (o null si no es válido). */
+function parseYear(releaseDate?: string): number | null {
+  if (!releaseDate) return null;
+  const y = Number(String(releaseDate).slice(0, 4));
+  return Number.isFinite(y) && y > 1900 ? y : null;
 }
 
 /** Mapea una lista de géneros de Spotify a estilo + sub-estilo de baile. */

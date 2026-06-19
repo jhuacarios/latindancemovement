@@ -117,15 +117,18 @@ export class YoutubeMetadataService {
   private async applySpotifyStyle(
     item: ExtractedTrackMetadata,
   ): Promise<ExtractedTrackMetadata> {
-    const guess = await this.spotify.detectStyle(item.title, item.artist);
-    if (guess?.style) {
-      return {
-        ...item,
-        detectedStyle: guess.style,
-        detectedSubstyle: guess.substyle ?? item.detectedSubstyle,
-      };
-    }
-    return item;
+    const match = await this.spotify.lookup(item.title, item.artist);
+    if (!match) return item;
+    return {
+      ...item,
+      // El estilo de Spotify pisa al de YouTube; si no hay, se mantiene el actual.
+      detectedStyle: match.style ?? item.detectedStyle,
+      detectedSubstyle: match.style
+        ? (match.substyle ?? item.detectedSubstyle)
+        : item.detectedSubstyle,
+      // El año real del álbum tiene prioridad sobre el de subida a YouTube.
+      year: match.year ?? item.year,
+    };
   }
 
   /** Normaliza un "base" (de la API/oEmbed) a la forma extraída final. */
