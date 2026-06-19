@@ -14,6 +14,14 @@ export default function AdminHomePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Link href="/admin/users">
+          <Card className="h-full transition hover:border-brand/60">
+            <div className="font-semibold">Usuarios</div>
+            <div className="mt-1 text-sm text-neutral-400">
+              Crea usuarios, cambia sus roles y elimínalos.
+            </div>
+          </Card>
+        </Link>
         <Link href="/admin/roles">
           <Card className="h-full transition hover:border-brand/60">
             <div className="font-semibold">Roles y permisos</div>

@@ -157,6 +157,7 @@ export const MODULES: AppModule[] = [
     status: 'ready',
     children: [
       { label: 'Resumen', href: '/admin' },
+      { label: 'Usuarios', href: '/admin/users' },
       { label: 'Roles y permisos', href: '/admin/roles' },
       { label: 'Estilos y sub-estilos', href: '/admin/tags' },
     ],
