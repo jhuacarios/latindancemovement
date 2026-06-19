@@ -7,6 +7,7 @@ import type {
 } from '@baile-latino/types';
 import { buildTrackUrl, parseTrackLink } from '../track-url.util';
 import { SpotifyService } from './spotify.service';
+import { DiscogsService } from './discogs.service';
 
 /** Palabras de adorno típicas en títulos de YouTube que conviene limpiar. */
 const NOISE = [
@@ -35,7 +36,10 @@ const NOISE = [
 export class YoutubeMetadataService {
   private readonly logger = new Logger(YoutubeMetadataService.name);
 
-  constructor(private readonly spotify: SpotifyService) {}
+  constructor(
+    private readonly spotify: SpotifyService,
+    private readonly discogs: DiscogsService,
+  ) {}
 
   async extract(link: string): Promise<ExtractedTrackMetadata> {
     const parsed = parseTrackLink(link);
@@ -53,7 +57,7 @@ export class YoutubeMetadataService {
       ? await this.fromDataApi(parsed.sourceId, apiKey)
       : await this.fromOembed(parsed.sourceId);
 
-    return this.applySpotifyStyle(this.toExtracted(parsed.sourceId, base));
+    return this.applyExternalStyle(this.toExtracted(parsed.sourceId, base));
   }
 
   /** Lee una playlist pública de YouTube y devuelve la metadata de cada video. */
@@ -90,44 +94,60 @@ export class YoutubeMetadataService {
         out.push(this.toExtracted(String(item.id), this.buildVideoData(item)));
       }
     }
-    return this.enrichManyWithSpotify(out);
+    return this.enrichManyExternal(out);
   }
 
   /**
-   * Fuente autoritativa de estilo: si Spotify lo reconoce, su resultado
-   * pisa al detectado por las señales de YouTube. Se procesa por lotes
-   * para no saturar la API. Si Spotify está deshabilitado, no hace nada.
+   * Enriquece el estilo/año con fuentes externas, por lotes para no saturar
+   * las APIs. Si ninguna fuente está habilitada, no hace nada.
    */
-  private async enrichManyWithSpotify(
+  private async enrichManyExternal(
     items: ExtractedTrackMetadata[],
   ): Promise<ExtractedTrackMetadata[]> {
-    if (!this.spotify.enabled || !items.length) return items;
+    if ((!this.spotify.enabled && !this.discogs.enabled) || !items.length) {
+      return items;
+    }
     const CHUNK = 5;
     const result = [...items];
     for (let i = 0; i < result.length; i += CHUNK) {
       const slice = result.slice(i, i + CHUNK);
       const enriched = await Promise.all(
-        slice.map((it) => this.applySpotifyStyle(it)),
+        slice.map((it) => this.applyExternalStyle(it)),
       );
       for (let j = 0; j < enriched.length; j++) result[i + j] = enriched[j];
     }
     return result;
   }
 
-  private async applySpotifyStyle(
+  /**
+   * Cascada de detección: Spotify (año + género mainstream) → Discogs
+   * (campo "Style", ideal para música cubana) → señales de YouTube
+   * (lo ya detectado). El año real del álbum pisa al de subida a YouTube.
+   */
+  private async applyExternalStyle(
     item: ExtractedTrackMetadata,
   ): Promise<ExtractedTrackMetadata> {
-    const match = await this.spotify.lookup(item.title, item.artist);
-    if (!match) return item;
+    const sp = await this.spotify.lookup(item.title, item.artist);
+    let style = sp?.style ?? null;
+    let substyle = sp?.style ? (sp.substyle ?? null) : null;
+    let year = sp?.year ?? null;
+
+    // Discogs solo si Spotify no resolvió el estilo (su "Style" es más certero
+    // para géneros cubanos que Spotify no etiqueta).
+    if (!style) {
+      const dc = await this.discogs.lookup(item.title, item.artist);
+      if (dc?.style) {
+        style = dc.style;
+        substyle = dc.substyle;
+      }
+      year = year ?? dc?.year ?? null;
+    }
+
     return {
       ...item,
-      // El estilo de Spotify pisa al de YouTube; si no hay, se mantiene el actual.
-      detectedStyle: match.style ?? item.detectedStyle,
-      detectedSubstyle: match.style
-        ? (match.substyle ?? item.detectedSubstyle)
-        : item.detectedSubstyle,
-      // El año real del álbum tiene prioridad sobre el de subida a YouTube.
-      year: match.year ?? item.year,
+      detectedStyle: style ?? item.detectedStyle,
+      detectedSubstyle: style ? (substyle ?? item.detectedSubstyle) : item.detectedSubstyle,
+      year: year ?? item.year,
     };
   }
 
