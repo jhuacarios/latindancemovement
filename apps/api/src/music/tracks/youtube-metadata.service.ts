@@ -347,15 +347,26 @@ export class YoutubeMetadataService {
     let style: DanceStyle | null = null;
     let substyle: DanceSubstyle | null = null;
 
+    // Géneros cubanos que implican salsa cubana (timba y familia).
+    const cuban = [
+      'timba',
+      'son cubano',
+      'son montuno',
+      'guaracha',
+      'songo',
+      'charanga',
+      'casino',
+    ];
+    const hasCuban = cuban.some((k) => haystack.includes(k));
+
     if (haystack.includes('bachata')) {
       style = 'BACHATA';
       if (haystack.includes('sensual')) substyle = 'BACHATA_SENSUAL';
       else if (haystack.includes('tradicional')) substyle = 'BACHATA_TRADICIONAL';
       else if (haystack.includes('urbana')) substyle = 'BACHATA_URBANA';
-    } else if (haystack.includes('salsa')) {
+    } else if (haystack.includes('salsa') || hasCuban) {
       style = 'SALSA';
-      if (haystack.includes('cubana') || haystack.includes('casino'))
-        substyle = 'SALSA_CUBANA';
+      if (haystack.includes('cubana') || hasCuban) substyle = 'SALSA_CUBANA';
       else if (haystack.includes('on2') || haystack.includes('on 2'))
         substyle = 'SALSA_ON2';
       else if (haystack.includes('on1') || haystack.includes('on 1'))
