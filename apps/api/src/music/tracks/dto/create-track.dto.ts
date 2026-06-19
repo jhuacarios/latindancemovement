@@ -91,4 +91,10 @@ export class CreateTrackDto {
   @IsOptional()
   @IsString()
   artistUserId?: string;
+
+  /** JSON con todos los datos de YouTube (del autocompletar). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20000)
+  ytMetadata?: string;
 }

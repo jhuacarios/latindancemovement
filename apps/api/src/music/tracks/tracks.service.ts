@@ -59,6 +59,7 @@ export class TracksService {
         scope: 'CATALOG',
         ownerId: null,
         artistUserId: dto.artistUserId ?? null,
+        ytMetadata: dto.ytMetadata ?? null,
         createdById: userId,
       },
     });
@@ -128,6 +129,7 @@ export class TracksService {
       year: dto.year ?? null,
       coverUrl: dto.coverUrl ?? null,
       durationSec: dto.durationSec ?? null,
+      ytMetadata: dto.ytMetadata ?? null,
     };
     const existing = await this.prisma.track.findFirst({
       where: { source, sourceId, scope: 'CATALOG' },
@@ -168,6 +170,7 @@ export class TracksService {
       durationSec: dto.durationSec,
       isRelease: dto.isRelease,
       approvalStatus: dto.approvalStatus,
+      ytMetadata: dto.ytMetadata,
     };
 
     // Si se cambia el link, re-resolvemos la fuente y evitamos duplicados.

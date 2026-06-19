@@ -3,6 +3,7 @@ import type {
   DanceStyle,
   DanceSubstyle,
   ExtractedTrackMetadata,
+  YoutubeDetails,
 } from '@baile-latino/types';
 import { buildTrackUrl, parseTrackLink } from '../track-url.util';
 
@@ -72,12 +73,13 @@ export class YoutubeMetadataService {
       detectedStyle: style,
       detectedSubstyle: substyle,
       via: base.via,
+      details: base.details,
     };
   }
 
   // --- YouTube Data API v3 (requiere YOUTUBE_API_KEY) ----------------------
   private async fromDataApi(id: string, apiKey: string) {
-    const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${id}&key=${apiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,status,topicDetails&id=${id}&key=${apiKey}`;
     const res = await fetch(url);
     if (!res.ok) {
       this.logger.warn(`YouTube API ${res.status}; usando oEmbed de respaldo`);
@@ -87,10 +89,43 @@ export class YoutubeMetadataService {
     const item = json.items?.[0];
     if (!item) throw new BadRequestException('Video de YouTube no encontrado.');
     const sn = item.snippet ?? {};
+    const cd = item.contentDetails ?? {};
+    const st = item.statistics ?? {};
+    const status = item.status ?? {};
+    const td = item.topicDetails ?? {};
+
+    const details: YoutubeDetails = {
+      description: sn.description ?? null,
+      channelId: sn.channelId ?? null,
+      channelTitle: sn.channelTitle ?? null,
+      categoryId: sn.categoryId ?? null,
+      publishedAt: sn.publishedAt ?? null,
+      tags: Array.isArray(sn.tags) ? (sn.tags as string[]) : undefined,
+      defaultAudioLanguage: sn.defaultAudioLanguage ?? sn.defaultLanguage ?? null,
+      definition: cd.definition ?? null,
+      dimension: cd.dimension ?? null,
+      caption: cd.caption != null ? String(cd.caption) === 'true' : null,
+      licensedContent:
+        typeof cd.licensedContent === 'boolean' ? cd.licensedContent : null,
+      viewCount: st.viewCount ?? null,
+      likeCount: st.likeCount ?? null,
+      commentCount: st.commentCount ?? null,
+      privacyStatus: status.privacyStatus ?? null,
+      embeddable: typeof status.embeddable === 'boolean' ? status.embeddable : null,
+      madeForKids: typeof status.madeForKids === 'boolean' ? status.madeForKids : null,
+      license: status.license ?? null,
+      uploadStatus: status.uploadStatus ?? null,
+      topicCategories: Array.isArray(td.topicCategories)
+        ? (td.topicCategories as string[])
+        : undefined,
+      via: 'youtube-api',
+      fetchedAt: new Date().toISOString(),
+    };
+
     return {
       rawTitle: String(sn.title ?? ''),
       channelTitle: sn.channelTitle ? String(sn.channelTitle) : null,
-      durationSec: this.parseIsoDuration(item.contentDetails?.duration),
+      durationSec: this.parseIsoDuration(cd.duration),
       year: sn.publishedAt ? Number(String(sn.publishedAt).slice(0, 4)) : null,
       coverUrl:
         sn.thumbnails?.high?.url ??
@@ -99,6 +134,7 @@ export class YoutubeMetadataService {
         null,
       tags: Array.isArray(sn.tags) ? (sn.tags as string[]) : undefined,
       via: 'youtube-api' as const,
+      details,
     };
   }
 
@@ -113,6 +149,11 @@ export class YoutubeMetadataService {
       );
     }
     const json = (await res.json()) as any;
+    const details: YoutubeDetails = {
+      channelTitle: json.author_name ? String(json.author_name) : null,
+      via: 'oembed',
+      fetchedAt: new Date().toISOString(),
+    };
     return {
       rawTitle: String(json.title ?? ''),
       channelTitle: json.author_name ? String(json.author_name) : null,
@@ -121,6 +162,7 @@ export class YoutubeMetadataService {
       coverUrl: json.thumbnail_url ? String(json.thumbnail_url) : null,
       tags: undefined as string[] | undefined,
       via: 'oembed' as const,
+      details,
     };
   }
 

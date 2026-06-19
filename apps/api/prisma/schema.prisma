@@ -56,6 +56,7 @@ model Track {
   approvalStatus String   @default("APROBADA") // TrackApprovalStatus
   scope          String   @default("CATALOG") // TrackScope: CATALOG (global) | PERSONAL (privada del DJ)
   ownerId        String? // dueño cuando scope = PERSONAL
+  ytMetadata     String? // JSON con todos los datos extraídos de YouTube (snippet, stats, status, etc.)
   artistUserId   String?
   createdById    String
   createdAt      DateTime @default(now())

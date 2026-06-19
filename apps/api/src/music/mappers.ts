@@ -41,7 +41,17 @@ export function toPublicTrack(t: PrismaTrack): Track {
     createdById: t.createdById,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
+    details: parseYtMetadata(t.ytMetadata),
   };
+}
+
+function parseYtMetadata(raw: string | null): Track['details'] {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Track['details'];
+  } catch {
+    return null;
+  }
 }
 
 type PrismaItemWithTrack = PrismaPlaylistItem & { track?: PrismaTrack | null };

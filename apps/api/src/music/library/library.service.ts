@@ -105,6 +105,7 @@ export class LibraryService {
           sourceId,
           coverUrl: dto.coverUrl ?? null,
           durationSec: dto.durationSec ?? null,
+          ytMetadata: dto.ytMetadata ?? null,
           scope: 'PERSONAL',
           ownerId: userId,
           createdById: userId,

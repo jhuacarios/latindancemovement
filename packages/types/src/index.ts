@@ -121,6 +121,8 @@ export interface Track {
   inLibrary?: boolean;
   /** Tags del usuario actual para esta canción (en "Mis Canciones"). */
   tags?: TagRef[];
+  /** Datos completos de YouTube guardados (si se autocompletó). */
+  details?: YoutubeDetails | null;
 }
 
 export interface PlaylistItem {
@@ -184,6 +186,32 @@ export interface ImportResult {
   errors: { index: number; reason: string }[];
 }
 
+/** Todos los datos extra de YouTube que guardamos en la canción (JSON). */
+export interface YoutubeDetails {
+  description?: string | null;
+  channelId?: string | null;
+  channelTitle?: string | null;
+  categoryId?: string | null;
+  publishedAt?: string | null;
+  tags?: string[];
+  defaultAudioLanguage?: string | null;
+  definition?: string | null; // hd | sd
+  dimension?: string | null; // 2d | 3d
+  caption?: boolean | null;
+  licensedContent?: boolean | null;
+  viewCount?: string | null;
+  likeCount?: string | null;
+  commentCount?: string | null;
+  privacyStatus?: string | null;
+  embeddable?: boolean | null;
+  madeForKids?: boolean | null;
+  license?: string | null;
+  uploadStatus?: string | null;
+  topicCategories?: string[];
+  via: 'youtube-api' | 'oembed';
+  fetchedAt: string;
+}
+
 /** Metadata extraída de un link (YouTube) para autocompletar una canción. */
 export interface ExtractedTrackMetadata {
   source: TrackSource;
@@ -199,6 +227,8 @@ export interface ExtractedTrackMetadata {
   detectedSubstyle: DanceSubstyle | null;
   /** De dónde salió la info: API de YouTube (completa) u oEmbed (básica). */
   via: 'youtube-api' | 'oembed';
+  /** Todos los datos extra disponibles (para guardar en la canción). */
+  details: YoutubeDetails;
 }
 
 /** Resultado de importar canciones desde un archivo Excel. */

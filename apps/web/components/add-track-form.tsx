@@ -5,6 +5,7 @@ import {
   DANCE_STYLES,
   type DanceStyle,
   type ExtractedTrackMetadata,
+  type YoutubeDetails,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Select } from './ui';
@@ -19,6 +20,7 @@ export interface NewTrackBody {
   year?: number;
   coverUrl?: string;
   link: string;
+  ytMetadata?: string;
 }
 
 /**
@@ -46,6 +48,7 @@ export function AddTrackForm({
     coverUrl: '',
     link: '',
   });
+  const [ytDetails, setYtDetails] = useState<YoutubeDetails | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -71,9 +74,12 @@ export function AddTrackForm({
         year: m.year ? String(m.year) : f.year,
         coverUrl: m.coverUrl ?? f.coverUrl,
       }));
+      setYtDetails(m.details);
       const parts: string[] = [];
       if (m.detectedStyle) parts.push(`estilo: ${m.detectedStyle}`);
       if (m.durationSec) parts.push(`${Math.round(m.durationSec / 60)} min`);
+      if (m.details?.viewCount)
+        parts.push(`${Number(m.details.viewCount).toLocaleString()} vistas`);
       parts.push(m.via === 'youtube-api' ? 'YouTube API' : 'oEmbed');
       setInfo(`✓ Autocompletado (${parts.join(' · ')}). Revisa y guarda.`);
     } catch (e) {
@@ -97,6 +103,7 @@ export function AddTrackForm({
         year: form.year ? Number(form.year) : undefined,
         coverUrl: form.coverUrl || undefined,
         link: form.link,
+        ytMetadata: ytDetails ? JSON.stringify(ytDetails) : undefined,
       });
       onDone();
     } catch (e) {
