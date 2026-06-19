@@ -6,8 +6,11 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
+  DanceStyle,
+  ExtractedTrackMetadata,
   ImportResult,
   Paginated,
+  PlaylistImportResult,
   Track,
   TrackSource,
 } from '@baile-latino/types';
@@ -89,7 +92,7 @@ export class TracksService {
       ];
     }
 
-    const orderBy = this.buildOrderBy(q.sort);
+    const orderBy = this.buildOrderBy(q);
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.track.findMany({
@@ -254,10 +257,60 @@ export class TracksService {
     return result;
   }
 
-  private buildOrderBy(
-    sort: QueryTracksDto['sort'],
-  ): Prisma.TrackOrderByWithRelationInput {
-    switch (sort) {
+  /** Guarda en el catálogo las canciones extraídas de una playlist de YouTube. */
+  async importPlaylistItems(
+    items: ExtractedTrackMetadata[],
+    defaultStyle: DanceStyle,
+    userId: string,
+  ): Promise<PlaylistImportResult> {
+    let created = 0;
+    let updated = 0;
+    const errors: string[] = [];
+
+    for (const it of items) {
+      try {
+        const res = await this.upsertCatalog(
+          {
+            title: it.title,
+            artist: it.artist ?? it.channelTitle ?? 'Desconocido',
+            style: it.detectedStyle ?? defaultStyle,
+            source: 'YOUTUBE',
+            sourceId: it.sourceId,
+            year: it.year ?? undefined,
+            coverUrl: it.coverUrl ?? undefined,
+            durationSec: it.durationSec ?? undefined,
+            ytMetadata: JSON.stringify(it.details),
+          },
+          userId,
+        );
+        if (res.created) created++;
+        else updated++;
+      } catch (e) {
+        errors.push(
+          `${it.title}: ${e instanceof Error ? e.message : 'error'}`,
+        );
+      }
+    }
+
+    return { total: items.length, created, updated, errors };
+  }
+
+  private buildOrderBy(q: QueryTracksDto): Prisma.TrackOrderByWithRelationInput {
+    // Ordenamiento por columna (click en el header).
+    if (q.sortBy) {
+      const dir: Prisma.SortOrder = q.sortDir === 'desc' ? 'desc' : 'asc';
+      switch (q.sortBy) {
+        case 'title':
+          return { title: dir };
+        case 'artist':
+          return { artist: dir };
+        case 'bpm':
+          return { bpm: dir };
+        case 'year':
+          return { year: dir };
+      }
+    }
+    switch (q.sort) {
       case 'title':
         return { title: 'asc' };
       case 'artist':

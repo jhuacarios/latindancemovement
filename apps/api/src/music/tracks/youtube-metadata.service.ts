@@ -50,6 +50,51 @@ export class YoutubeMetadataService {
       ? await this.fromDataApi(parsed.sourceId, apiKey)
       : await this.fromOembed(parsed.sourceId);
 
+    return this.toExtracted(parsed.sourceId, base);
+  }
+
+  /** Lee una playlist pública de YouTube y devuelve la metadata de cada video. */
+  async extractPlaylist(link: string): Promise<ExtractedTrackMetadata[]> {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      throw new BadRequestException(
+        'Importar playlists requiere configurar YOUTUBE_API_KEY.',
+      );
+    }
+    const playlistId = this.parsePlaylistId(link);
+    if (!playlistId) {
+      throw new BadRequestException(
+        'No se reconoció una playlist de YouTube en el link.',
+      );
+    }
+
+    const videoIds = await this.fetchPlaylistVideoIds(playlistId, apiKey);
+    if (!videoIds.length) {
+      throw new BadRequestException(
+        'La playlist está vacía o no es pública.',
+      );
+    }
+
+    const out: ExtractedTrackMetadata[] = [];
+    // videos.list acepta hasta 50 ids por llamada.
+    for (let i = 0; i < videoIds.length; i += 50) {
+      const chunk = videoIds.slice(i, i + 50);
+      const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,status,topicDetails&id=${chunk.join(',')}&key=${apiKey}`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const json = (await res.json()) as any;
+      for (const item of json.items ?? []) {
+        out.push(this.toExtracted(String(item.id), this.buildVideoData(item)));
+      }
+    }
+    return out;
+  }
+
+  /** Normaliza un "base" (de la API/oEmbed) a la forma extraída final. */
+  private toExtracted(
+    sourceId: string,
+    base: VideoBase,
+  ): ExtractedTrackMetadata {
     const haystack = [base.rawTitle, base.channelTitle, base.tags?.join(' ')]
       .filter(Boolean)
       .join(' ')
@@ -59,11 +104,10 @@ export class YoutubeMetadataService {
       base.rawTitle,
       base.channelTitle,
     );
-
     return {
       source: 'YOUTUBE',
-      sourceId: parsed.sourceId,
-      url: buildTrackUrl('YOUTUBE', parsed.sourceId),
+      sourceId,
+      url: buildTrackUrl('YOUTUBE', sourceId),
       title,
       artist,
       durationSec: base.durationSec,
@@ -77,6 +121,36 @@ export class YoutubeMetadataService {
     };
   }
 
+  private parsePlaylistId(link: string): string | null {
+    const m = link.match(/[?&]list=([A-Za-z0-9_-]+)/);
+    return m ? m[1] : null;
+  }
+
+  /** Trae los videoIds de una playlist (paginado, tope 200). */
+  private async fetchPlaylistVideoIds(
+    playlistId: string,
+    apiKey: string,
+  ): Promise<string[]> {
+    const ids: string[] = [];
+    let pageToken = '';
+    for (let page = 0; page < 4; page++) {
+      const url =
+        `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=50` +
+        `&playlistId=${playlistId}&key=${apiKey}` +
+        (pageToken ? `&pageToken=${pageToken}` : '');
+      const res = await fetch(url);
+      if (!res.ok) break;
+      const json = (await res.json()) as any;
+      for (const it of json.items ?? []) {
+        const vid = it.contentDetails?.videoId;
+        if (vid) ids.push(String(vid));
+      }
+      if (!json.nextPageToken) break;
+      pageToken = json.nextPageToken;
+    }
+    return ids;
+  }
+
   // --- YouTube Data API v3 (requiere YOUTUBE_API_KEY) ----------------------
   private async fromDataApi(id: string, apiKey: string) {
     const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,status,topicDetails&id=${id}&key=${apiKey}`;
@@ -88,6 +162,11 @@ export class YoutubeMetadataService {
     const json = (await res.json()) as any;
     const item = json.items?.[0];
     if (!item) throw new BadRequestException('Video de YouTube no encontrado.');
+    return this.buildVideoData(item);
+  }
+
+  /** Arma los datos base + details desde un item de videos.list. */
+  private buildVideoData(item: any): VideoBase {
     const sn = item.snippet ?? {};
     const cd = item.contentDetails ?? {};
     const st = item.statistics ?? {};
@@ -133,7 +212,7 @@ export class YoutubeMetadataService {
         sn.thumbnails?.default?.url ??
         null,
       tags: Array.isArray(sn.tags) ? (sn.tags as string[]) : undefined,
-      via: 'youtube-api' as const,
+      via: 'youtube-api',
       details,
     };
   }
@@ -234,4 +313,16 @@ export class YoutubeMetadataService {
     }
     return { style, substyle };
   }
+}
+
+/** Datos "base" de un video (API o oEmbed) antes de normalizar. */
+interface VideoBase {
+  rawTitle: string;
+  channelTitle: string | null;
+  durationSec: number | null;
+  year: number | null;
+  coverUrl: string | null;
+  tags?: string[];
+  via: 'youtube-api' | 'oembed';
+  details: YoutubeDetails;
 }

@@ -18,6 +18,8 @@ import { usePlayer } from '@/components/player';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
+import { SortTh, nextSort, type SortState } from '@/components/sort-th';
+import { PlaylistImportModal } from '@/components/playlist-import-modal';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -42,9 +44,15 @@ export default function CatalogPage() {
   const [substyle, setSubstyle] = useState('');
   const [source, setSource] = useState('');
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState>({ by: '', dir: 'asc' });
   const [showForm, setShowForm] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const onSort = (col: string, primary: 'asc' | 'desc') => {
+    setSort((s) => nextSort(s, col, primary));
+    setPage(1);
+  };
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -60,13 +68,17 @@ export default function CatalogPage() {
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['catalog', { search, style, substyle, source, page }],
+    queryKey: ['catalog', { search, style, substyle, source, page, sort }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (search) p.set('search', search);
       if (style) p.set('style', style);
       if (substyle) p.set('substyle', substyle);
       if (source) p.set('source', source);
+      if (sort.by) {
+        p.set('sortBy', sort.by);
+        p.set('sortDir', sort.dir);
+      }
       p.set('page', String(page));
       p.set('pageSize', String(PAGE_SIZE));
       return api<Paginated<Track>>(`/music/tracks?${p.toString()}`);
@@ -264,11 +276,11 @@ export default function CatalogPage() {
                     />
                   </th>
                 )}
-                <th className="px-4 py-3">Título</th>
-                <th className="px-4 py-3">Artista</th>
+                <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
+                <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3">Estilo</th>
-                <th className="px-4 py-3">BPM</th>
-                <th className="px-4 py-3">Año</th>
+                <SortTh label="BPM" col="bpm" primary="desc" sort={sort} onSort={onSort} />
+                <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -437,6 +449,7 @@ function AdminImportExport() {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<ExcelImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPlaylist, setShowPlaylist] = useState(false);
 
   async function onFile(file: File) {
     setError(null);
@@ -489,6 +502,9 @@ function AdminImportExport() {
         >
           ⬇ Exportar
         </Button>
+        <Button onClick={() => setShowPlaylist(true)}>
+          📺 Importar playlist YouTube
+        </Button>
       </div>
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
@@ -497,6 +513,10 @@ function AdminImportExport() {
           Filas: {result.totalRows} · creadas {result.created} · actualizadas{' '}
           {result.updated} · errores {result.errors.length}
         </p>
+      )}
+
+      {showPlaylist && (
+        <PlaylistImportModal onClose={() => setShowPlaylist(false)} />
       )}
     </Card>
   );

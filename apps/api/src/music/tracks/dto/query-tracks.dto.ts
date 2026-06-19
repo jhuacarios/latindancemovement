@@ -73,4 +73,13 @@ export class QueryTracksDto {
   @IsOptional()
   @IsIn(['recent', 'title', 'artist', 'bpm', 'popularity'])
   sort?: 'recent' | 'title' | 'artist' | 'bpm' | 'popularity' = 'recent';
+
+  /** Columna por la que ordenar (click en el header). */
+  @IsOptional()
+  @IsIn(['title', 'artist', 'bpm', 'year'])
+  sortBy?: 'title' | 'artist' | 'bpm' | 'year';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortDir?: 'asc' | 'desc';
 }

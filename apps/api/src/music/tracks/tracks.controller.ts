@@ -26,6 +26,7 @@ import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { QueryTracksDto } from './dto/query-tracks.dto';
 import { ImportTracksDto } from './dto/import-tracks.dto';
+import { ImportPlaylistDto, PlaylistPreviewDto } from './dto/playlist.dto';
 
 @Controller('music/tracks')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -85,6 +86,24 @@ export class TracksController {
     if (!file) throw new BadRequestException('No se recibió ningún archivo.');
     const buffer = await file.toBuffer();
     return this.excelImporter.importBuffer(buffer, user.id);
+  }
+
+  /** Previsualiza las canciones de una playlist de YouTube (no guarda). */
+  @Post('playlist-preview')
+  @Roles('SUPER_ADMIN')
+  playlistPreview(@Body() dto: PlaylistPreviewDto) {
+    return this.youtube.extractPlaylist(dto.link);
+  }
+
+  /** Importa al catálogo todas las canciones de una playlist de YouTube. */
+  @Post('import-playlist')
+  @Roles('SUPER_ADMIN')
+  async importPlaylist(
+    @Body() dto: ImportPlaylistDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const items = await this.youtube.extractPlaylist(dto.link);
+    return this.tracks.importPlaylistItems(items, dto.defaultStyle, user.id);
   }
 
   @Get(':id')

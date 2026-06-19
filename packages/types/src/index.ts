@@ -231,6 +231,14 @@ export interface ExtractedTrackMetadata {
   details: YoutubeDetails;
 }
 
+/** Resultado de importar una playlist de YouTube al catálogo. */
+export interface PlaylistImportResult {
+  total: number;
+  created: number;
+  updated: number;
+  errors: string[];
+}
+
 /** Resultado de importar canciones desde un archivo Excel. */
 export interface ExcelImportResult {
   totalRows: number;

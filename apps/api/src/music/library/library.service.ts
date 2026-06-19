@@ -37,10 +37,22 @@ export class LibraryService {
       ];
     }
 
+    const dir: Prisma.SortOrder = q.sortDir === 'desc' ? 'desc' : 'asc';
+    const orderBy: Prisma.TrackOrderByWithRelationInput =
+      q.sortBy === 'title'
+        ? { title: dir }
+        : q.sortBy === 'artist'
+          ? { artist: dir }
+          : q.sortBy === 'bpm'
+            ? { bpm: dir }
+            : q.sortBy === 'year'
+              ? { year: dir }
+              : { createdAt: 'desc' };
+
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.track.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),

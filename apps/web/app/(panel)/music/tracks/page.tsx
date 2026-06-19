@@ -15,6 +15,7 @@ import { usePlayer } from '@/components/player';
 import { SourceLink } from '@/components/source-link';
 import { TagEditor } from '@/components/tag-editor';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
+import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -36,6 +37,11 @@ export default function MyTracksPage() {
   const [style, setStyle] = useState('');
   const [substyle, setSubstyle] = useState('');
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState>({ by: '', dir: 'asc' });
+  const onSort = (col: string, primary: 'asc' | 'desc') => {
+    setSort((s) => nextSort(s, col, primary));
+    setPage(1);
+  };
   const [showForm, setShowForm] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -56,12 +62,16 @@ export default function MyTracksPage() {
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['library', { search, style, substyle, page }],
+    queryKey: ['library', { search, style, substyle, page, sort }],
     queryFn: () => {
       const p = new URLSearchParams();
       if (search) p.set('search', search);
       if (style) p.set('style', style);
       if (substyle) p.set('substyle', substyle);
+      if (sort.by) {
+        p.set('sortBy', sort.by);
+        p.set('sortDir', sort.dir);
+      }
       p.set('page', String(page));
       p.set('pageSize', String(PAGE_SIZE));
       return api<Paginated<Track>>(`/music/library?${p.toString()}`);
@@ -243,12 +253,12 @@ export default function MyTracksPage() {
                     />
                   </th>
                 )}
-                <th className="px-4 py-3">Título</th>
-                <th className="px-4 py-3">Artista</th>
+                <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
+                <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3">Estilo</th>
                 <th className="px-4 py-3">Origen</th>
-                <th className="px-4 py-3">BPM</th>
-                <th className="px-4 py-3">Año</th>
+                <SortTh label="BPM" col="bpm" primary="desc" sort={sort} onSort={onSort} />
+                <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
