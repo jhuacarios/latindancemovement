@@ -76,8 +76,8 @@ export class QueryTracksDto {
 
   /** Columna por la que ordenar (click en el header). */
   @IsOptional()
-  @IsIn(['title', 'artist', 'bpm', 'year'])
-  sortBy?: 'title' | 'artist' | 'bpm' | 'year';
+  @IsIn(['title', 'artist', 'bpm', 'year', 'createdAt'])
+  sortBy?: 'title' | 'artist' | 'bpm' | 'year' | 'createdAt';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])

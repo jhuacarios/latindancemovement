@@ -374,6 +374,8 @@ export class TracksService {
           return { bpm: dir };
         case 'year':
           return { year: dir };
+        case 'createdAt':
+          return { createdAt: dir };
       }
     }
     switch (q.sort) {
