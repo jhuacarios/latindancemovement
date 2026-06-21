@@ -26,7 +26,8 @@ import {
 } from '@/components/confirm-dialog';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 
-const PAGE_SIZE = 20;
+// Sin paginación por ahora: traemos todo el catálogo de una.
+const PAGE_SIZE = 1000;
 
 export default function CatalogPage() {
   const { user } = useAuth();
