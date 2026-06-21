@@ -263,6 +263,13 @@ export interface PlaylistGenerationResult {
   playlist: Playlist | null;
 }
 
+/** Conteo de "Mis Canciones" por estilo (toda la biblioteca, sin filtros). */
+export interface LibrarySummary {
+  bachata: number;
+  salsa: number;
+  total: number;
+}
+
 export interface CatalogSummary {
   totalTracks: number;
   byStyle: Record<string, number>;

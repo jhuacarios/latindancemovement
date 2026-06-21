@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { Paginated, Track } from '@baile-latino/types';
+import type { LibrarySummary, Paginated, Track } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toPublicTrack } from '../mappers';
 import { TracksService } from '../tracks/tracks.service';
@@ -69,6 +69,16 @@ export class LibraryService {
       t.tags = tagMap.get(t.id) ?? [];
     }
     return { data, total, page, pageSize };
+  }
+
+  /** Cuenta toda mi biblioteca por estilo (ignora filtros de la lista). */
+  async summary(userId: string): Promise<LibrarySummary> {
+    const base = { savedBy: { some: { userId } } } as const;
+    const [bachata, salsa] = await this.prisma.$transaction([
+      this.prisma.track.count({ where: { ...base, style: 'BACHATA' } }),
+      this.prisma.track.count({ where: { ...base, style: 'SALSA' } }),
+    ]);
+    return { bachata, salsa, total: bachata + salsa };
   }
 
   async myTrackIds(userId: string): Promise<string[]> {

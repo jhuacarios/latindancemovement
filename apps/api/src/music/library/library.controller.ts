@@ -36,6 +36,12 @@ export class LibraryController {
     return this.library.myTrackIds(user.id);
   }
 
+  /** Conteo de mis canciones por estilo (bachatas vs salsas). */
+  @Get('summary')
+  summary(@CurrentUser() user: AuthUser) {
+    return this.library.summary(user.id);
+  }
+
   /** Agregar una canción del catálogo a mis canciones. */
   @Post()
   addCatalog(@Body() dto: AddCatalogDto, @CurrentUser() user: AuthUser) {
