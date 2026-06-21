@@ -26,6 +26,37 @@ import { QueryTracksDto } from './dto/query-tracks.dto';
 export class TracksService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Construye un patch que SOLO rellena campos vacíos de una canción existente;
+   * nunca pisa valores ya presentes (protege la curación manual). title y style
+   * no se incluyen porque una canción existente siempre los tiene.
+   */
+  private fillEmptyPatch(
+    existing: {
+      year: number | null;
+      coverUrl: string | null;
+      durationSec: number | null;
+      ytMetadata: string | null;
+      bpm: number | null;
+      substyle: string | null;
+      artist: string | null;
+    },
+    dto: CreateTrackDto,
+  ): Prisma.TrackUpdateInput {
+    const patch: Prisma.TrackUpdateInput = {};
+    if (existing.year == null && dto.year != null) patch.year = dto.year;
+    if (existing.coverUrl == null && dto.coverUrl != null) patch.coverUrl = dto.coverUrl;
+    if (existing.durationSec == null && dto.durationSec != null)
+      patch.durationSec = dto.durationSec;
+    if (existing.ytMetadata == null && dto.ytMetadata != null)
+      patch.ytMetadata = dto.ytMetadata;
+    if (existing.bpm == null && dto.bpm != null) patch.bpm = dto.bpm;
+    const sub = this.joinSubstyles(dto.substyles);
+    if (!existing.substyle && sub) patch.substyle = sub;
+    if (!existing.artist && dto.artist) patch.artist = dto.artist;
+    return patch;
+  }
+
   /** Une hasta 3 sub-estilos en un CSV para guardar en la columna `substyle`. */
   private joinSubstyles(arr?: string[]): string | null {
     if (!arr || !arr.length) return null;
@@ -118,33 +149,60 @@ export class TracksService {
     return { data, total, page, pageSize };
   }
 
-  /** Crea o actualiza una canción del catálogo (por link/fuente). Devuelve id + si fue creada. */
+  /**
+   * Crea una canción del catálogo si no existe. Si ya existe (por fuente),
+   * NO pisa lo que ya tiene valor: solo rellena los campos vacíos. Así una
+   * re-importación nunca borra ni sobreescribe la curación manual (estilo,
+   * BPM, sub-estilos…). Devuelve id + si fue creada.
+   */
   async upsertCatalog(
     dto: CreateTrackDto,
     userId: string,
+    opts?: { fillEmptyOnly?: boolean },
   ): Promise<{ id: string; created: boolean }> {
     const { source, sourceId } = this.resolveSource(dto);
-    const data = {
-      title: dto.title,
-      artist: dto.artist,
-      style: dto.style,
-      substyle: this.joinSubstyles(dto.substyles),
-      bpm: dto.bpm ?? null,
-      year: dto.year ?? null,
-      coverUrl: dto.coverUrl ?? null,
-      durationSec: dto.durationSec ?? null,
-      ytMetadata: dto.ytMetadata ?? null,
-    };
     const existing = await this.prisma.track.findFirst({
       where: { source, sourceId, scope: 'CATALOG' },
-      select: { id: true },
     });
+
     if (existing) {
-      await this.prisma.track.update({ where: { id: existing.id }, data });
+      const patch: Prisma.TrackUpdateInput = opts?.fillEmptyOnly
+        ? this.fillEmptyPatch(existing, dto)
+        : {
+            // Sobreescritura completa (importación deliberada, ej. Excel).
+            title: dto.title,
+            artist: dto.artist,
+            style: dto.style,
+            substyle: this.joinSubstyles(dto.substyles),
+            bpm: dto.bpm ?? null,
+            year: dto.year ?? null,
+            coverUrl: dto.coverUrl ?? null,
+            durationSec: dto.durationSec ?? null,
+            ytMetadata: dto.ytMetadata ?? null,
+          };
+
+      if (Object.keys(patch).length) {
+        await this.prisma.track.update({ where: { id: existing.id }, data: patch });
+      }
       return { id: existing.id, created: false };
     }
+
     const created = await this.prisma.track.create({
-      data: { ...data, source, sourceId, scope: 'CATALOG', createdById: userId },
+      data: {
+        title: dto.title,
+        artist: dto.artist,
+        style: dto.style,
+        substyle: this.joinSubstyles(dto.substyles),
+        bpm: dto.bpm ?? null,
+        year: dto.year ?? null,
+        coverUrl: dto.coverUrl ?? null,
+        durationSec: dto.durationSec ?? null,
+        ytMetadata: dto.ytMetadata ?? null,
+        source,
+        sourceId,
+        scope: 'CATALOG',
+        createdById: userId,
+      },
     });
     return { id: created.id, created: true };
   }
@@ -289,6 +347,7 @@ export class TracksService {
             ytMetadata: JSON.stringify(it.details),
           },
           userId,
+          { fillEmptyOnly: true },
         );
         if (res.created) created++;
         else updated++;
