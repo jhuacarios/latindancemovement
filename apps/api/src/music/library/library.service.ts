@@ -81,6 +81,26 @@ export class LibraryService {
     return { bachata, salsa, total: bachata + salsa };
   }
 
+  /**
+   * VideoIds de YouTube de mi biblioteca, separados por estilo. Solo fuente
+   * YOUTUBE (las de Spotify no tienen video para una playlist de YouTube).
+   */
+  async myYoutubeVideoIdsByStyle(
+    userId: string,
+  ): Promise<{ bachata: string[]; salsa: string[] }> {
+    const rows = await this.prisma.track.findMany({
+      where: { savedBy: { some: { userId } }, source: 'YOUTUBE' },
+      select: { sourceId: true, style: true },
+    });
+    const bachata: string[] = [];
+    const salsa: string[] = [];
+    for (const r of rows) {
+      if (r.style === 'BACHATA') bachata.push(r.sourceId);
+      else if (r.style === 'SALSA') salsa.push(r.sourceId);
+    }
+    return { bachata, salsa };
+  }
+
   async myTrackIds(userId: string): Promise<string[]> {
     const rows = await this.prisma.userTrack.findMany({
       where: { userId },

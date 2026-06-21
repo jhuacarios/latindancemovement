@@ -15,6 +15,8 @@ import { LibraryController } from './library/library.controller';
 import { LibraryService } from './library/library.service';
 import { TagsController } from './tags/tags.controller';
 import { TagsService } from './tags/tags.service';
+import { YoutubeController } from './youtube/youtube.controller';
+import { YoutubeOAuthService } from './youtube/youtube-oauth.service';
 
 @Module({
   controllers: [
@@ -23,6 +25,7 @@ import { TagsService } from './tags/tags.service';
     ReportsController,
     LibraryController,
     TagsController,
+    YoutubeController,
   ],
   providers: [
     TracksService,
@@ -36,6 +39,7 @@ import { TagsService } from './tags/tags.service';
     ReportsService,
     LibraryService,
     TagsService,
+    YoutubeOAuthService,
   ],
 })
 export class MusicModule {}

@@ -270,6 +270,25 @@ export interface LibrarySummary {
   total: number;
 }
 
+/** Estado de conexión OAuth con YouTube del usuario actual. */
+export interface YoutubeConnectionStatus {
+  connected: boolean;
+}
+
+/** Resultado de crear una playlist en YouTube con el patrón 5B/3S. */
+export interface YoutubePlaylistResult {
+  playlistId: string;
+  url: string;
+  /** Total de canciones agregadas a la playlist. */
+  total: number;
+  /** Bachatas agregadas. */
+  bachata: number;
+  /** Salsas agregadas. */
+  salsa: number;
+  /** Canciones disponibles que quedaron fuera por el corte del patrón. */
+  leftover: number;
+}
+
 export interface CatalogSummary {
   totalTracks: number;
   byStyle: Record<string, number>;

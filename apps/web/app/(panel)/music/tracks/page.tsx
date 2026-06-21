@@ -17,6 +17,7 @@ import { SourceLink } from '@/components/source-link';
 import { TagEditor } from '@/components/tag-editor';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
+import { YoutubePlaylistModal } from '@/components/youtube-playlist-modal';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -48,6 +49,7 @@ export default function MyTracksPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const [tagTrack, setTagTrack] = useState<Track | null>(null);
+  const [showYtPlaylist, setShowYtPlaylist] = useState(false);
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -134,6 +136,9 @@ export default function MyTracksPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setShowYtPlaylist(true)}>
+            ▶️ Crear playlist YouTube
+          </Button>
           {canDelete && (
             <Button
               variant="ghost"
@@ -439,6 +444,10 @@ export default function MyTracksPage() {
           title={`${tagTrack.title} — ${tagTrack.artist}`}
           onClose={() => setTagTrack(null)}
         />
+      )}
+
+      {showYtPlaylist && (
+        <YoutubePlaylistModal onClose={() => setShowYtPlaylist(false)} />
       )}
     </div>
   );
