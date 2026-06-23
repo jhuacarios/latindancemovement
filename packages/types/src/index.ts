@@ -275,6 +275,14 @@ export interface YoutubeConnectionStatus {
   connected: boolean;
 }
 
+/** Previsualización (sin crear): cuántas canciones tendría la playlist 5B/3S. */
+export interface YoutubePlaylistPreview {
+  total: number;
+  bachata: number;
+  salsa: number;
+  leftover: number;
+}
+
 /** Resultado de crear una playlist en YouTube con el patrón 5B/3S. */
 export interface YoutubePlaylistResult {
   playlistId: string;

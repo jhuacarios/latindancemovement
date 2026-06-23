@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import type { YoutubePlaylistResult } from '@baile-latino/types';
+import type {
+  YoutubePlaylistPreview,
+  YoutubePlaylistResult,
+} from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LibraryService } from '../library/library.service';
 import { interleavePattern, shuffle } from './playlist-pattern.util';
@@ -147,12 +150,10 @@ export class YoutubeOAuthService {
     return json.access_token;
   }
 
-  // --- Crear la playlist con el patrón -------------------------------------
-  async generatePatternPlaylist(
+  // --- Cálculo del patrón (compartido por preview y creación) --------------
+  private async computeOrdered(
     userId: string,
-    title: string,
-    privacyStatus: 'private' | 'unlisted' | 'public',
-  ): Promise<YoutubePlaylistResult> {
+  ): Promise<{ ordered: string[]; bachataAvail: number; salsaAvail: number }> {
     const { bachata, salsa } = await this.library.myYoutubeVideoIdsByStyle(userId);
     const ordered = interleavePattern(
       shuffle(bachata),
@@ -160,17 +161,42 @@ export class YoutubeOAuthService {
       BLOCK_B,
       BLOCK_S,
     );
+    return { ordered, bachataAvail: bachata.length, salsaAvail: salsa.length };
+  }
+
+  private counts(ordered: string[], bachataAvail: number, salsaAvail: number) {
+    const blocks = ordered.length / (BLOCK_B + BLOCK_S);
+    const bachata = blocks * BLOCK_B;
+    const salsa = blocks * BLOCK_S;
+    return {
+      total: ordered.length,
+      bachata,
+      salsa,
+      leftover: bachataAvail - bachata + (salsaAvail - salsa),
+    };
+  }
+
+  /** Cuántas canciones tendría la playlist, sin crearla. */
+  async previewPattern(userId: string): Promise<YoutubePlaylistPreview> {
+    const { ordered, bachataAvail, salsaAvail } = await this.computeOrdered(userId);
+    return this.counts(ordered, bachataAvail, salsaAvail);
+  }
+
+  // --- Crear la playlist con el patrón -------------------------------------
+  async generatePatternPlaylist(
+    userId: string,
+    title: string,
+    privacyStatus: 'private' | 'unlisted' | 'public',
+  ): Promise<YoutubePlaylistResult> {
+    const { ordered, bachataAvail, salsaAvail } = await this.computeOrdered(userId);
     if (!ordered.length) {
       throw new BadRequestException(
         `No hay suficientes canciones de YouTube en Mis Canciones para el patrón ` +
           `(se necesitan al menos ${BLOCK_B} bachatas y ${BLOCK_S} salsas). ` +
-          `Tienes ${bachata.length} bachatas y ${salsa.length} salsas de YouTube.`,
+          `Tienes ${bachataAvail} bachatas y ${salsaAvail} salsas de YouTube.`,
       );
     }
-    const blocks = ordered.length / (BLOCK_B + BLOCK_S);
-    const bachUsed = blocks * BLOCK_B;
-    const salUsed = blocks * BLOCK_S;
-    const leftover = bachata.length - bachUsed + (salsa.length - salUsed);
+    const c = this.counts(ordered, bachataAvail, salsaAvail);
 
     const description =
       `Generada por Baile Latino — patrón ${BLOCK_B} bachatas / ${BLOCK_S} salsas, ` +
@@ -185,10 +211,7 @@ export class YoutubeOAuthService {
     return {
       playlistId,
       url: `https://www.youtube.com/playlist?list=${playlistId}`,
-      total: ordered.length,
-      bachata: bachUsed,
-      salsa: salUsed,
-      leftover,
+      ...c,
     };
   }
 

@@ -57,6 +57,14 @@ export class YoutubeController {
     }
   }
 
+  /** Cuántas canciones tendría la playlist 5B/3S, sin crearla. */
+  @Get('preview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  preview(@CurrentUser() user: AuthUser) {
+    return this.yt.previewPattern(user.id);
+  }
+
   /** Crea la playlist 5 bachatas / 3 salsas (orden aleatorio) en YouTube. */
   @Post('playlist')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,7 +74,7 @@ export class YoutubeController {
     @CurrentUser() user: AuthUser,
   ) {
     const title = dto.title?.trim() || 'Set 5x3 — Baile Latino';
-    return this.yt.generatePatternPlaylist(user.id, title, dto.privacy ?? 'unlisted');
+    return this.yt.generatePatternPlaylist(user.id, title, dto.privacy ?? 'public');
   }
 
   /** Desconecta la cuenta de YouTube (borra el refresh token). */
