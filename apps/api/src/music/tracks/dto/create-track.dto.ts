@@ -42,12 +42,6 @@ export class CreateTrackDto {
 
   @IsOptional()
   @IsInt()
-  @Min(40)
-  @Max(260)
-  bpm?: number;
-
-  @IsOptional()
-  @IsInt()
   @Min(1900)
   @Max(2100)
   year?: number;

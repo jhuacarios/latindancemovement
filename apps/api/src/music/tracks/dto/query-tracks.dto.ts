@@ -46,20 +46,6 @@ export class QueryTracksDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(40)
-  @Max(260)
-  bpmMin?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(40)
-  @Max(260)
-  bpmMax?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
   @Min(1)
   page?: number = 1;
 
@@ -71,13 +57,13 @@ export class QueryTracksDto {
   pageSize?: number = 50;
 
   @IsOptional()
-  @IsIn(['recent', 'title', 'artist', 'bpm', 'popularity'])
-  sort?: 'recent' | 'title' | 'artist' | 'bpm' | 'popularity' = 'recent';
+  @IsIn(['recent', 'title', 'artist', 'popularity'])
+  sort?: 'recent' | 'title' | 'artist' | 'popularity' = 'recent';
 
   /** Columna por la que ordenar (click en el header). */
   @IsOptional()
-  @IsIn(['title', 'artist', 'bpm', 'year', 'createdAt'])
-  sortBy?: 'title' | 'artist' | 'bpm' | 'year' | 'createdAt';
+  @IsIn(['title', 'artist', 'year', 'createdAt'])
+  sortBy?: 'title' | 'artist' | 'year' | 'createdAt';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])

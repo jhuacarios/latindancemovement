@@ -100,7 +100,6 @@ export interface Track {
   style: DanceStyle;
   /** Sub-estilos (tags del vocabulario), hasta 3, a nivel de catálogo. */
   substyles: string[];
-  bpm: number | null;
   year: number | null;
   source: TrackSource;
   sourceId: string;
@@ -156,8 +155,6 @@ export interface PlaylistGenerationFilters {
   /** % de bachata objetivo (0-100); el resto salsa. Default 50. */
   bachataPct?: number;
   substyles?: DanceSubstyle[];
-  bpmMin?: number;
-  bpmMax?: number;
   /** Duración objetivo total en minutos. */
   targetMinutes?: number;
   /** Máximo de canciones. */
@@ -275,7 +272,20 @@ export interface YoutubeConnectionStatus {
   connected: boolean;
 }
 
-/** Previsualización (sin crear): cuántas canciones tendría la playlist 5B/3S. */
+/** Qué estilo abre cada bloque del patrón. */
+export type YoutubePlaylistOrder = 'bachata' | 'salsa';
+
+/** Distribución configurable del patrón de la playlist rápida. */
+export interface YoutubePlaylistPattern {
+  /** Cuántas bachatas por bloque. */
+  bachataPerBlock: number;
+  /** Cuántas salsas por bloque. */
+  salsaPerBlock: number;
+  /** Qué estilo va primero en cada bloque. */
+  order: YoutubePlaylistOrder;
+}
+
+/** Previsualización (sin crear): cuántas canciones tendría la playlist. */
 export interface YoutubePlaylistPreview {
   total: number;
   bachata: number;
@@ -283,7 +293,7 @@ export interface YoutubePlaylistPreview {
   leftover: number;
 }
 
-/** Resultado de crear una playlist en YouTube con el patrón 5B/3S. */
+/** Resultado de crear una playlist en YouTube con el patrón configurado. */
 export interface YoutubePlaylistResult {
   playlistId: string;
   url: string;

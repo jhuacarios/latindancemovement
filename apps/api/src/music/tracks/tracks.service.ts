@@ -37,7 +37,6 @@ export class TracksService {
       coverUrl: string | null;
       durationSec: number | null;
       ytMetadata: string | null;
-      bpm: number | null;
       substyle: string | null;
       artist: string | null;
     },
@@ -50,7 +49,6 @@ export class TracksService {
       patch.durationSec = dto.durationSec;
     if (existing.ytMetadata == null && dto.ytMetadata != null)
       patch.ytMetadata = dto.ytMetadata;
-    if (existing.bpm == null && dto.bpm != null) patch.bpm = dto.bpm;
     const sub = this.joinSubstyles(dto.substyles);
     if (!existing.substyle && sub) patch.substyle = sub;
     if (!existing.artist && dto.artist) patch.artist = dto.artist;
@@ -83,7 +81,6 @@ export class TracksService {
         artist: dto.artist,
         style: dto.style,
         substyle: this.joinSubstyles(dto.substyles),
-        bpm: dto.bpm ?? null,
         year: dto.year ?? null,
         source,
         sourceId,
@@ -112,11 +109,6 @@ export class TracksService {
     if (q.source) where.source = q.source;
     if (q.approvalStatus) where.approvalStatus = q.approvalStatus;
     if (q.isRelease !== undefined) where.isRelease = q.isRelease;
-    if (q.bpmMin !== undefined || q.bpmMax !== undefined) {
-      where.bpm = {};
-      if (q.bpmMin !== undefined) where.bpm.gte = q.bpmMin;
-      if (q.bpmMax !== undefined) where.bpm.lte = q.bpmMax;
-    }
     if (q.search) {
       where.OR = [
         { title: { contains: q.search } },
@@ -153,7 +145,7 @@ export class TracksService {
    * Crea una canción del catálogo si no existe. Si ya existe (por fuente),
    * NO pisa lo que ya tiene valor: solo rellena los campos vacíos. Así una
    * re-importación nunca borra ni sobreescribe la curación manual (estilo,
-   * BPM, sub-estilos…). Devuelve id + si fue creada.
+   * sub-estilos…). Devuelve id + si fue creada.
    */
   async upsertCatalog(
     dto: CreateTrackDto,
@@ -174,7 +166,6 @@ export class TracksService {
             artist: dto.artist,
             style: dto.style,
             substyle: this.joinSubstyles(dto.substyles),
-            bpm: dto.bpm ?? null,
             year: dto.year ?? null,
             coverUrl: dto.coverUrl ?? null,
             durationSec: dto.durationSec ?? null,
@@ -193,7 +184,6 @@ export class TracksService {
         artist: dto.artist,
         style: dto.style,
         substyle: this.joinSubstyles(dto.substyles),
-        bpm: dto.bpm ?? null,
         year: dto.year ?? null,
         coverUrl: dto.coverUrl ?? null,
         durationSec: dto.durationSec ?? null,
@@ -226,7 +216,6 @@ export class TracksService {
       style: dto.style,
       substyle:
         dto.substyles !== undefined ? this.joinSubstyles(dto.substyles) : undefined,
-      bpm: dto.bpm,
       year: dto.year,
       coverUrl: dto.coverUrl,
       durationSec: dto.durationSec,
@@ -288,7 +277,6 @@ export class TracksService {
           artist: dto.artist,
           style: dto.style,
           substyle: this.joinSubstyles(dto.substyles),
-          bpm: dto.bpm ?? null,
           year: dto.year ?? null,
           coverUrl: dto.coverUrl ?? null,
           durationSec: dto.durationSec ?? null,
@@ -370,8 +358,6 @@ export class TracksService {
           return { title: dir };
         case 'artist':
           return { artist: dir };
-        case 'bpm':
-          return { bpm: dir };
         case 'year':
           return { year: dir };
         case 'createdAt':
@@ -383,8 +369,6 @@ export class TracksService {
         return { title: 'asc' };
       case 'artist':
         return { artist: 'asc' };
-      case 'bpm':
-        return { bpm: 'asc' };
       case 'popularity':
         return { songRequests: { _count: 'desc' } };
       case 'recent':

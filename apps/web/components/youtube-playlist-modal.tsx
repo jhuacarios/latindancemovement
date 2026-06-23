@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   YoutubeConnectionStatus,
+  YoutubePlaylistOrder,
   YoutubePlaylistPreview,
   YoutubePlaylistResult,
 } from '@baile-latino/types';
@@ -17,6 +18,9 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
   );
   const [title, setTitle] = useState('');
   const [privacy, setPrivacy] = useState<Privacy>('public');
+  const [bachatas, setBachatas] = useState(5);
+  const [salsas, setSalsas] = useState(3);
+  const [order, setOrder] = useState<YoutubePlaylistOrder>('bachata');
   const [preview, setPreview] = useState<YoutubePlaylistPreview | null>(null);
   const [creating, setCreating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -26,17 +30,27 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     api<YoutubeConnectionStatus>('/music/youtube/status')
-      .then((s) => {
-        const connected = s.connected;
-        setStatus(connected ? 'connected' : 'disconnected');
-        if (connected) {
-          api<YoutubePlaylistPreview>('/music/youtube/preview')
-            .then(setPreview)
-            .catch(() => undefined);
-        }
-      })
+      .then((s) => setStatus(s.connected ? 'connected' : 'disconnected'))
       .catch(() => setStatus('disconnected'));
   }, []);
+
+  // Recalcula la previsualización al cambiar la distribución/orden (con debounce).
+  useEffect(() => {
+    if (status !== 'connected') return;
+    const b = Math.max(1, Math.min(50, bachatas || 1));
+    const s = Math.max(1, Math.min(50, salsas || 1));
+    const t = setTimeout(() => {
+      const qs = new URLSearchParams({
+        bachataPerBlock: String(b),
+        salsaPerBlock: String(s),
+        order,
+      });
+      api<YoutubePlaylistPreview>(`/music/youtube/preview?${qs.toString()}`)
+        .then(setPreview)
+        .catch(() => undefined);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [status, bachatas, salsas, order]);
 
   useEffect(() => () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -84,7 +98,13 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
     try {
       const res = await api<YoutubePlaylistResult>('/music/youtube/playlist', {
         method: 'POST',
-        body: { title: title.trim() || undefined, privacy },
+        body: {
+          title: title.trim() || undefined,
+          privacy,
+          bachataPerBlock: Math.max(1, Math.min(50, bachatas || 1)),
+          salsaPerBlock: Math.max(1, Math.min(50, salsas || 1)),
+          order,
+        },
       });
       setProgress(100);
       setResult(res);
@@ -109,7 +129,7 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">▶️ Crear playlist en YouTube</h2>
+          <h2 className="font-semibold">▶️ Crear playlist YouTube rápida</h2>
           <button
             onClick={onClose}
             className="rounded-lg bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
@@ -120,8 +140,13 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
 
         <p className="mb-4 text-xs text-neutral-400">
           Toma tus canciones de YouTube, baraja cada estilo al azar y arma el
-          patrón <b>5 bachatas → 3 salsas</b>, repitiendo. Solo bloques
-          completos (corta al romperse el patrón).
+          patrón{' '}
+          <b>
+            {order === 'salsa'
+              ? `${salsas || 1} salsas → ${bachatas || 1} bachatas`
+              : `${bachatas || 1} bachatas → ${salsas || 1} salsas`}
+          </b>
+          , repitiendo. Solo bloques completos (corta al romperse el patrón).
         </p>
 
         {status === 'loading' && <Spinner label="Comprobando conexión…" />}
@@ -142,11 +167,63 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
                 Nombre de la playlist
               </label>
               <Input
-                placeholder="Set 5x3 — Baile Latino"
+                placeholder="Playlist YouTube rápida — Baile Latino"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-neutral-400">
+                Distribución por bloque
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={bachatas}
+                    onChange={(e) =>
+                      setBachatas(Math.floor(Number(e.target.value)) || 0)
+                    }
+                  />
+                  <span className="mt-1 block text-[11px] text-neutral-500">
+                    Bachatas
+                  </span>
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={salsas}
+                    onChange={(e) =>
+                      setSalsas(Math.floor(Number(e.target.value)) || 0)
+                    }
+                  />
+                  <span className="mt-1 block text-[11px] text-neutral-500">
+                    Salsas
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-neutral-400">
+                Empieza cada bloque con
+              </label>
+              <Select
+                value={order}
+                onChange={(e) =>
+                  setOrder(e.target.value as YoutubePlaylistOrder)
+                }
+              >
+                <option value="bachata">Bachata primero</option>
+                <option value="salsa">Salsa primero</option>
+              </Select>
+            </div>
+
             <div>
               <label className="mb-1 block text-xs text-neutral-400">
                 Privacidad
@@ -173,8 +250,8 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
                   </>
                 ) : (
                   <span className="text-amber-300">
-                    No alcanza para un bloque (se necesitan ≥5 bachatas y ≥3
-                    salsas de YouTube).
+                    No alcanza para un bloque (se necesitan ≥{bachatas || 1}{' '}
+                    bachatas y ≥{salsas || 1} salsas de YouTube).
                   </span>
                 )}
               </p>

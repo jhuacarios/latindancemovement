@@ -61,8 +61,6 @@ function Generator() {
   const qc = useQueryClient();
   const [bachataPct, setBachataPct] = useState(50);
   const [maxTracks, setMaxTracks] = useState(20);
-  const [bpmMin, setBpmMin] = useState('');
-  const [bpmMax, setBpmMax] = useState('');
   const [byPopularity, setByPopularity] = useState(false);
   const [name, setName] = useState('');
   const [result, setResult] = useState<PlaylistGenerationResult | null>(null);
@@ -75,8 +73,6 @@ function Generator() {
         body: {
           bachataPct,
           maxTracks,
-          bpmMin: bpmMin ? Number(bpmMin) : undefined,
-          bpmMax: bpmMax ? Number(bpmMax) : undefined,
           byPopularity,
           name: name || undefined,
         },
@@ -127,24 +123,6 @@ function Generator() {
             onChange={(e) => setMaxTracks(Number(e.target.value))}
             className="w-full accent-[var(--color-brand)]"
           />
-        </div>
-        <div className="flex gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">BPM mín.</label>
-            <Input
-              type="number"
-              value={bpmMin}
-              onChange={(e) => setBpmMin(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">BPM máx.</label>
-            <Input
-              type="number"
-              value={bpmMax}
-              onChange={(e) => setBpmMax(e.target.value)}
-            />
-          </div>
         </div>
         <div className="flex items-end">
           <label className="flex items-center gap-2 text-sm text-neutral-300">

@@ -16,7 +16,10 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../../auth/auth.types';
 import { YoutubeOAuthService } from './youtube-oauth.service';
-import { CreateYoutubePlaylistDto } from './dto/create-youtube-playlist.dto';
+import {
+  CreateYoutubePlaylistDto,
+  YoutubePatternQueryDto,
+} from './dto/create-youtube-playlist.dto';
 
 @Controller('music/youtube')
 export class YoutubeController {
@@ -57,15 +60,15 @@ export class YoutubeController {
     }
   }
 
-  /** Cuántas canciones tendría la playlist 5B/3S, sin crearla. */
+  /** Cuántas canciones tendría la playlist con el patrón dado, sin crearla. */
   @Get('preview')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
-  preview(@CurrentUser() user: AuthUser) {
-    return this.yt.previewPattern(user.id);
+  preview(@Query() q: YoutubePatternQueryDto, @CurrentUser() user: AuthUser) {
+    return this.yt.previewPattern(user.id, q);
   }
 
-  /** Crea la playlist 5 bachatas / 3 salsas (orden aleatorio) en YouTube. */
+  /** Crea la playlist rápida (patrón configurable, orden aleatorio) en YouTube. */
   @Post('playlist')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
@@ -73,8 +76,12 @@ export class YoutubeController {
     @Body() dto: CreateYoutubePlaylistDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const title = dto.title?.trim() || 'Set 5x3 — Baile Latino';
-    return this.yt.generatePatternPlaylist(user.id, title, dto.privacy ?? 'public');
+    const title = dto.title?.trim() || 'Playlist YouTube rápida — Baile Latino';
+    return this.yt.generatePatternPlaylist(user.id, title, dto.privacy ?? 'public', {
+      bachataPerBlock: dto.bachataPerBlock,
+      salsaPerBlock: dto.salsaPerBlock,
+      order: dto.order,
+    });
   }
 
   /** Desconecta la cuenta de YouTube (borra el refresh token). */

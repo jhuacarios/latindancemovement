@@ -25,18 +25,6 @@ export class GeneratePlaylistDto {
   @IsIn(DANCE_SUBSTYLES, { each: true })
   substyles?: DanceSubstyle[];
 
-  @IsOptional()
-  @IsInt()
-  @Min(40)
-  @Max(260)
-  bpmMin?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(40)
-  @Max(260)
-  bpmMax?: number;
-
   /** Duración objetivo total en minutos (si los tracks tienen duración). */
   @IsOptional()
   @IsInt()

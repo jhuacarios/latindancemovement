@@ -25,11 +25,6 @@ export class LibraryService {
     if (q.style) where.style = q.style;
     if (q.substyle) where.substyle = { contains: q.substyle };
     if (q.source) where.source = q.source;
-    if (q.bpmMin !== undefined || q.bpmMax !== undefined) {
-      where.bpm = {};
-      if (q.bpmMin !== undefined) where.bpm.gte = q.bpmMin;
-      if (q.bpmMax !== undefined) where.bpm.lte = q.bpmMax;
-    }
     if (q.search) {
       where.OR = [
         { title: { contains: q.search } },
@@ -43,11 +38,9 @@ export class LibraryService {
         ? { title: dir }
         : q.sortBy === 'artist'
           ? { artist: dir }
-          : q.sortBy === 'bpm'
-            ? { bpm: dir }
-            : q.sortBy === 'year'
-              ? { year: dir }
-              : { createdAt: 'desc' };
+          : q.sortBy === 'year'
+            ? { year: dir }
+            : { createdAt: 'desc' };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.track.findMany({
@@ -141,7 +134,6 @@ export class LibraryService {
             dto.substyles && dto.substyles.length
               ? dto.substyles.map((s) => s.trim()).filter(Boolean).slice(0, 3).join(', ')
               : null,
-          bpm: dto.bpm ?? null,
           year: dto.year ?? null,
           source,
           sourceId,

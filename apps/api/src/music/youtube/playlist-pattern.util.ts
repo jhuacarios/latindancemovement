@@ -22,6 +22,8 @@ export function interleavePattern<T>(
   nB = 3,
 ): T[] {
   const out: T[] = [];
+  // Sin al menos uno de cada lado el bloque no tiene sentido (y evita bucle infinito).
+  if (nA < 1 || nB < 1) return out;
   let ai = 0;
   let bi = 0;
   while (groupA.length - ai >= nA && groupB.length - bi >= nB) {

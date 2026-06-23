@@ -26,7 +26,6 @@ export function toPublicTrack(t: PrismaTrack): Track {
     substyles: t.substyle
       ? t.substyle.split(',').map((s) => s.trim()).filter(Boolean)
       : [],
-    bpm: t.bpm,
     year: t.year,
     source: t.source as TrackSource,
     sourceId: t.sourceId,

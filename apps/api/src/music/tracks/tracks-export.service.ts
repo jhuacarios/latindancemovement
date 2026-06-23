@@ -18,11 +18,6 @@ export class TracksExportService {
     if (q.source) where.source = q.source;
     if (q.approvalStatus) where.approvalStatus = q.approvalStatus;
     if (q.isRelease !== undefined) where.isRelease = q.isRelease;
-    if (q.bpmMin !== undefined || q.bpmMax !== undefined) {
-      where.bpm = {};
-      if (q.bpmMin !== undefined) where.bpm.gte = q.bpmMin;
-      if (q.bpmMax !== undefined) where.bpm.lte = q.bpmMax;
-    }
     if (q.search) {
       where.OR = [
         { title: { contains: q.search } },
@@ -56,7 +51,6 @@ export class TracksExportService {
       { header: 'Artista', key: 'artist', width: 28 },
       { header: 'Estilo', key: 'style', width: 12 },
       { header: 'Tags', key: 'tags', width: 28 },
-      { header: 'BPM', key: 'bpm', width: 8 },
       { header: 'Año', key: 'year', width: 8 },
       { header: 'Duración (s)', key: 'durationSec', width: 12 },
       { header: 'Fuente', key: 'source', width: 10 },
@@ -74,7 +68,6 @@ export class TracksExportService {
         artist: t.artist,
         style: t.style,
         tags: [...(tagsByTrack.get(t.id) ?? [])].join(', '),
-        bpm: t.bpm ?? '',
         year: t.year ?? '',
         durationSec: t.durationSec ?? '',
         source: t.source,
@@ -101,7 +94,6 @@ export class TracksExportService {
       { header: 'Artista', key: 'artist', width: 28 },
       { header: 'Estilo', key: 'style', width: 12 },
       { header: 'Tags', key: 'tags', width: 28 },
-      { header: 'BPM', key: 'bpm', width: 8 },
       { header: 'Año', key: 'year', width: 8 },
       { header: 'Link', key: 'link', width: 50 },
     ];
@@ -113,7 +105,6 @@ export class TracksExportService {
       artist: 'Romeo Santos',
       style: 'BACHATA',
       tags: 'Sensual, Romántica',
-      bpm: 130,
       year: 2013,
       link: 'https://www.youtube.com/watch?v=e_Vym6fEPdo',
     });
@@ -127,7 +118,6 @@ export class TracksExportService {
       ['Artista', 'Sí', 'Texto'],
       ['Estilo', 'Sí', 'BACHATA | SALSA'],
       ['Tags', 'No', 'Uno o varios separados por coma (ej: Sensual, Romántica). Se crean/normalizan en el vocabulario y se asocian a tu biblioteca.'],
-      ['BPM', 'No', 'Número (ej: 130)'],
       ['Año', 'No', 'Número (ej: 2013)'],
       ['Link', 'Sí', 'URL de Spotify o YouTube'],
     ]);

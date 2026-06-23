@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type {
+  YoutubePlaylistPattern,
   YoutubePlaylistPreview,
   YoutubePlaylistResult,
 } from '@baile-latino/types';
@@ -10,8 +11,13 @@ import { interleavePattern, shuffle } from './playlist-pattern.util';
 
 /** Permite gestionar (crear) playlists en la cuenta del usuario. */
 const SCOPE = 'https://www.googleapis.com/auth/youtube';
-const BLOCK_B = 5; // bachatas por bloque
-const BLOCK_S = 3; // salsas por bloque
+
+/** Patrón por defecto si el cliente no envía nada: 5 bachatas / 3 salsas. */
+const DEFAULT_PATTERN: YoutubePlaylistPattern = {
+  bachataPerBlock: 5,
+  salsaPerBlock: 3,
+  order: 'bachata',
+};
 
 const refreshKey = (userId: string) => `yt_refresh:${userId}`;
 const stateKey = (state: string) => `yt_state:${state}`;
@@ -150,24 +156,42 @@ export class YoutubeOAuthService {
     return json.access_token;
   }
 
+  /** Normaliza el patrón recibido aplicando defaults y límites sanos. */
+  private resolvePattern(p?: Partial<YoutubePlaylistPattern>): YoutubePlaylistPattern {
+    const clamp = (n: number | undefined, fallback: number) =>
+      Math.min(50, Math.max(1, Math.round(n ?? fallback)));
+    return {
+      bachataPerBlock: clamp(p?.bachataPerBlock, DEFAULT_PATTERN.bachataPerBlock),
+      salsaPerBlock: clamp(p?.salsaPerBlock, DEFAULT_PATTERN.salsaPerBlock),
+      order: p?.order === 'salsa' ? 'salsa' : 'bachata',
+    };
+  }
+
   // --- Cálculo del patrón (compartido por preview y creación) --------------
   private async computeOrdered(
     userId: string,
+    pattern: YoutubePlaylistPattern,
   ): Promise<{ ordered: string[]; bachataAvail: number; salsaAvail: number }> {
     const { bachata, salsa } = await this.library.myYoutubeVideoIdsByStyle(userId);
-    const ordered = interleavePattern(
-      shuffle(bachata),
-      shuffle(salsa),
-      BLOCK_B,
-      BLOCK_S,
-    );
+    const b = shuffle(bachata);
+    const s = shuffle(salsa);
+    // El estilo del "order" abre cada bloque; el otro lo cierra.
+    const ordered =
+      pattern.order === 'salsa'
+        ? interleavePattern(s, b, pattern.salsaPerBlock, pattern.bachataPerBlock)
+        : interleavePattern(b, s, pattern.bachataPerBlock, pattern.salsaPerBlock);
     return { ordered, bachataAvail: bachata.length, salsaAvail: salsa.length };
   }
 
-  private counts(ordered: string[], bachataAvail: number, salsaAvail: number) {
-    const blocks = ordered.length / (BLOCK_B + BLOCK_S);
-    const bachata = blocks * BLOCK_B;
-    const salsa = blocks * BLOCK_S;
+  private counts(
+    ordered: string[],
+    bachataAvail: number,
+    salsaAvail: number,
+    pattern: YoutubePlaylistPattern,
+  ) {
+    const blocks = ordered.length / (pattern.bachataPerBlock + pattern.salsaPerBlock);
+    const bachata = blocks * pattern.bachataPerBlock;
+    const salsa = blocks * pattern.salsaPerBlock;
     return {
       total: ordered.length,
       bachata,
@@ -177,9 +201,13 @@ export class YoutubeOAuthService {
   }
 
   /** Cuántas canciones tendría la playlist, sin crearla. */
-  async previewPattern(userId: string): Promise<YoutubePlaylistPreview> {
-    const { ordered, bachataAvail, salsaAvail } = await this.computeOrdered(userId);
-    return this.counts(ordered, bachataAvail, salsaAvail);
+  async previewPattern(
+    userId: string,
+    pattern?: Partial<YoutubePlaylistPattern>,
+  ): Promise<YoutubePlaylistPreview> {
+    const cfg = this.resolvePattern(pattern);
+    const { ordered, bachataAvail, salsaAvail } = await this.computeOrdered(userId, cfg);
+    return this.counts(ordered, bachataAvail, salsaAvail, cfg);
   }
 
   // --- Crear la playlist con el patrón -------------------------------------
@@ -187,19 +215,23 @@ export class YoutubeOAuthService {
     userId: string,
     title: string,
     privacyStatus: 'private' | 'unlisted' | 'public',
+    pattern?: Partial<YoutubePlaylistPattern>,
   ): Promise<YoutubePlaylistResult> {
-    const { ordered, bachataAvail, salsaAvail } = await this.computeOrdered(userId);
+    const cfg = this.resolvePattern(pattern);
+    const { ordered, bachataAvail, salsaAvail } = await this.computeOrdered(userId, cfg);
     if (!ordered.length) {
       throw new BadRequestException(
         `No hay suficientes canciones de YouTube en Mis Canciones para el patrón ` +
-          `(se necesitan al menos ${BLOCK_B} bachatas y ${BLOCK_S} salsas). ` +
+          `(se necesitan al menos ${cfg.bachataPerBlock} bachatas y ${cfg.salsaPerBlock} salsas). ` +
           `Tienes ${bachataAvail} bachatas y ${salsaAvail} salsas de YouTube.`,
       );
     }
-    const c = this.counts(ordered, bachataAvail, salsaAvail);
+    const c = this.counts(ordered, bachataAvail, salsaAvail, cfg);
 
+    const first = cfg.order === 'salsa' ? 'salsas' : 'bachatas';
     const description =
-      `Generada por Baile Latino — patrón ${BLOCK_B} bachatas / ${BLOCK_S} salsas, ` +
+      `Generada por Baile Latino — patrón ${cfg.bachataPerBlock} bachatas / ` +
+      `${cfg.salsaPerBlock} salsas (empieza por ${first}), ` +
       `orden aleatorio dentro de cada estilo.`;
     const playlistId = await this.createPlaylistWithVideos(
       userId,

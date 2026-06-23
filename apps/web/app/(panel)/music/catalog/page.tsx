@@ -14,7 +14,7 @@ import { api, ApiError, downloadFile, uploadFile } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
-import { usePlayer } from '@/components/player';
+import { PlayButtons } from '@/components/play-buttons';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
@@ -33,7 +33,6 @@ export default function CatalogPage() {
   const { user } = useAuth();
   const perms = usePermissions();
   const qc = useQueryClient();
-  const player = usePlayer();
   const isAdmin = user?.role === 'SUPER_ADMIN';
   const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
   const canDelete = user ? perms.can(user.role, 'music', 'eliminar') : false;
@@ -280,7 +279,6 @@ export default function CatalogPage() {
                 <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
                 <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3">Estilo</th>
-                <SortTh label="BPM" col="bpm" primary="desc" sort={sort} onSort={onSort} />
                 <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
                 <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
@@ -320,31 +318,13 @@ export default function CatalogPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-neutral-400">{t.bpm ?? '—'}</td>
                   <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
                   <td className="px-4 py-3 text-neutral-400">
                     {new Date(t.createdAt).toLocaleDateString('es-CL')}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {player.canPlay(t) && (
-                        <>
-                          <button
-                            className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
-                            title="Reproducir audio"
-                            onClick={() => player.playAudio(t)}
-                          >
-                            🎵
-                          </button>
-                          <button
-                            className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
-                            title="Reproducir video"
-                            onClick={() => player.playVideo(t)}
-                          >
-                            🎬
-                          </button>
-                        </>
-                      )}
+                      <PlayButtons track={t} />
                       <SourceLink track={t} />
                       {canEdit && (
                         <button
@@ -400,7 +380,7 @@ export default function CatalogPage() {
               {data.data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={selectMode ? 8 : 7}
+                    colSpan={selectMode ? 7 : 6}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
                     El catálogo está vacío.

@@ -16,7 +16,6 @@ export interface NewTrackBody {
   artist: string;
   style: DanceStyle;
   substyles?: string[];
-  bpm?: number;
   year?: number;
   coverUrl?: string;
   link: string;
@@ -43,7 +42,6 @@ export function AddTrackForm({
     artist: '',
     style: 'BACHATA' as DanceStyle,
     substyles: [] as string[],
-    bpm: '',
     year: '',
     coverUrl: '',
     link: '',
@@ -99,7 +97,6 @@ export function AddTrackForm({
         artist: form.artist,
         style: form.style,
         substyles: form.substyles,
-        bpm: form.bpm ? Number(form.bpm) : undefined,
         year: form.year ? Number(form.year) : undefined,
         coverUrl: form.coverUrl || undefined,
         link: form.link,
@@ -165,12 +162,6 @@ export function AddTrackForm({
             </option>
           ))}
         </Select>
-        <Input
-          type="number"
-          placeholder="BPM (opcional)"
-          value={form.bpm}
-          onChange={(e) => setForm({ ...form, bpm: e.target.value })}
-        />
         <Input
           type="number"
           placeholder="Año (opcional)"

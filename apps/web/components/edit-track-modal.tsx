@@ -26,7 +26,6 @@ export function EditTrackModal({
     artist: track.artist,
     style: track.style,
     substyles: track.substyles ?? [],
-    bpm: track.bpm != null ? String(track.bpm) : '',
     year: track.year != null ? String(track.year) : '',
     link: track.url,
     coverUrl: track.coverUrl ?? '',
@@ -91,7 +90,6 @@ export function EditTrackModal({
           artist: form.artist,
           style: form.style,
           substyles: form.substyles,
-          bpm: form.bpm ? Number(form.bpm) : undefined,
           year: form.year ? Number(form.year) : undefined,
           coverUrl: form.coverUrl || undefined,
           link: form.link || undefined,
@@ -171,12 +169,6 @@ export function EditTrackModal({
               </option>
             ))}
           </Select>
-          <Input
-            type="number"
-            placeholder="BPM"
-            value={form.bpm}
-            onChange={(e) => setForm({ ...form, bpm: e.target.value })}
-          />
           <Input
             type="number"
             placeholder="Año"

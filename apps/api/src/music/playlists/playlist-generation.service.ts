@@ -77,12 +77,6 @@ export class PlaylistGenerationService {
     );
     if (subs.length) where.substyle = { in: subs };
 
-    if (dto.bpmMin !== undefined || dto.bpmMax !== undefined) {
-      where.bpm = {};
-      if (dto.bpmMin !== undefined) where.bpm.gte = dto.bpmMin;
-      if (dto.bpmMax !== undefined) where.bpm.lte = dto.bpmMax;
-    }
-
     if (byPopularity) {
       // Recomendación: más solicitadas primero.
       return this.prisma.track.findMany({

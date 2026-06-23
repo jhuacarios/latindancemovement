@@ -46,7 +46,6 @@ model Track {
   artist         String
   style          String // DanceStyle
   substyle       String? // DanceSubstyle
-  bpm            Int?
   year           Int?
   source         String // TrackSource: SPOTIFY | YOUTUBE
   sourceId       String
@@ -77,7 +76,6 @@ model Track {
   @@index([ownerId])
   @@index([style])
   @@index([substyle])
-  @@index([bpm])
 }
 
 /// Configuración global de la plataforma (clave/valor JSON). P.ej. la matriz

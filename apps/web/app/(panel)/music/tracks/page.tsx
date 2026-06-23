@@ -12,7 +12,7 @@ import {
 } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
-import { usePlayer } from '@/components/player';
+import { PlayButtons } from '@/components/play-buttons';
 import { SourceLink } from '@/components/source-link';
 import { TagEditor } from '@/components/tag-editor';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
@@ -30,7 +30,6 @@ const PAGE_SIZE = 20;
 
 export default function MyTracksPage() {
   const qc = useQueryClient();
-  const player = usePlayer();
   const { user } = useAuth();
   const perms = usePermissions();
   const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
@@ -137,7 +136,7 @@ export default function MyTracksPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => setShowYtPlaylist(true)}>
-            ▶️ Crear playlist YouTube
+            ▶️ Crear playlist YouTube rápida
           </Button>
           {canDelete && (
             <Button
@@ -286,7 +285,6 @@ export default function MyTracksPage() {
                 <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3">Estilo</th>
                 <th className="px-4 py-3">Origen</th>
-                <SortTh label="BPM" col="bpm" primary="desc" sort={sort} onSort={onSort} />
                 <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
               </tr>
@@ -336,28 +334,10 @@ export default function MyTracksPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-neutral-400">{t.bpm ?? '—'}</td>
                   <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {player.canPlay(t) && (
-                        <>
-                          <button
-                            className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
-                            title="Reproducir audio"
-                            onClick={() => player.playAudio(t)}
-                          >
-                            🎵
-                          </button>
-                          <button
-                            className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
-                            title="Reproducir video"
-                            onClick={() => player.playVideo(t)}
-                          >
-                            🎬
-                          </button>
-                        </>
-                      )}
+                      <PlayButtons track={t} />
                       {canEdit && (
                         <button
                           className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
@@ -402,7 +382,7 @@ export default function MyTracksPage() {
               {data.data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={selectMode ? 8 : 7}
+                    colSpan={selectMode ? 7 : 6}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
                     Aún no tienes canciones. Agrega tu música o{' '}
