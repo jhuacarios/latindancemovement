@@ -2,7 +2,10 @@ import { USER_ROLES, type UserRole } from '@baile-latino/types';
 
 export interface ModuleChild {
   label: string;
-  href: string;
+  /** Enlace (hoja). Ausente si es un grupo con sub-items. */
+  href?: string;
+  /** Sub-items (un nivel de anidamiento, ej: YouTube → Canciones/Catálogo/Playlists). */
+  children?: ModuleChild[];
 }
 
 export interface AppModule {
@@ -35,9 +38,22 @@ export const MODULES: AppModule[] = [
     status: 'ready',
     children: [
       { label: 'Resumen', href: '/music' },
-      { label: 'Canciones', href: '/music/tracks' },
-      { label: 'Catálogo', href: '/music/catalog' },
-      { label: 'Playlists', href: '/music/playlists' },
+      {
+        label: '📺 YouTube',
+        children: [
+          { label: 'Canciones', href: '/music/tracks' },
+          { label: 'Catálogo', href: '/music/catalog' },
+          { label: 'Playlists', href: '/music/playlists' },
+        ],
+      },
+      {
+        label: '🟢 Spotify',
+        children: [
+          { label: 'Canciones', href: '/music/spotify/tracks' },
+          { label: 'Catálogo', href: '/music/spotify/catalog' },
+          { label: 'Playlists', href: '/music/spotify/playlists' },
+        ],
+      },
       { label: 'Reportes', href: '/music/reports' },
     ],
   },

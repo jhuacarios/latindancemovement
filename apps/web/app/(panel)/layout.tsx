@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
-import { moduleForPath } from '@/lib/modules';
+import { moduleForPath, type ModuleChild } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
 import { PlayerProvider } from '@/components/player';
 
@@ -78,20 +78,22 @@ export default function PanelLayout({
 
                 {isActive && m.children && (
                   <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-neutral-800 pl-3">
-                    {m.children.map((c) => (
-                      <Link
-                        key={c.href}
-                        href={c.href}
-                        className={clsx(
-                          'rounded-md px-2 py-1 text-sm transition',
-                          pathname === c.href
-                            ? 'text-brand'
-                            : 'text-neutral-400 hover:text-neutral-200',
-                        )}
-                      >
-                        {c.label}
-                      </Link>
-                    ))}
+                    {m.children.map((c) =>
+                      c.children ? (
+                        <div key={c.label} className="mt-1">
+                          <div className="px-2 py-1 text-xs font-semibold text-neutral-500">
+                            {c.label}
+                          </div>
+                          <div className="ml-2 flex flex-col gap-0.5 border-l border-neutral-800/60 pl-2">
+                            {c.children.map((g) => (
+                              <SubNavLink key={g.href} child={g} pathname={pathname} />
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <SubNavLink key={c.href} child={c} pathname={pathname} />
+                      ),
+                    )}
                   </div>
                 )}
               </div>
@@ -141,6 +143,29 @@ export default function PanelLayout({
       </div>
     </div>
     </PlayerProvider>
+  );
+}
+
+function SubNavLink({
+  child,
+  pathname,
+}: {
+  child: ModuleChild;
+  pathname: string;
+}) {
+  if (!child.href) return null;
+  return (
+    <Link
+      href={child.href}
+      className={clsx(
+        'rounded-md px-2 py-1 text-sm transition',
+        pathname === child.href
+          ? 'text-brand'
+          : 'text-neutral-400 hover:text-neutral-200',
+      )}
+    >
+      {child.label}
+    </Link>
   );
 }
 
