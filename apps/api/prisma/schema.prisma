@@ -18,7 +18,9 @@ datasource db {
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
-  passwordHash    String
+  passwordHash    String? // opcional: los usuarios que solo entran con Google no tienen contraseña
+  googleId        String?  @unique // vinculación con cuenta de Google
+  emailVerified   Boolean  @default(false) // true si un proveedor (Google) verificó el email
   name            String
   role            String   @default("BAILARIN") // UserRole
   city            String?

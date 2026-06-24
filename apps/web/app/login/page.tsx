@@ -76,6 +76,25 @@ export default function LoginPage() {
             {submitting ? 'Entrando…' : 'Iniciar sesión'}
           </Button>
         </form>
+
+        <div className="my-5 flex items-center gap-3 text-xs text-neutral-500">
+          <div className="h-px flex-1 bg-neutral-800" />
+          o
+          <div className="h-px flex-1 bg-neutral-800" />
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full"
+          onClick={() => {
+            const api =
+              process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+            window.location.href = `${api}/auth/google`;
+          }}
+        >
+          <span className="mr-2">🅖</span> Entrar con Google
+        </Button>
       </Card>
     </main>
   );
