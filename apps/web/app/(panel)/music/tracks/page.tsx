@@ -13,6 +13,7 @@ import {
 import { api } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { PlayButtons } from '@/components/play-buttons';
+import { formatDuration } from '@/lib/format';
 import { SourceLink } from '@/components/source-link';
 import { TagEditor } from '@/components/tag-editor';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
@@ -285,6 +286,7 @@ export default function MyTracksPage() {
                 <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3">Estilo</th>
                 <th className="px-4 py-3">Origen</th>
+                <th className="px-4 py-3">Duración</th>
                 <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
               </tr>
@@ -334,6 +336,9 @@ export default function MyTracksPage() {
                       </span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-neutral-400 tabular-nums">
+                    {formatDuration(t.durationSec)}
+                  </td>
                   <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -382,7 +387,7 @@ export default function MyTracksPage() {
               {data.data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={selectMode ? 7 : 6}
+                    colSpan={selectMode ? 8 : 7}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
                     Aún no tienes canciones. Agrega tu música o{' '}

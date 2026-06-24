@@ -15,6 +15,7 @@ import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { PlayButtons } from '@/components/play-buttons';
+import { formatDuration } from '@/lib/format';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
@@ -279,6 +280,7 @@ export default function CatalogPage() {
                 <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
                 <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3">Estilo</th>
+                <th className="px-4 py-3">Duración</th>
                 <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
                 <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
@@ -317,6 +319,9 @@ export default function CatalogPage() {
                         </span>
                       ))}
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-neutral-400 tabular-nums">
+                    {formatDuration(t.durationSec)}
                   </td>
                   <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
                   <td className="px-4 py-3 text-neutral-400">
@@ -380,7 +385,7 @@ export default function CatalogPage() {
               {data.data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={selectMode ? 7 : 6}
+                    colSpan={selectMode ? 8 : 7}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
                     El catálogo está vacío.
