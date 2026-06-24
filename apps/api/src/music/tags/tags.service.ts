@@ -44,7 +44,10 @@ export class TagsService {
   async create(name: string, style: DanceStyle | null, userId: string): Promise<Tag> {
     const slug = slugify(name);
     if (!slug) throw new BadRequestException('Nombre de tag inválido.');
-    const existing = await this.prisma.tag.findUnique({ where: { slug } });
+    // Dedup por (slug, estilo): el mismo nombre puede existir en otro estilo.
+    const existing = await this.prisma.tag.findFirst({
+      where: { slug, style: style ?? null },
+    });
     if (existing) {
       return {
         id: existing.id,
@@ -72,15 +75,26 @@ export class TagsService {
     if (!tag) throw new NotFoundException('Tag no encontrado');
 
     const patch: { name?: string; slug?: string; style?: string | null } = {};
-    if (data.name !== undefined) {
-      const slug = slugify(data.name);
-      if (!slug) throw new BadRequestException('Nombre de tag inválido.');
-      const clash = await this.prisma.tag.findUnique({ where: { slug } });
-      if (clash && clash.id !== id) {
-        throw new ConflictException('Ya existe un tag equivalente.');
+
+    // Estado final tras el cambio, para validar choque por (slug, estilo).
+    const finalSlug = data.name !== undefined ? slugify(data.name) : tag.slug;
+    if (data.name !== undefined && !finalSlug) {
+      throw new BadRequestException('Nombre de tag inválido.');
+    }
+    const finalStyle = data.style !== undefined ? (data.style ?? null) : tag.style;
+
+    if (data.name !== undefined || data.style !== undefined) {
+      const clash = await this.prisma.tag.findFirst({
+        where: { slug: finalSlug, style: finalStyle, NOT: { id } },
+      });
+      if (clash) {
+        throw new ConflictException('Ya existe ese sub-estilo en este estilo.');
       }
+    }
+
+    if (data.name !== undefined) {
       patch.name = data.name.trim();
-      patch.slug = slug;
+      patch.slug = finalSlug;
     }
     if (data.style !== undefined) patch.style = data.style ?? null;
 

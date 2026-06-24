@@ -92,12 +92,15 @@ model Setting {
 model Tag {
   id          String   @id @default(cuid())
   name        String // texto a mostrar
-  slug        String   @unique // normalizado para deduplicar
-  style       String? // categoría opcional: BACHATA | SALSA
+  slug        String // normalizado para deduplicar (único por estilo, no global)
+  style       String? // categoría: BACHATA | SALSA | null (general)
   createdById String
   createdAt   DateTime @default(now())
 
   tracks TrackTag[]
+
+  // El mismo nombre puede existir en cada estilo (ej: "Romántica" en bachata y salsa).
+  @@unique([slug, style])
 }
 
 /// Asociación DJ↔canción↔tag (cada DJ etiqueta según su apreciación).
