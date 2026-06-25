@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
+import { VersionBadge } from '@/components/version-badge';
 
 export const metadata: Metadata = {
   title: 'Baile Latino · Panel',
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <Providers>{children}</Providers>
+        <VersionBadge />
       </body>
     </html>
   );
