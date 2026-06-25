@@ -1,12 +1,17 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type {
+  YoutubeOwnPlaylist,
+  YoutubePlaylistDetail,
   YoutubePlaylistPattern,
   YoutubePlaylistPreview,
   YoutubePlaylistResult,
+  YoutubePlaylistStats,
+  YoutubePlaylistVideo,
 } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LibraryService } from '../library/library.service';
+import { TracksService } from '../tracks/tracks.service';
 import { interleavePattern, shuffle } from './playlist-pattern.util';
 
 /** Permite gestionar (crear) playlists en la cuenta del usuario. */
@@ -29,6 +34,7 @@ export class YoutubeOAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly library: LibraryService,
+    private readonly tracks: TracksService,
   ) {}
 
   get configured(): boolean {
@@ -127,6 +133,252 @@ export class YoutubeOAuthService {
     await this.prisma.setting
       .delete({ where: { key: refreshKey(userId) } })
       .catch(() => undefined);
+  }
+
+  /** Trae las playlists de la cuenta de YouTube del usuario (todas, paginando). */
+  async listMyPlaylists(userId: string): Promise<YoutubeOwnPlaylist[]> {
+    const token = await this.accessToken(userId);
+    const out: YoutubeOwnPlaylist[] = [];
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({
+        part: 'snippet,contentDetails,status',
+        mine: 'true',
+        maxResults: '50',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/playlists?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        throw new BadRequestException(
+          `No se pudieron traer tus playlists de YouTube: ${await res.text()}`,
+        );
+      }
+      const json = (await res.json()) as {
+        items?: Array<{
+          id: string;
+          snippet?: {
+            title?: string;
+            description?: string;
+            publishedAt?: string;
+            thumbnails?: Record<string, { url?: string }>;
+          };
+          contentDetails?: { itemCount?: number };
+          status?: { privacyStatus?: string };
+        }>;
+        nextPageToken?: string;
+      };
+      for (const it of json.items ?? []) out.push(this.mapPlaylist(it));
+      pageToken = json.nextPageToken;
+    } while (pageToken);
+    return out;
+  }
+
+  /** Mapea la respuesta cruda de playlists.list a nuestro tipo. */
+  private mapPlaylist(it: {
+    id: string;
+    snippet?: {
+      title?: string;
+      description?: string;
+      publishedAt?: string;
+      thumbnails?: Record<string, { url?: string }>;
+    };
+    contentDetails?: { itemCount?: number };
+    status?: { privacyStatus?: string };
+  }): YoutubeOwnPlaylist {
+    const th = it.snippet?.thumbnails;
+    return {
+      id: it.id,
+      title: it.snippet?.title ?? '(sin título)',
+      description: it.snippet?.description ?? '',
+      itemCount: it.contentDetails?.itemCount ?? 0,
+      privacyStatus: it.status?.privacyStatus ?? 'private',
+      thumbnailUrl: th?.medium?.url ?? th?.high?.url ?? th?.default?.url ?? null,
+      publishedAt: it.snippet?.publishedAt ?? null,
+      url: `https://www.youtube.com/playlist?list=${it.id}`,
+    };
+  }
+
+  /** Detalle de una playlist propia: metadatos + sus videos (paginados). */
+  async getPlaylistDetail(
+    userId: string,
+    playlistId: string,
+  ): Promise<YoutubePlaylistDetail> {
+    const token = await this.accessToken(userId);
+
+    // Metadatos de la playlist.
+    const metaRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails,status&id=${encodeURIComponent(playlistId)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!metaRes.ok) {
+      throw new BadRequestException(
+        `No se pudo traer la playlist: ${await metaRes.text()}`,
+      );
+    }
+    const metaJson = (await metaRes.json()) as {
+      items?: Array<Parameters<YoutubeOAuthService['mapPlaylist']>[0]>;
+    };
+    const raw = metaJson.items?.[0];
+    if (!raw) throw new BadRequestException('La playlist no existe.');
+    const meta = this.mapPlaylist(raw);
+
+    // Videos de la playlist (paginando).
+    const items: YoutubePlaylistVideo[] = [];
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({
+        part: 'snippet,contentDetails',
+        playlistId,
+        maxResults: '50',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        throw new BadRequestException(
+          `No se pudieron traer los videos: ${await res.text()}`,
+        );
+      }
+      const json = (await res.json()) as {
+        items?: Array<{
+          snippet?: {
+            title?: string;
+            position?: number;
+            videoOwnerChannelTitle?: string;
+            channelTitle?: string;
+            thumbnails?: Record<string, { url?: string }>;
+            resourceId?: { videoId?: string };
+          };
+          contentDetails?: { videoId?: string };
+        }>;
+        nextPageToken?: string;
+      };
+      for (const it of json.items ?? []) {
+        const videoId =
+          it.contentDetails?.videoId ?? it.snippet?.resourceId?.videoId ?? '';
+        if (!videoId) continue;
+        const th = it.snippet?.thumbnails;
+        items.push({
+          videoId,
+          title: it.snippet?.title ?? '(sin título)',
+          channelTitle:
+            it.snippet?.videoOwnerChannelTitle ?? it.snippet?.channelTitle ?? '',
+          thumbnailUrl:
+            th?.medium?.url ?? th?.default?.url ?? th?.high?.url ?? null,
+          position: it.snippet?.position ?? items.length,
+          durationSec: null,
+          url: `https://www.youtube.com/watch?v=${videoId}&list=${playlistId}`,
+        });
+      }
+      pageToken = json.nextPageToken;
+    } while (pageToken);
+
+    // Duración real de cada video (videos.list, en lotes de 50).
+    const durations = await this.fetchDurations(
+      token,
+      items.map((v) => v.videoId),
+    );
+    for (const v of items) v.durationSec = durations.get(v.videoId) ?? null;
+
+    // Enriquecer con nuestro catálogo: match por videoId.
+    const byVideoId = await this.tracks.findByYoutubeIds(
+      items.map((v) => v.videoId),
+      userId,
+    );
+    for (const v of items) {
+      const t = byVideoId.get(v.videoId);
+      v.match = t
+        ? {
+            trackId: t.id,
+            style: t.style,
+            substyles: t.substyles,
+            durationSec: t.durationSec,
+            year: t.year,
+            approvalStatus: t.approvalStatus,
+            inCatalog: t.scope === 'CATALOG',
+            inLibrary: t.inLibrary ?? false,
+            embeddable: t.details?.embeddable ?? null,
+          }
+        : null;
+    }
+
+    return { ...meta, items };
+  }
+
+  /** Elimina una playlist de la cuenta de YouTube del usuario. */
+  async deletePlaylist(userId: string, playlistId: string): Promise<void> {
+    const token = await this.accessToken(userId);
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlists?id=${encodeURIComponent(playlistId)}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+    );
+    // 204 = borrada; 404 = ya no existe (lo tratamos como éxito idempotente).
+    if (!res.ok && res.status !== 404) {
+      throw new BadRequestException(
+        `No se pudo eliminar la playlist en YouTube: ${await res.text()}`,
+      );
+    }
+  }
+
+  /** Resumen de una playlist: cuántas en cada lugar + duración total. */
+  async getPlaylistStats(
+    userId: string,
+    playlistId: string,
+  ): Promise<YoutubePlaylistStats> {
+    const d = await this.getPlaylistDetail(userId, playlistId);
+    return {
+      itemCount: d.items.length,
+      inLibrary: d.items.filter((v) => v.match?.inLibrary).length,
+      inCatalog: d.items.filter((v) => v.match?.inCatalog).length,
+      external: d.items.filter((v) => !v.match).length,
+      totalSec: d.items.reduce((a, v) => a + (v.durationSec ?? 0), 0),
+      partialDuration: d.items.some((v) => v.durationSec == null),
+    };
+  }
+
+  /** Trae la duración real (segundos) de cada videoId vía videos.list. */
+  private async fetchDurations(
+    token: string,
+    videoIds: string[],
+  ): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const ids = [...new Set(videoIds.filter(Boolean))];
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const params = new URLSearchParams({
+        part: 'contentDetails',
+        id: chunk.join(','),
+        maxResults: '50',
+      });
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) continue; // no abortar el detalle por las duraciones
+      const json = (await res.json()) as {
+        items?: Array<{ id?: string; contentDetails?: { duration?: string } }>;
+      };
+      for (const it of json.items ?? []) {
+        const d = it.contentDetails?.duration;
+        if (it.id && d) map.set(it.id, this.parseIsoDuration(d));
+      }
+    }
+    return map;
+  }
+
+  /** Convierte una duración ISO 8601 (ej: "PT3M45S") a segundos. */
+  private parseIsoDuration(iso: string): number {
+    const m = /^P(?:\d+D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso);
+    if (!m) return 0;
+    const h = Number(m[1] ?? 0);
+    const min = Number(m[2] ?? 0);
+    const s = Number(m[3] ?? 0);
+    return h * 3600 + min * 60 + s;
   }
 
   private async accessToken(userId: string): Promise<string> {

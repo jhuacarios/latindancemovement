@@ -307,6 +307,75 @@ export interface YoutubePlaylistResult {
   leftover: number;
 }
 
+/** Playlist existente en la cuenta de YouTube del usuario (traída a la vista). */
+export interface YoutubeOwnPlaylist {
+  id: string;
+  title: string;
+  description: string;
+  /** Cantidad de videos en la playlist. */
+  itemCount: number;
+  /** 'public' | 'unlisted' | 'private'. */
+  privacyStatus: string;
+  /** Miniatura de la playlist (o null si no tiene). */
+  thumbnailUrl: string | null;
+  /** Fecha de creación (ISO) o null. */
+  publishedAt: string | null;
+  /** Enlace directo a la playlist en YouTube. */
+  url: string;
+}
+
+/** Datos de nuestro catálogo que matchean un video de la playlist (por videoId). */
+export interface YoutubePlaylistVideoMatch {
+  trackId: string;
+  style: DanceStyle;
+  substyles: string[];
+  durationSec: number | null;
+  year: number | null;
+  approvalStatus: TrackApprovalStatus;
+  /** Si existe en el catálogo global. */
+  inCatalog: boolean;
+  /** Si el usuario actual la tiene en "Mis Canciones". */
+  inLibrary: boolean;
+  /** false si el video no permite reproducción embebida (para los botones). */
+  embeddable: boolean | null;
+}
+
+/** Un video dentro de una playlist de YouTube. */
+export interface YoutubePlaylistVideo {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnailUrl: string | null;
+  /** Posición (0-based) dentro de la playlist. */
+  position: number;
+  /** Duración real del video en YouTube (segundos), o null si no se obtuvo. */
+  durationSec: number | null;
+  /** Enlace directo al video en YouTube. */
+  url: string;
+  /** Datos de nuestro catálogo si la canción existe (match por videoId). */
+  match?: YoutubePlaylistVideoMatch | null;
+}
+
+/** Detalle de una playlist de YouTube: metadatos + sus videos. */
+export interface YoutubePlaylistDetail extends YoutubeOwnPlaylist {
+  items: YoutubePlaylistVideo[];
+}
+
+/** Resumen de una playlist: cuántas en cada lugar + duración total. */
+export interface YoutubePlaylistStats {
+  itemCount: number;
+  /** En "Mis Canciones" del usuario. */
+  inLibrary: number;
+  /** En el catálogo global. */
+  inCatalog: number;
+  /** Externas: no están en el sistema (sin match). */
+  external: number;
+  /** Duración total (segundos) de los videos. */
+  totalSec: number;
+  /** true si alguna duración no se pudo obtener (el total es un mínimo). */
+  partialDuration: boolean;
+}
+
 export interface CatalogSummary {
   totalTracks: number;
   byStyle: Record<string, number>;

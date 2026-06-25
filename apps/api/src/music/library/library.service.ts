@@ -132,7 +132,7 @@ export class LibraryService {
           style: dto.style,
           substyle:
             dto.substyles && dto.substyles.length
-              ? dto.substyles.map((s) => s.trim()).filter(Boolean).slice(0, 3).join(', ')
+              ? dto.substyles.map((s) => s.trim()).filter(Boolean).slice(0, 4).join(', ')
               : null,
           year: dto.year ?? null,
           source,

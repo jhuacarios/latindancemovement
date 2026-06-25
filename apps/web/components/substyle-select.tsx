@@ -6,7 +6,9 @@ import { api } from '@/lib/api';
 import { Select } from './ui';
 import { clsx } from './clsx';
 
-const MAX = 3;
+/** Máximo de sub-estilos por estilo (bachata y salsa: 4). */
+const maxFor = (style: string) =>
+  style === 'SALSA' || style === 'BACHATA' ? 4 : 3;
 
 /** Dropdown de filtro por sub-estilo, poblado desde el vocabulario (por estilo). */
 export function SubstyleFilterSelect({
@@ -65,6 +67,8 @@ export function SubstyleMultiSelect({
     );
   }
 
+  const max = maxFor(style);
+
   // Solo sub-estilos del estilo seleccionado + los ya elegidos.
   const options = (vocab ?? [])
     .filter((t) => t.style === style)
@@ -74,7 +78,7 @@ export function SubstyleMultiSelect({
   function toggle(name: string) {
     if (value.includes(name)) {
       onChange(value.filter((v) => v !== name));
-    } else if (value.length < MAX) {
+    } else if (value.length < max) {
       onChange([...value, name]);
     }
   }
@@ -106,7 +110,7 @@ export function SubstyleMultiSelect({
       <div className="flex max-h-28 flex-wrap gap-1 overflow-auto">
         {all.map((name) => {
           const active = value.includes(name);
-          const disabled = !active && value.length >= MAX;
+          const disabled = !active && value.length >= max;
           return (
             <button
               key={name}
@@ -132,7 +136,7 @@ export function SubstyleMultiSelect({
           </span>
         )}
       </div>
-      <p className="mt-1 text-[10px] text-neutral-500">Máximo {MAX}.</p>
+      <p className="mt-1 text-[10px] text-neutral-500">Máximo {max}.</p>
     </div>
   );
 }

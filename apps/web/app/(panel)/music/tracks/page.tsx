@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  DANCE_STYLES,
   type DanceStyle,
   type LibrarySummary,
   type Paginated,
@@ -13,7 +12,11 @@ import {
 import { api } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { PlayButtons } from '@/components/play-buttons';
+import { SearchInput } from '@/components/search-input';
+import { StyleFilter } from '@/components/style-filter';
+import { TrackThumb } from '@/components/track-thumb';
 import { formatDuration } from '@/lib/format';
+import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { TagEditor } from '@/components/tag-editor';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
@@ -25,9 +28,9 @@ import {
 } from '@/components/confirm-dialog';
 import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
-import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
+import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 30;
 
 export default function MyTracksPage() {
   const qc = useQueryClient();
@@ -50,6 +53,8 @@ export default function MyTracksPage() {
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const [tagTrack, setTagTrack] = useState<Track | null>(null);
   const [showYtPlaylist, setShowYtPlaylist] = useState(false);
+  const [showThumb, toggleThumb] = useThumbs();
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -136,6 +141,9 @@ export default function MyTracksPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="ghost" onClick={toggleThumb}>
+            {showThumb ? '🖼 Ocultar thumbnails' : '🖼 Thumbnails'}
+          </Button>
           <Button variant="ghost" onClick={() => setShowYtPlaylist(true)}>
             ▶️ Crear playlist YouTube rápida
           </Button>
@@ -219,32 +227,25 @@ export default function MyTracksPage() {
       <Card className="flex flex-wrap items-end gap-3">
         <div className="grow">
           <label className="mb-1 block text-xs text-neutral-400">Buscar</label>
-          <Input
+          <SearchInput
             placeholder="Título o artista…"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
+            onChange={(v) => {
+              setSearch(v);
               setPage(1);
             }}
           />
         </div>
         <div>
           <label className="mb-1 block text-xs text-neutral-400">Estilo</label>
-          <Select
+          <StyleFilter
             value={style}
-            onChange={(e) => {
-              setStyle(e.target.value);
+            onChange={(v) => {
+              setStyle(v);
               setSubstyle('');
               setPage(1);
             }}
-          >
-            <option value="">Todos</option>
-            {DANCE_STYLES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
         {style && (
           <div>
@@ -282,6 +283,7 @@ export default function MyTracksPage() {
                     />
                   </th>
                 )}
+                {showThumb && <th className="px-3 py-3 w-20"></th>}
                 <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
                 <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3">Estilo</th>
@@ -297,7 +299,11 @@ export default function MyTracksPage() {
                   key={t.id}
                   className={
                     'border-b border-neutral-800/60 last:border-0 ' +
-                    (selected.has(t.id) ? 'bg-brand/5' : '')
+                    (activeRowId === t.id
+                      ? 'bg-brand/10'
+                      : selected.has(t.id)
+                        ? 'bg-brand/5'
+                        : '')
                   }
                 >
                   {selectMode && (
@@ -310,15 +316,28 @@ export default function MyTracksPage() {
                       />
                     </td>
                   )}
+                  {showThumb && (
+                    <td className="px-3 py-2">
+                      <TrackThumb track={t} />
+                    </td>
+                  )}
                   <td className="px-4 py-3 font-medium">{t.title}</td>
                   <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-1">
                       <StyleBadge style={t.style} />
+                      {t.substyles?.map((s) => (
+                        <span
+                          key={s}
+                          className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                        >
+                          {s}
+                        </span>
+                      ))}
                       {t.tags?.map((tag) => (
                         <span
                           key={tag.id}
-                          className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                          className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
                         >
                           {tag.name}
                         </span>
@@ -340,7 +359,10 @@ export default function MyTracksPage() {
                     {formatDuration(t.durationSec)}
                   </td>
                   <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td
+                    className="px-4 py-3 text-right"
+                    onClick={() => setActiveRowId(t.id)}
+                  >
                     <div className="flex items-center justify-end gap-2">
                       <PlayButtons track={t} />
                       {canEdit && (
@@ -387,7 +409,7 @@ export default function MyTracksPage() {
               {data.data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={selectMode ? 8 : 7}
+                    colSpan={(selectMode ? 8 : 7) + (showThumb ? 1 : 0)}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
                     Aún no tienes canciones. Agrega tu música o{' '}
@@ -427,6 +449,7 @@ export default function MyTracksPage() {
         <TagEditor
           trackId={tagTrack.id}
           title={`${tagTrack.title} — ${tagTrack.artist}`}
+          style={tagTrack.style}
           onClose={() => setTagTrack(null)}
         />
       )}

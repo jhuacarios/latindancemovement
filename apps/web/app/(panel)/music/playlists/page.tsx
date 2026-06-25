@@ -19,9 +19,10 @@ export default function PlaylistsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Playlists</h1>
+        <h1 className="text-2xl font-bold">Playlists Internas</h1>
         <p className="text-sm text-neutral-400">
-          Genera listas automáticas o revisa las guardadas.
+          Playlists de la plataforma, asociadas a tu cuenta. Genera listas
+          automáticas o revisa las guardadas.
         </p>
       </div>
 

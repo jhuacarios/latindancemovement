@@ -36,7 +36,7 @@ export class CreateTrackDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(3)
+  @ArrayMaxSize(4)
   @IsString({ each: true })
   substyles?: string[];
 

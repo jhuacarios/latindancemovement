@@ -7,14 +7,13 @@ import {
 } from '@baile-latino/types';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { TracksService } from './tracks.service';
-import { TagsService } from '../tags/tags.service';
 
 /** Encabezados aceptados por campo (normalizados: minúscula, sin acentos). */
 const HEADER_ALIASES: Record<string, string[]> = {
   title: ['titulo', 'title', 'nombre', 'cancion', 'tema'],
   artist: ['artista', 'artist', 'interprete'],
   style: ['estilo', 'style', 'genero'],
-  tags: ['tags', 'etiquetas', 'tag', 'subestilos', 'sub estilos'],
+  substyles: ['subestilos', 'sub estilos', 'sub-estilos', 'subestilo', 'tags', 'etiquetas'],
   year: ['ano', 'year', 'anio'],
   link: ['link', 'url', 'enlace'],
   source: ['fuente', 'source'],
@@ -32,16 +31,12 @@ function normalize(s: string): string {
 
 interface ParsedRow {
   dto: CreateTrackDto;
-  tags: string[];
   excelRow: number;
 }
 
 @Injectable()
 export class TracksImportExcelService {
-  constructor(
-    private readonly tracks: TracksService,
-    private readonly tags: TagsService,
-  ) {}
+  constructor(private readonly tracks: TracksService) {}
 
   async importBuffer(buffer: Buffer, userId: string): Promise<ExcelImportResult> {
     const wb = new Workbook();
@@ -95,16 +90,16 @@ export class TracksImportExcelService {
           title,
           artist,
           style,
+          substyles: get(cols.substyles)
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean),
           year: this.parseNum(get(cols.year)),
           durationSec: this.parseNum(get(cols.durationSec)),
           link: get(cols.link) || undefined,
           source: this.parseSource(get(cols.source)),
           sourceId: get(cols.sourceId) || undefined,
         },
-        tags: get(cols.tags)
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean),
         excelRow: rowNumber,
       });
     });
@@ -116,9 +111,6 @@ export class TracksImportExcelService {
         const res = await this.tracks.upsertCatalog(r.dto, userId);
         if (res.created) created++;
         else updated++;
-        if (r.tags.length) {
-          await this.tags.addTagsByName(res.id, userId, r.tags);
-        }
       } catch (e) {
         errors.push({
           row: r.excelRow,

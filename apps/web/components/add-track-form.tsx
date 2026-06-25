@@ -40,7 +40,7 @@ export function AddTrackForm({
   const [form, setForm] = useState({
     title: '',
     artist: '',
-    style: 'BACHATA' as DanceStyle,
+    style: '' as DanceStyle | '',
     substyles: [] as string[],
     year: '',
     coverUrl: '',
@@ -90,6 +90,10 @@ export function AddTrackForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    if (!form.style) {
+      setErr('Elige un estilo.');
+      return;
+    }
     setSaving(true);
     try {
       await onCreate({
@@ -153,9 +157,14 @@ export function AddTrackForm({
         <Select
           value={form.style}
           onChange={(e) =>
-            setForm({ ...form, style: e.target.value as DanceStyle, substyles: [] })
+            setForm({
+              ...form,
+              style: e.target.value as DanceStyle | '',
+              substyles: [],
+            })
           }
         >
+          <option value="">Selecciona un estilo…</option>
           {DANCE_STYLES.map((s) => (
             <option key={s} value={s}>
               {s}

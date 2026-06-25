@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Param,
   Post,
   Query,
   Res,
@@ -82,6 +83,42 @@ export class YoutubeController {
       salsaPerBlock: dto.salsaPerBlock,
       order: dto.order,
     });
+  }
+
+  /** Lista las playlists de la cuenta de YouTube del usuario. */
+  @Get('playlists')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  myPlaylists(@CurrentUser() user: AuthUser) {
+    return this.yt.listMyPlaylists(user.id);
+  }
+
+  /** Resumen de una playlist: contadores + duración total. */
+  @Get('playlists/:id/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  playlistStats(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.yt.getPlaylistStats(user.id, id);
+  }
+
+  /** Detalle de una playlist propia: metadatos + sus videos. */
+  @Get('playlists/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  playlistDetail(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.yt.getPlaylistDetail(user.id, id);
+  }
+
+  /** Elimina una playlist de la cuenta de YouTube del usuario. */
+  @Delete('playlists/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  async deletePlaylist(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    await this.yt.deletePlaylist(user.id, id);
+    return { deleted: true };
   }
 
   /** Desconecta la cuenta de YouTube (borra el refresh token). */

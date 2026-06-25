@@ -6,9 +6,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
-import { moduleForPath, type ModuleChild } from '@/lib/modules';
+import { moduleForPath, permKeyForPath, type ModuleChild } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
 import { PlayerProvider } from '@/components/player';
+import { WhatsNew } from '@/components/whats-new';
 
 export default function PanelLayout({
   children,
@@ -34,8 +35,10 @@ export default function PanelLayout({
 
   const myModules = perms.accessibleModules(user.role);
   const activeModule = moduleForPath(pathname);
+  // Bloquea por la sección específica de la ruta si existe; si no, por el módulo.
+  const blockKey = permKeyForPath(pathname) ?? activeModule?.key;
   const blocked =
-    activeModule && !perms.can(user.role, activeModule.key, 'ver');
+    activeModule && blockKey && !perms.can(user.role, blockKey, 'ver');
 
   return (
     <PlayerProvider>
@@ -78,22 +81,30 @@ export default function PanelLayout({
 
                 {isActive && m.children && (
                   <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-neutral-800 pl-3">
-                    {m.children.map((c) =>
-                      c.children ? (
-                        <div key={c.label} className="mt-1">
-                          <div className="px-2 py-1 text-xs font-semibold text-neutral-500">
-                            {c.label}
+                    {m.children.map((c) => {
+                      if (!perms.can(user.role, c.key, 'ver')) return null;
+                      if (c.children) {
+                        const visible = c.children.filter((g) =>
+                          perms.can(user.role, g.key, 'ver'),
+                        );
+                        if (visible.length === 0) return null;
+                        return (
+                          <div key={c.key} className="mt-1">
+                            <div className="px-2 py-1 text-xs font-semibold text-neutral-500">
+                              {c.label}
+                            </div>
+                            <div className="ml-2 flex flex-col gap-0.5 border-l border-neutral-800/60 pl-2">
+                              {visible.map((g) => (
+                                <SubNavLink key={g.key} child={g} pathname={pathname} />
+                              ))}
+                            </div>
                           </div>
-                          <div className="ml-2 flex flex-col gap-0.5 border-l border-neutral-800/60 pl-2">
-                            {c.children.map((g) => (
-                              <SubNavLink key={g.href} child={g} pathname={pathname} />
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <SubNavLink key={c.href} child={c} pathname={pathname} />
-                      ),
-                    )}
+                        );
+                      }
+                      return (
+                        <SubNavLink key={c.key} child={c} pathname={pathname} />
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -108,6 +119,7 @@ export default function PanelLayout({
             {activeModule ? `${activeModule.icon} ${activeModule.title}` : 'Panel'}
           </div>
           <div className="flex items-center gap-3 text-sm">
+            <WhatsNew />
             <span className="text-neutral-300">
               {user.name}{' '}
               <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-400">

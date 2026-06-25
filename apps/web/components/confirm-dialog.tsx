@@ -34,11 +34,16 @@ export function ConfirmDialog({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-5"
+        className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold">{state.title}</h2>
-        <div className="mt-2 text-sm text-neutral-300">{state.message}</div>
+        <div className="flex items-center gap-2">
+          {state.danger && <span className="text-xl">⚠️</span>}
+          <h2 className="text-lg font-semibold">{state.title}</h2>
+        </div>
+        <div className="mt-2 text-sm leading-relaxed text-neutral-300">
+          {state.message}
+        </div>
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancelar

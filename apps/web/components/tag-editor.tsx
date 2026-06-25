@@ -13,10 +13,13 @@ import { clsx } from './clsx';
 export function TagEditor({
   trackId,
   title,
+  style,
   onClose,
 }: {
   trackId: string;
   title: string;
+  /** Estilo principal de la canción: solo se muestran/crean tags de ese estilo. */
+  style: string;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -49,7 +52,7 @@ export function TagEditor({
 
   const createTag = useMutation({
     mutationFn: (name: string) =>
-      api<Tag>('/music/tags', { method: 'POST', body: { name } }),
+      api<Tag>('/music/tags', { method: 'POST', body: { name, style } }),
     onSuccess: (tag) => {
       setSelected((prev) => new Set(prev).add(tag.id));
       setQuery('');
@@ -83,22 +86,28 @@ export function TagEditor({
     });
   }
 
-  const suggestions = trackTags.data?.suggestions ?? [];
+  // Solo sugerencias del estilo principal de la canción.
+  const suggestions = (trackTags.data?.suggestions ?? []).filter(
+    (s) => s.style === style,
+  );
   const suggestionIds = new Set(suggestions.map((s) => s.id));
 
-  // Resto del vocabulario (lo que no es sugerencia de esta canción), filtrado.
+  // Resto del vocabulario del MISMO estilo (sin las sugerencias), filtrado por búsqueda.
   const others = useMemo(() => {
     const all = vocab.data ?? [];
     const q = query.trim().toLowerCase();
     return all
+      .filter((t) => t.style === style)
       .filter((t) => !suggestionIds.has(t.id))
       .filter((t) => !q || t.name.toLowerCase().includes(q));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vocab.data, query, trackTags.data]);
+  }, [vocab.data, query, trackTags.data, style]);
 
   const exactExists =
     (vocab.data ?? []).some(
-      (t) => t.name.toLowerCase() === query.trim().toLowerCase(),
+      (t) =>
+        t.style === style &&
+        t.name.toLowerCase() === query.trim().toLowerCase(),
     ) || query.trim() === '';
 
   const loading = trackTags.isLoading || vocab.isLoading;

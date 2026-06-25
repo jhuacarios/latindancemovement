@@ -10,15 +10,14 @@ import {
   type UserRole,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { MODULES } from '@/lib/modules';
+import { permTree, defaultRolesForKey } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
 import { Button, Card, Select, Spinner } from '@/components/ui';
 
 const EDITABLE_ROLES = USER_ROLES.filter((r) => r !== 'SUPER_ADMIN');
 
 function defaultPerms(role: UserRole, key: string): ModulePerms {
-  const mod = MODULES.find((m) => m.key === key);
-  const allowed = mod ? mod.roles.includes(role) : false;
+  const allowed = defaultRolesForKey(key).includes(role);
   return { ver: allowed, editar: allowed, eliminar: allowed };
 }
 
@@ -26,8 +25,8 @@ function buildFullMatrix(saved: PermissionsMatrix): PermissionsMatrix {
   const full: PermissionsMatrix = {};
   for (const role of EDITABLE_ROLES) {
     full[role] = {};
-    for (const mod of MODULES) {
-      full[role][mod.key] = saved?.[role]?.[mod.key] ?? defaultPerms(role, mod.key);
+    for (const node of permTree()) {
+      full[role][node.key] = saved?.[role]?.[node.key] ?? defaultPerms(role, node.key);
     }
   }
   return full;
@@ -135,24 +134,33 @@ export default function RolesPage() {
               </tr>
             </thead>
             <tbody>
-              {MODULES.map((m) => {
-                const p = matrix[role][m.key];
+              {permTree().map((node) => {
+                const p = matrix[role][node.key];
+                if (!p) return null;
                 return (
                   <tr
-                    key={m.key}
-                    className="border-b border-neutral-800/60 last:border-0"
+                    key={node.key}
+                    className={
+                      'border-b border-neutral-800/60 transition-colors last:border-0 hover:bg-brand/5 ' +
+                      (node.depth === 0 ? 'font-medium' : 'text-neutral-300')
+                    }
                   >
-                    <td className="px-4 py-3">
-                      <span className="mr-2">{m.icon}</span>
-                      {m.title}
+                    <td
+                      className="py-2.5 pr-4"
+                      style={{ paddingLeft: `${1 + node.depth * 1.5}rem` }}
+                    >
+                      {node.depth > 0 && (
+                        <span className="mr-1 text-neutral-600">└</span>
+                      )}
+                      {node.label}
                     </td>
                     {PERMISSION_ACTIONS.map((a) => (
-                      <td key={a} className="px-4 py-3 text-center">
+                      <td key={a} className="px-4 py-2.5 text-center">
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-[var(--color-brand)]"
                           checked={p[a]}
-                          onChange={(e) => toggle(m.key, a, e.target.checked)}
+                          onChange={(e) => toggle(node.key, a, e.target.checked)}
                         />
                       </td>
                     ))}

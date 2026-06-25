@@ -58,7 +58,7 @@ export class TracksService {
   /** Une hasta 3 sub-estilos en un CSV para guardar en la columna `substyle`. */
   private joinSubstyles(arr?: string[]): string | null {
     if (!arr || !arr.length) return null;
-    const clean = arr.map((s) => s.trim()).filter(Boolean).slice(0, 3);
+    const clean = arr.map((s) => s.trim()).filter(Boolean).slice(0, 4);
     return clean.length ? clean.join(', ') : null;
   }
 
@@ -139,6 +139,49 @@ export class TracksService {
     }
 
     return { data, total, page, pageSize };
+  }
+
+  /**
+   * Busca canciones por sus videoIds de YouTube: las del catálogo global y las
+   * personales del propio usuario. Devuelve un mapa videoId → Track (con
+   * `inLibrary` resuelto). Para enriquecer vistas externas (ej: playlists de
+   * YouTube) con nuestra data. La personal del usuario tiene prioridad.
+   */
+  async findByYoutubeIds(
+    videoIds: string[],
+    userId?: string,
+  ): Promise<Map<string, Track>> {
+    const ids = [...new Set(videoIds.filter(Boolean))];
+    if (!ids.length) return new Map();
+
+    const scopeFilter: Prisma.TrackWhereInput[] = [{ scope: 'CATALOG' }];
+    if (userId) scopeFilter.push({ scope: 'PERSONAL', ownerId: userId });
+
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'YOUTUBE', sourceId: { in: ids }, OR: scopeFilter },
+    });
+    const tracks = rows.map(toPublicTrack);
+
+    // inLibrary: las personales propias siempre cuentan; las del catálogo, si
+    // están en UserTrack del usuario.
+    if (userId && tracks.length) {
+      const saved = await this.prisma.userTrack.findMany({
+        where: { userId, trackId: { in: tracks.map((t) => t.id) } },
+        select: { trackId: true },
+      });
+      const set = new Set(saved.map((s) => s.trackId));
+      for (const t of tracks) {
+        t.inLibrary = t.scope === 'PERSONAL' ? t.ownerId === userId : set.has(t.id);
+      }
+    }
+
+    // Si hay catálogo y personal con el mismo videoId, prioriza la personal.
+    const map = new Map<string, Track>();
+    for (const t of tracks) {
+      const prev = map.get(t.sourceId);
+      if (!prev || t.scope === 'PERSONAL') map.set(t.sourceId, t);
+    }
+    return map;
   }
 
   /**
@@ -258,6 +301,33 @@ export class TracksService {
     await this.ensureExists(id);
     await this.prisma.track.delete({ where: { id } });
     return { id, deleted: true };
+  }
+
+  /**
+   * Marca una canción como no-embebible (embeddable=false en su ytMetadata).
+   * Se usa cuando el reproductor detecta que YouTube bloquea el embed.
+   */
+  async markNotEmbeddable(id: string): Promise<{ ok: true }> {
+    const track = await this.prisma.track.findUnique({
+      where: { id },
+      select: { ytMetadata: true },
+    });
+    if (!track) throw new NotFoundException('Canción no encontrada');
+
+    let meta: Record<string, unknown> = {};
+    if (track.ytMetadata) {
+      try {
+        meta = JSON.parse(track.ytMetadata) as Record<string, unknown>;
+      } catch {
+        meta = {};
+      }
+    }
+    meta.embeddable = false;
+    await this.prisma.track.update({
+      where: { id },
+      data: { ytMetadata: JSON.stringify(meta) },
+    });
+    return { ok: true };
   }
 
   /** Carga masiva (upsert por source+sourceId). */

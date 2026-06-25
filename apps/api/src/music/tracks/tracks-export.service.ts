@@ -30,18 +30,6 @@ export class TracksExportService {
       orderBy: [{ style: 'asc' }, { artist: 'asc' }, { title: 'asc' }],
     });
 
-    // Tags (distintos) usados en cada canción, en cualquier biblioteca de DJ.
-    const tagRows = await this.prisma.trackTag.findMany({
-      where: { trackId: { in: tracks.map((t) => t.id) } },
-      include: { tag: true },
-    });
-    const tagsByTrack = new Map<string, Set<string>>();
-    for (const r of tagRows) {
-      const set = tagsByTrack.get(r.trackId) ?? new Set<string>();
-      set.add(r.tag.name);
-      tagsByTrack.set(r.trackId, set);
-    }
-
     const wb = new Workbook();
     wb.creator = 'Baile Latino Platform';
     const ws = wb.addWorksheet('Canciones');
@@ -50,7 +38,7 @@ export class TracksExportService {
       { header: 'Título', key: 'title', width: 36 },
       { header: 'Artista', key: 'artist', width: 28 },
       { header: 'Estilo', key: 'style', width: 12 },
-      { header: 'Tags', key: 'tags', width: 28 },
+      { header: 'Sub-estilos', key: 'substyles', width: 28 },
       { header: 'Año', key: 'year', width: 8 },
       { header: 'Duración (s)', key: 'durationSec', width: 12 },
       { header: 'Fuente', key: 'source', width: 10 },
@@ -67,7 +55,7 @@ export class TracksExportService {
         title: t.title,
         artist: t.artist,
         style: t.style,
-        tags: [...(tagsByTrack.get(t.id) ?? [])].join(', '),
+        substyles: t.substyle ?? '',
         year: t.year ?? '',
         durationSec: t.durationSec ?? '',
         source: t.source,
@@ -93,7 +81,7 @@ export class TracksExportService {
       { header: 'Título', key: 'title', width: 36 },
       { header: 'Artista', key: 'artist', width: 28 },
       { header: 'Estilo', key: 'style', width: 12 },
-      { header: 'Tags', key: 'tags', width: 28 },
+      { header: 'Sub-estilos', key: 'substyles', width: 28 },
       { header: 'Año', key: 'year', width: 8 },
       { header: 'Link', key: 'link', width: 50 },
     ];
@@ -104,7 +92,7 @@ export class TracksExportService {
       title: 'Propuesta Indecente',
       artist: 'Romeo Santos',
       style: 'BACHATA',
-      tags: 'Sensual, Romántica',
+      substyles: 'Sensual, Romántica',
       year: 2013,
       link: 'https://www.youtube.com/watch?v=e_Vym6fEPdo',
     });
@@ -117,7 +105,7 @@ export class TracksExportService {
       ['Título', 'Sí', 'Texto'],
       ['Artista', 'Sí', 'Texto'],
       ['Estilo', 'Sí', 'BACHATA | SALSA'],
-      ['Tags', 'No', 'Uno o varios separados por coma (ej: Sensual, Romántica). Se crean/normalizan en el vocabulario y se asocian a tu biblioteca.'],
+      ['Sub-estilos', 'No', 'Uno o varios separados por coma (ej: Sensual, Romántica). Deben existir en el vocabulario del estilo. Máx 4.'],
       ['Año', 'No', 'Número (ej: 2013)'],
       ['Link', 'Sí', 'URL de Spotify o YouTube'],
     ]);

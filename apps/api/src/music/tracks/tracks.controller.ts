@@ -143,4 +143,14 @@ export class TracksController {
   remove(@Param('id') id: string) {
     return this.tracks.remove(id);
   }
+
+  /**
+   * Marca una canción como no-reproducible fuera de YouTube. Lo dispara el
+   * reproductor cuando YouTube bloquea el embed (error 101/150). Cualquier
+   * usuario autenticado puede marcarla (es una corrección factual).
+   */
+  @Post(':id/not-embeddable')
+  markNotEmbeddable(@Param('id') id: string) {
+    return this.tracks.markNotEmbeddable(id);
+  }
 }

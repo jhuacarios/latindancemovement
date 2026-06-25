@@ -14,7 +14,7 @@ import type {
 } from '@baile-latino/types';
 import { api } from './api';
 import { useAuth } from './auth';
-import { MODULES, type AppModule } from './modules';
+import { MODULES, defaultRolesForKey, type AppModule } from './modules';
 
 interface PermissionsContextValue {
   loaded: boolean;
@@ -55,11 +55,17 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   const can = useCallback(
     (role: UserRole, key: string, action: PermissionAction): boolean => {
       if (role === 'SUPER_ADMIN') return true;
-      const saved = matrix?.[role]?.[key];
-      if (saved) return Boolean(saved[action]);
-      // Default: si el rol está en los roles por defecto del módulo, puede las 3.
-      const mod = MODULES.find((m) => m.key === key);
-      return mod ? mod.roles.includes(role) : false;
+      // Camino de claves: 'a.b.c' -> 'a.b' -> 'a'. Gana el permiso explícito más específico.
+      let k = key;
+      for (;;) {
+        const saved = matrix?.[role]?.[k];
+        if (saved) return Boolean(saved[action]);
+        const i = k.lastIndexOf('.');
+        if (i < 0) break;
+        k = k.slice(0, i);
+      }
+      // Sin permiso explícito en toda la cadena: default por los roles del módulo raíz.
+      return defaultRolesForKey(key).includes(role);
     },
     [matrix],
   );

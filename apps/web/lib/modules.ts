@@ -2,6 +2,8 @@ import { USER_ROLES, type UserRole } from '@baile-latino/types';
 
 export interface ModuleChild {
   label: string;
+  /** Clave de permiso jerárquica (ej: 'music.youtube.tracks'). La sección hereda del padre. */
+  key: string;
   /** Enlace (hoja). Ausente si es un grupo con sub-items. */
   href?: string;
   /** Sub-items (un nivel de anidamiento, ej: YouTube → Canciones/Catálogo/Playlists). */
@@ -37,24 +39,27 @@ export const MODULES: AppModule[] = [
     roles: ['DJ', 'ORGANIZADOR', 'SUPER_ADMIN'],
     status: 'ready',
     children: [
-      { label: 'Resumen', href: '/music' },
+      { label: 'Resumen', key: 'music.resumen', href: '/music' },
       {
         label: '📺 YouTube',
+        key: 'music.youtube',
         children: [
-          { label: 'Canciones', href: '/music/tracks' },
-          { label: 'Catálogo', href: '/music/catalog' },
-          { label: 'Playlists', href: '/music/playlists' },
+          { label: 'Canciones', key: 'music.youtube.tracks', href: '/music/tracks' },
+          { label: 'Catálogo', key: 'music.youtube.catalog', href: '/music/catalog' },
+          { label: 'Playlists Internas', key: 'music.youtube.playlists', href: '/music/playlists' },
+          { label: 'Playlists YouTube', key: 'music.youtube.ytplaylists', href: '/music/youtube-playlists' },
         ],
       },
       {
         label: '🟢 Spotify',
+        key: 'music.spotify',
         children: [
-          { label: 'Canciones', href: '/music/spotify/tracks' },
-          { label: 'Catálogo', href: '/music/spotify/catalog' },
-          { label: 'Playlists', href: '/music/spotify/playlists' },
+          { label: 'Canciones', key: 'music.spotify.tracks', href: '/music/spotify/tracks' },
+          { label: 'Catálogo', key: 'music.spotify.catalog', href: '/music/spotify/catalog' },
+          { label: 'Playlists', key: 'music.spotify.playlists', href: '/music/spotify/playlists' },
         ],
       },
-      { label: 'Reportes', href: '/music/reports' },
+      { label: 'Reportes', key: 'music.reportes', href: '/music/reports' },
     ],
   },
   {
@@ -172,10 +177,10 @@ export const MODULES: AppModule[] = [
     roles: ['SUPER_ADMIN'],
     status: 'ready',
     children: [
-      { label: 'Resumen', href: '/admin' },
-      { label: 'Usuarios', href: '/admin/users' },
-      { label: 'Roles y permisos', href: '/admin/roles' },
-      { label: 'Estilos y sub-estilos', href: '/admin/tags' },
+      { label: 'Resumen', key: 'admin.resumen', href: '/admin' },
+      { label: 'Usuarios', key: 'admin.users', href: '/admin/users' },
+      { label: 'Roles y permisos', key: 'admin.roles', href: '/admin/roles' },
+      { label: 'Estilos y sub-estilos', key: 'admin.tags', href: '/admin/tags' },
     ],
   },
 ];
@@ -198,4 +203,54 @@ export function moduleForPath(pathname: string): AppModule | undefined {
 
 export function moduleByKey(key: string): AppModule | undefined {
   return MODULES.find((m) => m.key === key);
+}
+
+export interface PermNode {
+  key: string;
+  label: string;
+  /** 0 = módulo, 1 = sección, 2 = subsección. */
+  depth: number;
+  /** Clave del módulo raíz (para los defaults). */
+  rootKey: string;
+}
+
+/** Aplana módulos + secciones + subsecciones en filas para la matriz de permisos. */
+export function permTree(): PermNode[] {
+  const out: PermNode[] = [];
+  for (const m of MODULES) {
+    out.push({ key: m.key, label: `${m.icon} ${m.title}`, depth: 0, rootKey: m.key });
+    const walk = (children: ModuleChild[], depth: number) => {
+      for (const c of children) {
+        out.push({ key: c.key, label: c.label, depth, rootKey: m.key });
+        if (c.children) walk(c.children, depth + 1);
+      }
+    };
+    if (m.children) walk(m.children, 1);
+  }
+  return out;
+}
+
+/** Roles por defecto de una clave: hereda del módulo raíz (primer segmento). */
+export function defaultRolesForKey(key: string): UserRole[] {
+  const rootKey = key.split('.')[0];
+  return MODULES.find((m) => m.key === rootKey)?.roles ?? [];
+}
+
+/** Clave de permiso de la sección (hoja) que mejor matchea una ruta (href más largo). */
+export function permKeyForPath(pathname: string): string | undefined {
+  let best: { key: string; len: number } | undefined;
+  const visit = (children: ModuleChild[]) => {
+    for (const c of children) {
+      if (
+        c.href &&
+        (pathname === c.href || pathname.startsWith(`${c.href}/`)) &&
+        (!best || c.href.length > best.len)
+      ) {
+        best = { key: c.key, len: c.href.length };
+      }
+      if (c.children) visit(c.children);
+    }
+  };
+  for (const m of MODULES) if (m.children) visit(m.children);
+  return best?.key;
 }
