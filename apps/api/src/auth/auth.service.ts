@@ -275,7 +275,8 @@ export class AuthService {
     }
 
     // 3) No existe -> cuenta nueva solo-Google (sin contraseña, email verificado).
-    const role = this.isSuperAdminEmail(email) ? 'SUPER_ADMIN' : 'BAILARIN';
+    // Por defecto entran como DJ (salvo que el email esté en la allowlist de super admin).
+    const role = this.isSuperAdminEmail(email) ? 'SUPER_ADMIN' : 'DJ';
     const created = await this.prisma.user.create({
       data: { email, name, googleId, emailVerified: true, role, styles: '' },
     });
