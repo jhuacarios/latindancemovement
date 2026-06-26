@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+.git
+**/.env
+**/.env.local
+**/*.db
+apps/api/prisma/dev.db
+*.log
