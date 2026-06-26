@@ -1,8 +1,14 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type {
   YoutubeOwnPlaylist,
   YoutubePlaylistDetail,
+  YoutubePlaylistFromTemplateResult,
   YoutubePlaylistPattern,
   YoutubePlaylistPreview,
   YoutubePlaylistResult,
@@ -12,6 +18,7 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { LibraryService } from '../library/library.service';
 import { TracksService } from '../tracks/tracks.service';
+import { PlaylistsService } from '../playlists/playlists.service';
 import { interleavePattern, shuffle } from './playlist-pattern.util';
 
 /** Permite gestionar (crear) playlists en la cuenta del usuario. */
@@ -35,7 +42,53 @@ export class YoutubeOAuthService {
     private readonly prisma: PrismaService,
     private readonly library: LibraryService,
     private readonly tracks: TracksService,
+    private readonly playlists: PlaylistsService,
   ) {}
+
+  /**
+   * Crea una playlist en YouTube con las canciones (de YouTube) de una playlist
+   * interna, como SNAPSHOT. No vincula nada: la interna es una plantilla y puede
+   * cambiar después sin afectar la de YouTube.
+   */
+  async createPlaylistFromTemplate(
+    userId: string,
+    playlistId: string,
+    title?: string,
+    privacyStatus: 'private' | 'unlisted' | 'public' = 'public',
+  ): Promise<YoutubePlaylistFromTemplateResult> {
+    const pl = await this.playlists.findOne(playlistId);
+    if (pl.ownerId !== userId) {
+      throw new ForbiddenException('Esta playlist no es tuya.');
+    }
+    const items = pl.items ?? [];
+    const videoIds = items
+      .filter((i) => i.track?.source === 'YOUTUBE' && i.track.sourceId)
+      .map((i) => i.track!.sourceId);
+    const skipped = items.length - videoIds.length;
+    if (!videoIds.length) {
+      throw new BadRequestException(
+        'La playlist no tiene canciones de YouTube para exportar.',
+      );
+    }
+
+    const finalTitle = title?.trim() || `${pl.name} — Baile Latino`;
+    const description =
+      `Generada desde la plantilla "${pl.name}" en Baile Latino. ` +
+      `Snapshot: no se sincroniza con la plantilla.`;
+    const newId = await this.createPlaylistWithVideos(
+      userId,
+      finalTitle,
+      description,
+      privacyStatus,
+      videoIds,
+    );
+    return {
+      playlistId: newId,
+      url: `https://www.youtube.com/playlist?list=${newId}`,
+      added: videoIds.length,
+      skipped,
+    };
+  }
 
   get configured(): boolean {
     return Boolean(

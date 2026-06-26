@@ -121,6 +121,23 @@ export class YoutubeController {
     return { deleted: true };
   }
 
+  /** Crea una playlist en YouTube con las canciones de una playlist interna (snapshot). */
+  @Post('from-template/:playlistId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  createFromTemplate(
+    @Param('playlistId') playlistId: string,
+    @Body() dto: CreateYoutubePlaylistDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.yt.createPlaylistFromTemplate(
+      user.id,
+      playlistId,
+      dto.title,
+      dto.privacy,
+    );
+  }
+
   /** Desconecta la cuenta de YouTube (borra el refresh token). */
   @Delete('connection')
   @UseGuards(JwtAuthGuard, RolesGuard)

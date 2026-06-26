@@ -9,7 +9,7 @@ export function trackThumbUrl(t: Track): string | null {
   return null;
 }
 
-/** Miniatura pequeña (16:9) del video de una canción. */
+/** Miniatura pequeña del video de una canción (mantiene su ratio original). */
 export function TrackThumb({ track }: { track: Track }) {
   const url = trackThumbUrl(track);
   if (!url) {
@@ -21,7 +21,7 @@ export function TrackThumb({ track }: { track: Track }) {
       src={url}
       alt=""
       loading="lazy"
-      className="h-14 w-24 shrink-0 rounded bg-neutral-800 object-cover"
+      className="h-14 w-24 shrink-0 rounded bg-neutral-800 object-contain"
     />
   );
 }

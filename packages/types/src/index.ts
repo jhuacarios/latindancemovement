@@ -293,6 +293,16 @@ export interface YoutubePlaylistPreview {
   leftover: number;
 }
 
+/** Resultado de crear una playlist en YouTube a partir de una plantilla interna. */
+export interface YoutubePlaylistFromTemplateResult {
+  playlistId: string;
+  url: string;
+  /** Videos de YouTube agregados. */
+  added: number;
+  /** Canciones omitidas (no eran de YouTube, ej: Spotify). */
+  skipped: number;
+}
+
 /** Resultado de crear una playlist en YouTube con el patrón configurado. */
 export interface YoutubePlaylistResult {
   playlistId: string;
