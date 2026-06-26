@@ -1,34 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Playlist, PlaylistItem } from '@baile-latino/types';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 import { PlayButtons } from '@/components/play-buttons';
 import { TrackThumb } from '@/components/track-thumb';
 import { SourceLink } from '@/components/source-link';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-modal';
+import { LibraryDrawer } from '@/components/library-drawer';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
+import { useLayoutUI } from '@/lib/layout-ui';
+
+type DropSide = { id: string; side: 'before' | 'after' } | null;
 
 export default function PlaylistDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const qc = useQueryClient();
+  const { setCollapsed } = useLayoutUI();
   const [ytOpen, setYtOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   // Orden local (para arrastrar-soltar con respuesta inmediata).
   const [localItems, setLocalItems] = useState<PlaylistItem[] | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{
-    id: string;
-    side: 'before' | 'after';
-  } | null>(null);
+  // Canción arrastrada desde el panel de Mis Canciones (para agregar).
+  const [externalDragId, setExternalDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropSide>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['playlist', id],
@@ -41,8 +47,18 @@ export default function PlaylistDetailPage() {
     setLocalItems(data?.items ?? null);
   }, [data]);
 
+  // Al abrir el panel de Mis Canciones, contrae el menú lateral para dar espacio.
+  useEffect(() => {
+    setCollapsed(drawerOpen);
+    return () => setCollapsed(false);
+  }, [drawerOpen, setCollapsed]);
+
   const items = localItems ?? data?.items ?? [];
   const ytCount = items.filter((i) => i.track?.source === 'YOUTUBE').length;
+  const inPlaylistIds = useMemo(
+    () => new Set(items.map((i) => i.trackId)),
+    [items],
+  );
 
   const removeItem = useMutation({
     mutationFn: (itemId: string) =>
@@ -59,9 +75,49 @@ export default function PlaylistDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['playlist', id] }),
   });
 
+  // Agrega una canción (desde Mis Canciones) en la posición indicada: la agrega
+  // al final y, si hay destino, la reordena ahí.
+  const addTrack = useMutation({
+    mutationFn: async (args: { trackId: string; target: DropSide }) => {
+      const updated = await api<Playlist>(`/music/playlists/${id}/items`, {
+        method: 'POST',
+        body: { trackId: args.trackId },
+      });
+      const newItem = updated.items?.find((i) => i.trackId === args.trackId);
+      if (newItem && args.target && args.target.id !== newItem.id) {
+        const rest = (updated.items ?? []).filter((i) => i.id !== newItem.id);
+        let to = rest.findIndex((i) => i.id === args.target!.id);
+        if (to !== -1) {
+          if (args.target.side === 'after') to += 1;
+          rest.splice(to, 0, newItem);
+          await api(`/music/playlists/${id}/reorder`, {
+            method: 'PATCH',
+            body: { itemIds: rest.map((i) => i.id) },
+          });
+        }
+      }
+    },
+    onSuccess: () => {
+      setErr(null);
+      void qc.invalidateQueries({ queryKey: ['playlist', id] });
+    },
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo agregar la canción.'),
+  });
+
   function handleDrop() {
     const target = dropTarget;
     setDropTarget(null);
+
+    // Soltada desde el panel de Mis Canciones: agregar.
+    if (externalDragId) {
+      const tid = externalDragId;
+      setExternalDragId(null);
+      addTrack.mutate({ trackId: tid, target });
+      return;
+    }
+
+    // Reordenar dentro de la playlist.
     const draggingId = dragId;
     setDragId(null);
     if (!draggingId || !target || draggingId === target.id) return;
@@ -102,37 +158,50 @@ export default function PlaylistDetailPage() {
       {error && <p className="text-sm text-red-300">No se pudo cargar la playlist.</p>}
 
       {data && (
-        <>
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-2xl font-bold">{data.name}</h1>
               <p className="text-sm text-neutral-400">
-                {data.items?.length ?? 0} canciones · estado {data.status}
+                {items.length} canciones · estado {data.status}
                 {data.targetBachataPct != null &&
                   ` · mix objetivo ${data.targetBachataPct}% bachata`}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              disabled={ytCount === 0}
-              title={
-                ytCount === 0
-                  ? 'No hay canciones de YouTube en esta playlist'
-                  : 'Crear una playlist en YouTube con estas canciones (snapshot)'
-              }
-              onClick={() => setYtOpen(true)}
-            >
-              <span className="flex items-center gap-2">
-                <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
-                Crear playlist en YouTube
-              </span>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={drawerOpen ? 'primary' : 'ghost'}
+                onClick={() => setDrawerOpen((o) => !o)}
+                title="Buscar en Mis Canciones y arrastrarlas a la playlist"
+              >
+                ＋ Agregar canciones
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={ytCount === 0}
+                title={
+                  ytCount === 0
+                    ? 'No hay canciones de YouTube en esta playlist'
+                    : 'Crear una playlist en YouTube con estas canciones (snapshot)'
+                }
+                onClick={() => setYtOpen(true)}
+              >
+                <span className="flex items-center gap-2">
+                  <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
+                  Crear playlist en YouTube
+                </span>
+              </Button>
+            </div>
           </div>
+
+          {err && <Card className="text-sm text-red-300">{err}</Card>}
 
           {items.length > 1 && (
             <p className="text-xs text-neutral-500">
-              Arrastra una fila (desde el número, la miniatura o un espacio vacío)
-              para reordenar.
+              Arrastra una fila para reordenar
+              {drawerOpen && ', o arrastra canciones desde el panel para agregarlas'}
+              .
             </p>
           )}
 
@@ -224,15 +293,45 @@ export default function PlaylistDetailPage() {
                 ))}
                 {items.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
-                      Playlist vacía.
+                    <td
+                      colSpan={6}
+                      onDragOver={(e) => externalDragId && e.preventDefault()}
+                      onDrop={(e) => {
+                        if (!externalDragId) return;
+                        e.preventDefault();
+                        const tid = externalDragId;
+                        setExternalDragId(null);
+                        addTrack.mutate({ trackId: tid, target: null });
+                      }}
+                      className={clsx(
+                        'px-4 py-8 text-center text-neutral-500',
+                        externalDragId &&
+                          'shadow-[inset_0_0_0_2px_var(--color-brand)]',
+                      )}
+                    >
+                      {externalDragId
+                        ? 'Suelta aquí para agregar a la playlist'
+                        : 'Playlist vacía.'}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </Card>
-        </>
+          </div>
+
+          {drawerOpen && (
+            <LibraryDrawer
+              excludeTrackIds={inPlaylistIds}
+              onClose={() => setDrawerOpen(false)}
+              onItemDragStart={setExternalDragId}
+              onItemDragEnd={() => {
+                setExternalDragId(null);
+                setDropTarget(null);
+              }}
+            />
+          )}
+        </div>
       )}
 
       {ytOpen && data && (

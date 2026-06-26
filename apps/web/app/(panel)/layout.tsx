@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
@@ -10,6 +10,7 @@ import { moduleForPath, permKeyForPath, type ModuleChild } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
 import { PlayerProvider } from '@/components/player';
 import { WhatsNew } from '@/components/whats-new';
+import { LayoutUIContext } from '@/lib/layout-ui';
 
 export default function PanelLayout({
   children,
@@ -20,6 +21,7 @@ export default function PanelLayout({
   const perms = usePermissions();
   const router = useRouter();
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -41,13 +43,46 @@ export default function PanelLayout({
     activeModule && blockKey && !perms.can(user.role, blockKey, 'ver');
 
   return (
+    <LayoutUIContext.Provider value={{ collapsed, setCollapsed }}>
     <PlayerProvider>
     <div className="flex min-h-screen">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 p-4">
-        <div className="mb-6 px-2 text-lg font-bold">
-          Baile<span className="text-brand">Latino</span>
+      <aside
+        className={clsx(
+          'flex shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 transition-all',
+          collapsed ? 'w-16 p-2' : 'w-64 p-4',
+        )}
+      >
+        <div
+          className={clsx(
+            'mb-6 font-bold',
+            collapsed ? 'text-center text-lg' : 'px-2 text-lg',
+          )}
+        >
+          {collapsed ? (
+            <span className="text-brand">BL</span>
+          ) : (
+            <>
+              Baile<span className="text-brand">Latino</span>
+            </>
+          )}
         </div>
 
+        {collapsed ? (
+          <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
+            <IconLink href="/" icon="🏠" title="Inicio" active={pathname === '/'} />
+            {myModules.map((m) => (
+              <IconLink
+                key={m.key}
+                href={m.href}
+                icon={m.icon}
+                title={m.title}
+                active={
+                  pathname === m.href || pathname.startsWith(`${m.href}/`)
+                }
+              />
+            ))}
+          </nav>
+        ) : (
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
           <NavLink href="/" label="🏠 Inicio" active={pathname === '/'} />
 
@@ -111,6 +146,7 @@ export default function PanelLayout({
             );
           })}
         </nav>
+        )}
       </aside>
 
       <div className="flex flex-1 flex-col">
@@ -155,6 +191,32 @@ export default function PanelLayout({
       </div>
     </div>
     </PlayerProvider>
+    </LayoutUIContext.Provider>
+  );
+}
+
+function IconLink({
+  href,
+  icon,
+  title,
+  active,
+}: {
+  href: string;
+  icon: string;
+  title: string;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      title={title}
+      className={clsx(
+        'flex h-10 w-10 items-center justify-center rounded-lg text-lg transition',
+        active ? 'bg-brand/15' : 'text-neutral-300 hover:bg-neutral-800',
+      )}
+    >
+      {icon}
+    </Link>
   );
 }
 
