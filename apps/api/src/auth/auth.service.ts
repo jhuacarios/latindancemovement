@@ -37,6 +37,41 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
+  /**
+   * Emails que SIEMPRE deben ser SUPER_ADMIN, desde la env `SUPER_ADMIN_EMAILS`
+   * (separados por coma). Permite que al desplegar, tu cuenta personal quede como
+   * super admin apenas entres (por Google o por password), sin tocar la base.
+   */
+  private superAdminEmails(): string[] {
+    return (process.env.SUPER_ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private isSuperAdminEmail(email: string): boolean {
+    return this.superAdminEmails().includes(email.toLowerCase());
+  }
+
+  /**
+   * Si el email está en la allowlist y el rol aún no es SUPER_ADMIN, lo promueve.
+   * Devuelve el rol vigente (ya actualizado). Idempotente.
+   */
+  private async ensureSuperAdmin(user: {
+    id: string;
+    email: string;
+    role: string;
+  }): Promise<string> {
+    if (this.isSuperAdminEmail(user.email) && user.role !== 'SUPER_ADMIN') {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { role: 'SUPER_ADMIN' },
+      });
+      return 'SUPER_ADMIN';
+    }
+    return user.role;
+  }
+
   async register(dto: RegisterDto): Promise<{ user: PublicUser; tokens: AuthTokens }> {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
@@ -44,12 +79,15 @@ export class AuthService {
     if (existing) throw new ConflictException('El email ya está registrado');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    const role = this.isSuperAdminEmail(dto.email)
+      ? 'SUPER_ADMIN'
+      : (dto.role ?? 'BAILARIN');
     const user = await this.prisma.user.create({
       data: {
         email: dto.email.toLowerCase(),
         passwordHash,
         name: dto.name,
-        role: dto.role ?? 'BAILARIN',
+        role,
         city: dto.city ?? null,
         instagramHandle: dto.instagramHandle ?? null,
         styles: (dto.styles ?? []).join(','),
@@ -72,8 +110,9 @@ export class AuthService {
       : false;
     if (!ok) throw new UnauthorizedException('Credenciales inválidas');
 
-    const tokens = await this.issueTokens(user.id, user.email, user.role as UserRole);
-    return { user: this.toPublicUser(user), tokens };
+    const role = await this.ensureSuperAdmin(user);
+    const tokens = await this.issueTokens(user.id, user.email, role as UserRole);
+    return { user: this.toPublicUser({ ...user, role }), tokens };
   }
 
   async refresh(refreshToken: string): Promise<AuthTokens> {
@@ -236,8 +275,9 @@ export class AuthService {
     }
 
     // 3) No existe -> cuenta nueva solo-Google (sin contraseña, email verificado).
+    const role = this.isSuperAdminEmail(email) ? 'SUPER_ADMIN' : 'BAILARIN';
     const created = await this.prisma.user.create({
-      data: { email, name, googleId, emailVerified: true, role: 'BAILARIN', styles: '' },
+      data: { email, name, googleId, emailVerified: true, role, styles: '' },
     });
     return created.id;
   }
@@ -260,8 +300,9 @@ export class AuthService {
     }
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
-    const tokens = await this.issueTokens(user.id, user.email, user.role as UserRole);
-    return { user: this.toPublicUser(user), tokens };
+    const role = await this.ensureSuperAdmin(user);
+    const tokens = await this.issueTokens(user.id, user.email, role as UserRole);
+    return { user: this.toPublicUser({ ...user, role }), tokens };
   }
 
   private async issueTokens(
