@@ -1,11 +1,11 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const prisma = new PrismaClient({
-  adapter: new PrismaLibSql({
-    url: process.env.DATABASE_URL ?? 'file:./prisma/dev.db',
-  }),
+  adapter: new PrismaPg(
+    process.env.DATABASE_URL ?? 'postgresql://baile:baile@localhost:5432/baile',
+  ),
 });
 
 /**

@@ -1,6 +1,9 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { PrismaPg } from '@prisma/adapter-pg';
+
+/** URL por defecto para dev local (ver docker-compose.yml). En prod va por env. */
+const DEFAULT_DB_URL = 'postgresql://baile:baile@localhost:5432/baile';
 
 @Injectable()
 export class PrismaService
@@ -8,12 +11,9 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    // Prisma 7: el cliente se conecta mediante un driver adapter.
-    // SQLite (dev) vía libsql; para prod (PostgreSQL) se cambiaría por @prisma/adapter-pg.
+    // Prisma 7: el cliente se conecta mediante un driver adapter (PostgreSQL).
     super({
-      adapter: new PrismaLibSql({
-        url: process.env.DATABASE_URL ?? 'file:./prisma/dev.db',
-      }),
+      adapter: new PrismaPg(process.env.DATABASE_URL ?? DEFAULT_DB_URL),
     });
   }
 

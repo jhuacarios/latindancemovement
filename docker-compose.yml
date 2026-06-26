@@ -1,0 +1,18 @@
+# Postgres para desarrollo local. Levantar con: docker compose up -d db
+# Luego (desde apps/api): pnpm db:push && pnpm db:seed
+services:
+  db:
+    image: postgres:16
+    container_name: baile-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: baile
+      POSTGRES_PASSWORD: baile
+      POSTGRES_DB: baile
+    ports:
+      - '5432:5432'
+    volumes:
+      - baile-pgdata:/var/lib/postgresql/data
+
+volumes:
+  baile-pgdata:

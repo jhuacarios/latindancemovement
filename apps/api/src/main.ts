@@ -32,9 +32,13 @@ async function bootstrap() {
     }),
   );
 
-  const webUrl = process.env.WEB_URL ?? 'http://localhost:3001';
+  // WEB_URL admite varias URLs separadas por coma (ej: prod + previews de Vercel).
+  const origins = (process.env.WEB_URL ?? 'http://localhost:3001')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: [webUrl],
+    origin: origins,
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });

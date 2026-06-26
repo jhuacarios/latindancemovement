@@ -1,18 +1,18 @@
-// Baile Latino Platform — schema de la API.
-// Dev: SQLite (file:./dev.db). Prod: PostgreSQL (cambiar provider + DATABASE_URL).
+// Baile Latino Platform — schema de la API. PostgreSQL (dev y prod).
+// Dev local: Postgres vía docker-compose. Prod: Postgres gestionado (Railway/Neon).
 //
-// NOTA: SQLite no soporta enums ni arrays nativos en Prisma. Los campos "enum"
-// se guardan como String validados contra los arrays de @baile-latino/types,
-// y las listas (p. ej. estilos del usuario) se guardan como CSV.
+// NOTA: los campos "enum" se guardan como String validados contra los arrays de
+// @baile-latino/types, y las listas (p. ej. estilos del usuario) como CSV (se
+// mantiene así por compatibilidad histórica).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  // Prisma 7: la URL ya no va aquí. Para migraciones vive en prisma.config.ts;
-  // en runtime el cliente se conecta vía driver adapter (libsql) — ver prisma.service.ts.
-  provider = "sqlite"
+  // Prisma 7: la URL no va aquí. Para migraciones/db push vive en prisma.config.ts;
+  // en runtime el cliente se conecta vía driver adapter (pg) — ver prisma.service.ts.
+  provider = "postgresql"
 }
 
 model User {
