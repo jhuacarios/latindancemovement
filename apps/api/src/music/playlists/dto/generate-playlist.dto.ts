@@ -25,6 +25,22 @@ export class GeneratePlaylistDto {
   @IsIn(DANCE_SUBSTYLES, { each: true })
   substyles?: DanceSubstyle[];
 
+  /**
+   * Distribución exacta: cuántas bachatas y cuántas salsas. Si se entregan, se
+   * usan en vez de bachataPct/maxTracks. Con `targetMinutes`, definen el ratio.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(300)
+  bachataCount?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(300)
+  salsaCount?: number;
+
   /** Duración objetivo total en minutos (si los tracks tienen duración). */
   @IsOptional()
   @IsInt()

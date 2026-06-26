@@ -9,12 +9,100 @@ import type {
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Spinner, StyleBadge } from '@/components/ui';
+import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
+import { clsx } from '@/components/clsx';
 
 export default function PlaylistsPage() {
+  const qc = useQueryClient();
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [err, setErr] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['playlists'],
     queryFn: () => api<Playlist[]>('/music/playlists'),
   });
+
+  const del = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let failed = 0;
+      for (const id of ids) {
+        try {
+          await api(`/music/playlists/${id}`, { method: 'DELETE' });
+        } catch {
+          failed++;
+        }
+      }
+      return failed;
+    },
+    onSuccess: async (failed) => {
+      setSelected(new Set());
+      setSelectMode(false);
+      await qc.invalidateQueries({ queryKey: ['playlists'] });
+      setErr(failed ? `${failed} playlist(s) no se pudieron eliminar.` : null);
+    },
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo eliminar.'),
+  });
+
+  const busy = del.isPending;
+  const items = data ?? [];
+
+  function deleteOne(p: Playlist) {
+    setConfirm({
+      title: 'Eliminar playlist',
+      danger: true,
+      confirmLabel: 'Eliminar',
+      message: (
+        <>
+          ¿Eliminar la playlist <b className="text-neutral-100">{p.name}</b>?
+          Esta acción no se puede deshacer.
+        </>
+      ),
+      onConfirm: () => {
+        setErr(null);
+        del.mutate([p.id]);
+      },
+    });
+  }
+
+  function deleteSelected() {
+    const ids = [...selected];
+    if (!ids.length) return;
+    setConfirm({
+      title: 'Eliminar playlists',
+      danger: true,
+      confirmLabel: `Eliminar ${ids.length}`,
+      message: (
+        <>
+          ¿Eliminar{' '}
+          <b className="text-neutral-100">
+            {ids.length} playlist{ids.length === 1 ? '' : 's'}
+          </b>
+          ? Esta acción no se puede deshacer.
+        </>
+      ),
+      onConfirm: () => {
+        setErr(null);
+        del.mutate(ids);
+      },
+    });
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
 
   return (
     <div className="space-y-6">
@@ -29,18 +117,72 @@ export default function PlaylistsPage() {
       <Generator />
 
       <div>
-        <h2 className="mb-3 font-semibold">Mis playlists</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Mis playlists</h2>
+          {items.length > 0 && (
+            <div className="flex items-center gap-2">
+              {!selectMode ? (
+                <Button variant="ghost" onClick={() => setSelectMode(true)}>
+                  ☑️ Seleccionar
+                </Button>
+              ) : (
+                <>
+                  <span className="text-sm text-neutral-400">
+                    {selected.size} seleccionada{selected.size === 1 ? '' : 's'}
+                  </span>
+                  <Button
+                    variant="danger"
+                    disabled={selected.size === 0 || busy}
+                    onClick={deleteSelected}
+                  >
+                    {busy ? 'Eliminando…' : `🗑 Eliminar (${selected.size})`}
+                  </Button>
+                  <Button variant="ghost" disabled={busy} onClick={exitSelect}>
+                    Cancelar
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {err && <Card className="mb-3 text-sm text-red-300">{err}</Card>}
         {isLoading && <Spinner />}
-        {data && data.length === 0 && (
+        {!isLoading && items.length === 0 && (
           <p className="text-sm text-neutral-500">
             Aún no tienes playlists guardadas. Genera una arriba (ponle nombre para guardarla).
           </p>
         )}
+
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {data?.map((p) => (
-            <Link key={p.id} href={`/music/playlists/${p.id}`}>
-              <Card className="h-full transition hover:border-brand/60">
-                <div className="font-semibold">{p.name}</div>
+          {items.map((p) => {
+            const isSelected = selected.has(p.id);
+            const inner = (
+              <Card
+                className={clsx(
+                  'relative h-full transition',
+                  selectMode
+                    ? isSelected
+                      ? 'border-brand ring-1 ring-brand'
+                      : 'hover:border-neutral-600'
+                    : 'hover:border-brand/60',
+                )}
+              >
+                {selectMode && (
+                  <span
+                    className={clsx(
+                      'absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border text-xs',
+                      isSelected
+                        ? 'border-brand bg-brand text-white'
+                        : 'border-neutral-600 bg-neutral-900/80 text-transparent',
+                    )}
+                  >
+                    ✓
+                  </span>
+                )}
+                <div className={clsx('font-semibold', selectMode && 'pl-7')}>
+                  {p.name}
+                </div>
                 <div className="mt-1 text-sm text-neutral-400">
                   {p.items?.length ?? 0} canciones · {p.status}
                 </div>
@@ -49,31 +191,75 @@ export default function PlaylistsPage() {
                     Mix objetivo: {p.targetBachataPct}% bachata
                   </div>
                 )}
+
+                {!selectMode && (
+                  <button
+                    type="button"
+                    title="Eliminar playlist"
+                    disabled={busy}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      deleteOne(p);
+                    }}
+                    className="absolute right-2 top-2 rounded-md bg-neutral-800/80 px-1.5 py-0.5 text-sm text-neutral-400 transition hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
+                  >
+                    🗑
+                  </button>
+                )}
               </Card>
-            </Link>
-          ))}
+            );
+
+            return selectMode ? (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => toggle(p.id)}
+                className="text-left"
+              >
+                {inner}
+              </button>
+            ) : (
+              <Link key={p.id} href={`/music/playlists/${p.id}`}>
+                {inner}
+              </Link>
+            );
+          })}
         </div>
       </div>
+
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }
 
 function Generator() {
   const qc = useQueryClient();
-  const [bachataPct, setBachataPct] = useState(50);
-  const [maxTracks, setMaxTracks] = useState(20);
+  const [bachatas, setBachatas] = useState<number | ''>(5);
+  const [salsas, setSalsas] = useState<number | ''>(3);
+  const [limitMode, setLimitMode] = useState<'count' | 'duration'>('count');
+  const [maxTracks, setMaxTracks] = useState<number | ''>(30);
+  const [minutes, setMinutes] = useState<number | ''>(60);
   const [byPopularity, setByPopularity] = useState(false);
   const [name, setName] = useState('');
   const [result, setResult] = useState<PlaylistGenerationResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // Coerciones: el campo puede quedar vacío mientras se edita; al generar se
+  // aplica el valor por defecto / mínimo.
+  const num = (v: number | '', min: number, fallback: number) =>
+    v === '' ? fallback : Math.max(min, v);
 
   const mutation = useMutation({
     mutationFn: () =>
       api<PlaylistGenerationResult>('/music/playlists/generate', {
         method: 'POST',
         body: {
-          bachataPct,
-          maxTracks,
+          bachataCount: bachatas === '' ? 0 : bachatas,
+          salsaCount: salsas === '' ? 0 : salsas,
+          maxTracks: limitMode === 'count' ? num(maxTracks, 1, 30) : undefined,
+          targetMinutes:
+            limitMode === 'duration' ? num(minutes, 5, 60) : undefined,
           byPopularity,
           name: name || undefined,
         },
@@ -97,33 +283,110 @@ function Generator() {
           mutation.mutate();
         }}
       >
-        <div>
-          <label className="mb-1 block text-sm text-neutral-300">
-            Mezcla: {bachataPct}% bachata / {100 - bachataPct}% salsa
+        <div className="md:col-span-2">
+          <label className="mb-1 block text-xs text-neutral-400">
+            Distribución por bloque (se repite el patrón hasta el límite)
           </label>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={bachataPct}
-            onChange={(e) => setBachataPct(Number(e.target.value))}
-            className="w-full accent-[var(--color-brand)]"
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm text-neutral-300">
+                Bachatas por bloque
+              </label>
+              <Input
+                type="number"
+                min={0}
+                max={50}
+                value={bachatas}
+                onChange={(e) =>
+                  setBachatas(
+                    e.target.value === '' ? '' : Math.max(0, Number(e.target.value)),
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-neutral-300">
+                Salsas por bloque
+              </label>
+              <Input
+                type="number"
+                min={0}
+                max={50}
+                value={salsas}
+                onChange={(e) =>
+                  setSalsas(
+                    e.target.value === '' ? '' : Math.max(0, Number(e.target.value)),
+                  )
+                }
+              />
+            </div>
+          </div>
+          <p className="mt-1 text-[11px] text-neutral-500">
+            Patrón: {bachatas || 0} bachatas → {salsas || 0} salsas, repetido.
+          </p>
         </div>
-        <div>
-          <label className="mb-1 block text-sm text-neutral-300">
-            Máx. canciones: {maxTracks}
-          </label>
-          <input
-            type="range"
-            min={5}
-            max={60}
-            step={1}
-            value={maxTracks}
-            onChange={(e) => setMaxTracks(Number(e.target.value))}
-            className="w-full accent-[var(--color-brand)]"
-          />
+
+        <div className="md:col-span-2">
+          <label className="mb-1 block text-xs text-neutral-400">Límite</label>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex rounded-lg border border-neutral-700 p-0.5">
+              {(['count', 'duration'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setLimitMode(m)}
+                  className={clsx(
+                    'rounded-md px-3 py-1 text-sm transition',
+                    limitMode === m
+                      ? 'bg-brand text-white'
+                      : 'text-neutral-300 hover:bg-neutral-800',
+                  )}
+                >
+                  {m === 'count' ? 'Por cantidad' : 'Por duración'}
+                </button>
+              ))}
+            </div>
+
+            {limitMode === 'count' ? (
+              <label className="flex items-center gap-2 text-sm text-neutral-300">
+                Máx. canciones:
+                <span className="w-24">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={300}
+                    value={maxTracks}
+                    onChange={(e) =>
+                      setMaxTracks(
+                        e.target.value === ''
+                          ? ''
+                          : Math.max(0, Number(e.target.value)),
+                      )
+                    }
+                  />
+                </span>
+              </label>
+            ) : (
+              <label className="flex items-center gap-2 text-sm text-neutral-300">
+                Máx. minutos:
+                <span className="w-24">
+                  <Input
+                    type="number"
+                    min={5}
+                    max={600}
+                    value={minutes}
+                    onChange={(e) =>
+                      setMinutes(
+                        e.target.value === ''
+                          ? ''
+                          : Math.max(0, Number(e.target.value)),
+                      )
+                    }
+                  />
+                </span>
+              </label>
+            )}
+          </div>
         </div>
         <div className="flex items-end">
           <label className="flex items-center gap-2 text-sm text-neutral-300">
