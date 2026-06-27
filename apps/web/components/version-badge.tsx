@@ -1,4 +1,4 @@
-import { APP_VERSION } from '@/lib/version';
+import { APP_VERSION, BUILD_SHA } from '@/lib/version';
 
 /**
  * Insignia de versión fija en la esquina inferior derecha. Visible en todas las
@@ -11,6 +11,7 @@ export function VersionBadge() {
       title="Versión de la app"
     >
       v{APP_VERSION}
+      {BUILD_SHA && ` · ${BUILD_SHA}`}
     </div>
   );
 }

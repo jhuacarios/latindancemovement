@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.3.0',
+    date: '2026-06-27',
+    module: 'general',
+    type: 'feature',
+    title: 'Control de volumen',
+    description:
+      'El reproductor ahora tiene control de volumen, y recuerda el último nivel que usaste entre canciones y sesiones.',
+  },
+  {
+    version: '0.3.0',
+    date: '2026-06-27',
+    module: 'general',
+    type: 'improvement',
+    title: 'Miniaturas más nítidas',
+    description:
+      'Las miniaturas de las canciones se ven en 16:9 completo (sin bordes negros ni recorte).',
+  },
+  {
     version: '0.2.0',
     date: '2026-06-25',
     module: 'music.youtube.ytplaylists',
