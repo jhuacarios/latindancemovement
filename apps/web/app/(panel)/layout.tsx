@@ -54,17 +54,28 @@ export default function PanelLayout({
       >
         <div
           className={clsx(
-            'mb-6 font-bold',
-            collapsed ? 'text-center text-lg' : 'px-2 text-lg',
+            'mb-6 flex font-bold',
+            collapsed
+              ? 'flex-col items-center gap-2'
+              : 'items-center justify-between px-2',
           )}
         >
           {collapsed ? (
-            <span className="text-brand">BL</span>
+            <span className="text-lg text-brand">BL</span>
           ) : (
-            <>
+            <span className="text-lg">
               Baile<span className="text-brand">Latino</span>
-            </>
+            </span>
           )}
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? 'Expandir menú' : 'Comprimir menú'}
+            aria-label={collapsed ? 'Expandir menú' : 'Comprimir menú'}
+            className="rounded-md px-1.5 py-1 text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200"
+          >
+            {collapsed ? '»' : '«'}
+          </button>
         </div>
 
         {collapsed ? (
@@ -156,12 +167,14 @@ export default function PanelLayout({
           </div>
           <div className="flex items-center gap-3 text-sm">
             <WhatsNew />
-            <span className="text-neutral-300">
-              {user.name}{' '}
-              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-400">
-                {user.role}
-              </span>
-            </span>
+            <Link
+              href="/profile"
+              title={`Mi perfil — ${user.name}`}
+              aria-label="Mi perfil"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white transition hover:bg-brand-dark"
+            >
+              {user.name?.trim()?.charAt(0).toUpperCase() || '👤'}
+            </Link>
             <Button variant="ghost" onClick={logout}>
               Salir
             </Button>

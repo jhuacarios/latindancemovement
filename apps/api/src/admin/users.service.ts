@@ -18,6 +18,8 @@ type UserRow = {
   instagramHandle: string | null;
   styles: string;
   createdAt: Date;
+  passwordHash?: string | null;
+  googleId?: string | null;
 };
 
 function toPublicUser(u: UserRow): PublicUser {
@@ -30,6 +32,8 @@ function toPublicUser(u: UserRow): PublicUser {
     instagramHandle: u.instagramHandle,
     styles: u.styles ? (u.styles.split(',').filter(Boolean) as DanceStyle[]) : [],
     createdAt: u.createdAt.toISOString(),
+    hasPassword: Boolean(u.passwordHash),
+    hasGoogle: Boolean(u.googleId),
   };
 }
 

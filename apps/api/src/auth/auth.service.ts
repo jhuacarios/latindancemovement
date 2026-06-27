@@ -28,6 +28,8 @@ type UserRecord = {
   instagramHandle: string | null;
   styles: string;
   createdAt: Date;
+  passwordHash?: string | null;
+  googleId?: string | null;
 };
 
 @Injectable()
@@ -350,6 +352,8 @@ export class AuthService {
         ? (user.styles.split(',').filter(Boolean) as DanceStyle[])
         : [],
       createdAt: user.createdAt.toISOString(),
+      hasPassword: Boolean(user.passwordHash),
+      hasGoogle: Boolean(user.googleId),
     };
   }
 }

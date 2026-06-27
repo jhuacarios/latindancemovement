@@ -91,6 +91,10 @@ export interface PublicUser {
   instagramHandle: string | null;
   styles: DanceStyle[];
   createdAt: string;
+  /** Tiene contraseña propia (registro por email). Si es false, es cuenta solo-social. */
+  hasPassword: boolean;
+  /** Cuenta vinculada con Google. */
+  hasGoogle: boolean;
 }
 
 export interface Track {
