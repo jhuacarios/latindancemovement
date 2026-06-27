@@ -55,9 +55,15 @@ export class YoutubeController {
       if (error) throw new BadRequestException(error);
       if (!code || !state) throw new BadRequestException('Faltan parámetros.');
       await this.yt.handleCallback(code, state);
-      reply.redirect(`${web}/music/tracks?youtube=connected`);
+      reply
+        .header('location', `${web}/music/tracks?youtube=connected`)
+        .code(302)
+        .send();
     } catch {
-      reply.redirect(`${web}/music/tracks?youtube=error`);
+      reply
+        .header('location', `${web}/music/tracks?youtube=error`)
+        .code(302)
+        .send();
     }
   }
 
