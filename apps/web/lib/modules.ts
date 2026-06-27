@@ -44,7 +44,7 @@ export const MODULES: AppModule[] = [
         label: '📺 YouTube',
         key: 'music.youtube',
         children: [
-          { label: 'Canciones', key: 'music.youtube.tracks', href: '/music/tracks' },
+          { label: 'Mis Canciones', key: 'music.youtube.tracks', href: '/music/tracks' },
           { label: 'Catálogo', key: 'music.youtube.catalog', href: '/music/catalog' },
           { label: 'Playlists Internas', key: 'music.youtube.playlists', href: '/music/playlists' },
           { label: 'Playlists YouTube', key: 'music.youtube.ytplaylists', href: '/music/youtube-playlists' },
@@ -54,7 +54,7 @@ export const MODULES: AppModule[] = [
         label: '🟢 Spotify',
         key: 'music.spotify',
         children: [
-          { label: 'Canciones', key: 'music.spotify.tracks', href: '/music/spotify/tracks' },
+          { label: 'Mis Canciones', key: 'music.spotify.tracks', href: '/music/spotify/tracks' },
           { label: 'Catálogo', key: 'music.spotify.catalog', href: '/music/spotify/catalog' },
           { label: 'Playlists', key: 'music.spotify.playlists', href: '/music/spotify/playlists' },
         ],
