@@ -197,3 +197,15 @@ model RequestVote {
 
   @@unique([requestId, userId])
 }
+
+/// Configuración global del sitio (fila única id="singleton"). El logo se guarda
+/// como base64 en la DB para que persista entre despliegues y lo sirvan ambos
+/// clientes (web/mobile) vía la API, sin depender de storage externo.
+model SiteSetting {
+  id        String   @id @default("singleton")
+  siteName  String?
+  logoData  String? // base64 del logo, sin el prefijo data:
+  logoMime  String? // tipo MIME (image/png, image/svg+xml, …)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

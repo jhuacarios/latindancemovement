@@ -181,6 +181,7 @@ export const MODULES: AppModule[] = [
       { label: 'Usuarios', key: 'admin.users', href: '/admin/users' },
       { label: 'Roles y permisos', key: 'admin.roles', href: '/admin/roles' },
       { label: 'Estilos y sub-estilos', key: 'admin.tags', href: '/admin/tags' },
+      { label: 'Configuración del sitio', key: 'admin.settings', href: '/admin/settings' },
     ],
   },
 ];
