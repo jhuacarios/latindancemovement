@@ -57,6 +57,14 @@ export function PlaylistsPanel({
     onSettled: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
   });
 
+  const removeMut = useMutation({
+    mutationFn: (itemId: string) =>
+      api(`/music/playlists/${selectedId}/items/${itemId}`, {
+        method: 'DELETE',
+      }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
+  });
+
   const playlists = data ?? [];
   const selected = selectedId
     ? (playlists.find((p) => p.id === selectedId) ?? null)
@@ -353,6 +361,20 @@ export function PlaylistsPanel({
                       </div>
                     </div>
                     {t && <StyleBadge style={t.style} />}
+                    <button
+                      type="button"
+                      title="Quitar de la playlist"
+                      aria-label="Quitar de la playlist"
+                      draggable={false}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOptimistic(songs.filter((s) => s.id !== it.id));
+                        removeMut.mutate(it.id);
+                      }}
+                      className="shrink-0 rounded-md px-1.5 py-1 text-[11px] text-neutral-500 opacity-70 transition hover:bg-red-600/20 hover:text-red-300 hover:opacity-100"
+                    >
+                      🗑
+                    </button>
                   </div>
                 );
               })}
