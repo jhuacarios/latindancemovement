@@ -274,7 +274,7 @@ export function PlaylistsPanel({
             )}
             {!anyDnd && songs.length > 0 && !q && (
               <p className="mb-1 px-1 text-[10px] text-neutral-500">
-                Arrastra una canción para reordenar.
+                Arrastra desde el asa ⠿ para reordenar.
               </p>
             )}
             {visibleSongs.length === 0 && (
@@ -301,20 +301,9 @@ export function PlaylistsPanel({
                 return (
                   <div
                     key={it.id}
-                    draggable={canReorder}
-                    title={playable ? 'Reproducir · arrastra para reordenar' : undefined}
+                    title={playable ? 'Reproducir' : undefined}
                     onClick={() => {
                       if (t && playable) player.playAudio(t);
-                    }}
-                    onDragStart={(e) => {
-                      if (!canReorder) return;
-                      setReorderDragId(it.id);
-                      e.dataTransfer.effectAllowed = 'move';
-                      e.dataTransfer.setData('text/plain', it.id);
-                    }}
-                    onDragEnd={() => {
-                      setReorderDragId(null);
-                      setDropIndex(null);
                     }}
                     onDragOver={(e) => {
                       if (!anyDnd) return;
@@ -328,7 +317,6 @@ export function PlaylistsPanel({
                     className={clsx(
                       'flex items-center gap-2 rounded-lg p-1 hover:bg-neutral-800/40',
                       playable && 'cursor-pointer',
-                      canReorder && 'select-none active:cursor-grabbing',
                       isPlaying && 'bg-brand/15',
                       isDragged && 'opacity-40',
                       showTop &&
@@ -375,6 +363,31 @@ export function PlaylistsPanel({
                     >
                       🗑
                     </button>
+                    {/* Asa de arrastre dedicada (solo desde aquí se reordena). */}
+                    {canReorder && (
+                      <span
+                        role="button"
+                        aria-label="Arrastra para reordenar"
+                        title="Arrastra para reordenar"
+                        draggable
+                        onClick={(e) => e.stopPropagation()}
+                        onDragStart={(e) => {
+                          setReorderDragId(it.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', it.id);
+                          // La imagen de arrastre es la fila completa (estilo YouTube).
+                          const row = e.currentTarget.parentElement;
+                          if (row) e.dataTransfer.setDragImage(row, 16, 16);
+                        }}
+                        onDragEnd={() => {
+                          setReorderDragId(null);
+                          setDropIndex(null);
+                        }}
+                        className="shrink-0 cursor-grab select-none px-1 text-sm leading-none text-neutral-600 transition hover:text-neutral-300 active:cursor-grabbing"
+                      >
+                        ⠿
+                      </span>
+                    )}
                   </div>
                 );
               })}
