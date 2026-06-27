@@ -1,6 +1,32 @@
-# Deploy — sitio de pruebas
+# Deploy — Nectason
 
 Stack del deploy: **Web → Vercel**, **API → Railway**, **DB → PostgreSQL** (Railway o Neon).
+
+---
+
+## Producción actual (Nectason)
+
+| Pieza | URL / valor |
+|-------|-------------|
+| Web (Vercel) | `https://nectason.app` + `https://www.nectason.app` |
+| API (Railway) | `https://api.nectason.app/api/v1` |
+| Dominio + DNS | `nectason.app` registrado y gestionado en **Cloudflare** |
+
+**DNS en Cloudflare** (todos en modo **DNS only / nube gris** — Vercel y Railway emiten su propio SSL):
+
+| Tipo | Nombre | Contenido |
+|------|--------|-----------|
+| CNAME | `nectason.app` (apex) | target de Vercel (`*.vercel-dns-017.com`) |
+| CNAME | `www` | target de Vercel |
+| CNAME | `api` | target que muestra Railway al añadir el dominio |
+| TXT | `_railway-verify.api` / `_vercel` | verificación (déjalos) |
+
+> En Cloudflare la nube **gris** es obligatoria: si proxeas (naranja), Vercel/Railway
+> no pueden validar su certificado.
+
+`WEB_URL` admite **varias URLs separadas por coma**: la **primera** es a donde redirige
+la API tras el login con Google/YouTube; **todas** se usan como orígenes permitidos en
+CORS. Por eso el orden importa (la principal va primera).
 
 ---
 
@@ -48,22 +74,23 @@ Copia su connection string (algo como `postgresql://user:pass@host:5432/db`).
    JWT_SECRET=<largo y aleatorio>
    JWT_REFRESH_SECRET=<otro largo y aleatorio>
    SUPER_ADMIN_EMAILS=jhuacarios@gmail.com
-   WEB_URL=https://TU-WEB.vercel.app
+   WEB_URL=https://nectason.app,https://www.nectason.app,https://latindancemovement.vercel.app
    GOOGLE_OAUTH_CLIENT_ID=<...>
    GOOGLE_OAUTH_CLIENT_SECRET=<...>
-   GOOGLE_LOGIN_REDIRECT_URI=https://TU-API.up.railway.app/api/v1/auth/google/callback
-   GOOGLE_OAUTH_REDIRECT_URI=https://TU-API.up.railway.app/api/v1/music/youtube/callback
+   GOOGLE_LOGIN_REDIRECT_URI=https://api.nectason.app/api/v1/auth/google/callback
+   GOOGLE_OAUTH_REDIRECT_URI=https://api.nectason.app/api/v1/music/youtube/callback
    YOUTUBE_API_KEY=<si la usas>
    NODE_ENV=production
    ```
-   > `WEB_URL` admite varias URLs separadas por coma (útil para previews de Vercel).
+   > `WEB_URL` admite varias URLs separadas por coma. La **primera** es la de redirect
+   > tras OAuth; las demás solo amplían los orígenes de CORS (previews de Vercel, www, etc.).
 4. Tras el **primer deploy**, abre la shell del servicio (o usa `railway run`) y corre **una vez**:
    ```bash
    pnpm --filter @baile-latino/api db:push
    pnpm --filter @baile-latino/api db:seed
    ```
    Esto crea las tablas y carga el catálogo (a nombre del email de `SUPER_ADMIN_EMAILS`).
-5. Anota la URL pública de la API (ej: `https://TU-API.up.railway.app`).
+5. Anota la URL pública de la API (`https://api.nectason.app`, o la `*.up.railway.app` si aún no conectas el dominio).
 
 ---
 
@@ -74,9 +101,11 @@ Copia su connection string (algo como `postgresql://user:pass@host:5432/db`).
 3. Framework: Next.js (autodetectado).
 4. **Environment Variables**:
    ```
-   NEXT_PUBLIC_API_URL=https://TU-API.up.railway.app/api/v1
+   NEXT_PUBLIC_API_URL=https://api.nectason.app/api/v1
    ```
-5. Deploy. Anota la URL (ej: `https://TU-WEB.vercel.app`) y ponla en `WEB_URL` de la API.
+   > Es **build-time**: si la cambias, hay que **Redeploy** del web para que tome efecto.
+5. **Domains** (Settings → Domains): agrega `nectason.app` y `www.nectason.app`.
+6. Deploy. La URL queda en `WEB_URL` de la API (ya incluida arriba).
 
 ---
 
@@ -85,18 +114,20 @@ Copia su connection string (algo como `postgresql://user:pass@host:5432/db`).
 En tu cliente OAuth (login con Google + conexión de YouTube):
 
 - **Authorized redirect URIs** → agrega:
-  - `https://TU-API.up.railway.app/api/v1/auth/google/callback`
-  - `https://TU-API.up.railway.app/api/v1/music/youtube/callback`
+  - `https://api.nectason.app/api/v1/auth/google/callback`
+  - `https://api.nectason.app/api/v1/music/youtube/callback`
 - **Authorized JavaScript origins** → agrega:
-  - `https://TU-WEB.vercel.app`
+  - `https://nectason.app`
+  - `https://www.nectason.app`
 
 Sin esto, el login con Google y la conexión de YouTube fallan en producción.
+Las redirect URIs deben ser **idénticas** a las envs `GOOGLE_*_REDIRECT_URI` de Railway.
 
 ---
 
 ## 5. Probar
 
-1. Entra a `https://TU-WEB.vercel.app`.
+1. Entra a `https://nectason.app`.
 2. Login con Google (tu correo queda **SUPER_ADMIN** por la allowlist; los demás entran como **DJ**).
 3. Verifica que el catálogo cargó (módulo Música y DJs).
 
