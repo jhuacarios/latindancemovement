@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/api';
 import { Button, Card, Input } from '@/components/ui';
+import { BrandLogo, Wordmark } from '@/components/brand';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,10 +38,13 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-sm">
-        <h1 className="mb-1 text-2xl font-bold">
-          Baile<span className="text-brand">Latino</span>
-        </h1>
-        <p className="mb-6 text-sm text-neutral-400">Panel de música y DJs</p>
+        <div className="mb-1 flex items-center gap-2">
+          <BrandLogo className="h-10 w-10" />
+          <Wordmark className="text-2xl" />
+        </div>
+        <p className="mb-6 text-sm text-neutral-400">
+          Conecta. Baila. Vive. · Panel de música y DJs
+        </p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>

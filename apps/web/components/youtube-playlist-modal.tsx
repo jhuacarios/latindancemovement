@@ -167,7 +167,7 @@ export function YoutubePlaylistModal({ onClose }: { onClose: () => void }) {
                 Nombre de la playlist
               </label>
               <Input
-                placeholder="Playlist YouTube rápida — Baile Latino"
+                placeholder="Playlist YouTube rápida — Nectason"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />

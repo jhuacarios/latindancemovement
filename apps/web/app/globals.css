@@ -1,8 +1,26 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-brand: #e11d8f;
-  --color-brand-dark: #b3146f;
+  /* Tipografía de marca (Plus Jakarta Sans, cargada con next/font). */
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  /* Paleta Nectason (ver BRANDING.md). */
+  --color-selva: #0d1f1a;
+  --color-son: #1a7a4e;
+  --color-clave: #4ec990;
+  --color-nectar: #b6f0d0;
+  --color-sabor: #e8f5e2;
+
+  /* Neutros tintados (superficies y bordes sobre Selva). */
+  --color-surface: #13291f;
+  --color-line: #244536;
+  --color-muted: #7baf8e;
+
+  /* Marca = Son. Conserva las clases bg-brand/text-brand existentes. */
+  --color-brand: #1a7a4e;
+  --color-brand-dark: #145c3b;
+
+  /* Categorías de baile. */
   --color-bachata: #f59e0b;
   --color-salsa: #ef4444;
 }
@@ -17,5 +35,6 @@ body {
 }
 
 body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
+  font-family: var(--font-sans);
+  @apply bg-selva text-sabor antialiased;
 }

@@ -2,6 +2,9 @@ import type { AuthTokens } from '@baile-latino/types';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
+/** Base de la API (para construir URLs de <img>, descargas, etc.). */
+export const API_BASE = BASE;
+
 const ACCESS_KEY = 'bl_access';
 const REFRESH_KEY = 'bl_refresh';
 

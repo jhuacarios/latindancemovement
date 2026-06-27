@@ -10,6 +10,7 @@ import { moduleForPath, permKeyForPath, type ModuleChild } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
 import { PlayerProvider } from '@/components/player';
 import { WhatsNew } from '@/components/whats-new';
+import { BrandLogo, Wordmark } from '@/components/brand';
 import { LayoutUIContext } from '@/lib/layout-ui';
 
 export default function PanelLayout({
@@ -61,10 +62,11 @@ export default function PanelLayout({
           )}
         >
           {collapsed ? (
-            <span className="text-lg text-brand">BL</span>
+            <BrandLogo className="h-9 w-9" />
           ) : (
-            <span className="text-lg">
-              Baile<span className="text-brand">Latino</span>
+            <span className="flex items-center gap-2">
+              <BrandLogo className="h-7 w-7" />
+              <Wordmark className="text-lg" />
             </span>
           )}
           <button
