@@ -2,18 +2,20 @@ import type { Track } from '@baile-latino/types';
 
 /** URL de miniatura: usa coverUrl si existe; si no, la deriva del video de YouTube. */
 export function trackThumbUrl(t: Track): string | null {
-  if (t.coverUrl) return t.coverUrl;
+  // YouTube: mqdefault es 16:9 limpio (sin barras). Se prefiere sobre coverUrl,
+  // que a veces es una miniatura 4:3 (con barras negras arriba/abajo).
   if (t.source === 'YOUTUBE') {
     return `https://i.ytimg.com/vi/${t.sourceId}/mqdefault.jpg`;
   }
+  if (t.coverUrl) return t.coverUrl;
   return null;
 }
 
-/** Miniatura pequeña del video de una canción (mantiene su ratio original). */
+/** Miniatura del video (16:9, llena el cuadro sin barras ni recorte raro). */
 export function TrackThumb({ track }: { track: Track }) {
   const url = trackThumbUrl(track);
   if (!url) {
-    return <div className="h-14 w-24 shrink-0 rounded bg-neutral-800" />;
+    return <div className="aspect-video w-24 shrink-0 rounded bg-neutral-800" />;
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -21,7 +23,7 @@ export function TrackThumb({ track }: { track: Track }) {
       src={url}
       alt=""
       loading="lazy"
-      className="h-14 w-24 shrink-0 rounded bg-neutral-800 object-contain"
+      className="aspect-video w-24 shrink-0 rounded bg-neutral-800 object-cover"
     />
   );
 }

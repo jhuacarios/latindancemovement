@@ -63,10 +63,29 @@ function loadYTApi(): Promise<void> {
   return ytApiPromise;
 }
 
+/** Lee el volumen guardado (0-100). Default 100. */
+function readStoredVolume(): number {
+  if (typeof window === 'undefined') return 100;
+  const v = Number(localStorage.getItem('bl_volume'));
+  return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 100;
+}
+
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const [audio, setAudio] = useState<Track | null>(null);
   const [video, setVideo] = useState<Track | null>(null);
+  // Volumen global persistente (0-100): se mantiene entre reproducciones y sesiones.
+  const [volume, setVolumeState] = useState<number>(readStoredVolume);
+
+  const setVolume = useCallback((v: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(v)));
+    setVolumeState(clamped);
+    try {
+      localStorage.setItem('bl_volume', String(clamped));
+    } catch {
+      /* noop */
+    }
+  }, []);
   // VideoIds detectados como bloqueados en esta sesión (refleja la ✕ al instante,
   // incluso en canciones externas que no están en la base).
   const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
@@ -116,6 +135,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         <AudioBar
           key={`${audio.source}:${audio.sourceId}`}
           track={audio}
+          volume={volume}
+          setVolume={setVolume}
           onClose={() => setAudio(null)}
           onBlocked={reportBlocked}
         />
@@ -124,6 +145,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         <VideoModal
           key={`${video.source}:${video.sourceId}`}
           track={video}
+          volume={volume}
+          setVolume={setVolume}
           onClose={() => setVideo(null)}
           onBlocked={reportBlocked}
         />
@@ -141,16 +164,23 @@ export function usePlayer(): PlayerContextValue {
 // --- Mini reproductor de audio con controles y progreso --------------------
 function AudioBar({
   track,
+  volume,
+  setVolume,
   onClose,
   onBlocked,
 }: {
   track: Track;
+  volume: number;
+  setVolume: (v: number) => void;
   onClose: () => void;
   onBlocked: (track: Track) => void;
 }) {
   const id = ytId(track);
   const holderRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
+  // Ref al volumen para aplicarlo en onReady sin recrear el player.
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(true);
   const [cur, setCur] = useState(0);
@@ -179,6 +209,7 @@ function AudioBar({
           onReady: (e: any) => {
             setReady(true);
             setDur(e.target.getDuration() || 0);
+            e.target.setVolume(volumeRef.current); // mantiene el último volumen
             e.target.playVideo();
           },
           onStateChange: (e: any) => {
@@ -277,6 +308,28 @@ function AudioBar({
             <span className="w-10 text-xs tabular-nums text-neutral-400">
               {fmt(dur)}
             </span>
+
+            <div
+              className="flex shrink-0 items-center gap-1"
+              title={`Volumen: ${volume}%`}
+            >
+              <span className="text-sm text-neutral-400">
+                {volume === 0 ? '🔇' : volume < 50 ? '🔉' : '🔊'}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={volume}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setVolume(v);
+                  playerRef.current?.setVolume?.(v);
+                }}
+                className="h-1 w-20 cursor-pointer accent-[var(--color-brand)]"
+              />
+            </div>
           </>
         )}
 
@@ -308,16 +361,22 @@ function AudioBar({
 // --- Modal de video --------------------------------------------------------
 function VideoModal({
   track,
+  volume,
+  setVolume,
   onClose,
   onBlocked,
 }: {
   track: Track;
+  volume: number;
+  setVolume: (v: number) => void;
   onClose: () => void;
   onBlocked: (track: Track) => void;
 }) {
   const id = ytId(track);
   const holderRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
   const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
@@ -332,6 +391,15 @@ function VideoModal({
   useEffect(() => {
     if (!id) return;
     let destroyed = false;
+    // Captura cambios de volumen hechos en los controles nativos de YouTube,
+    // para que se mantengan en la próxima reproducción.
+    const sync = setInterval(() => {
+      const p = playerRef.current;
+      if (p?.getVolume) {
+        const v = Math.round(p.getVolume());
+        if (Number.isFinite(v) && v !== volumeRef.current) setVolume(v);
+      }
+    }, 800);
     loadYTApi().then(() => {
       if (destroyed || !holderRef.current) return;
       playerRef.current = new window.YT.Player(holderRef.current, {
@@ -340,7 +408,10 @@ function VideoModal({
         height: '100%',
         playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
         events: {
-          onReady: (e: any) => e.target.playVideo(),
+          onReady: (e: any) => {
+            e.target.setVolume(volumeRef.current); // mantiene el último volumen
+            e.target.playVideo();
+          },
           onError: (e: any) => {
             if (EMBED_BLOCKED_CODES.includes(e.data)) {
               setBlocked(true);
@@ -352,6 +423,7 @@ function VideoModal({
     });
     return () => {
       destroyed = true;
+      clearInterval(sync);
       try {
         playerRef.current?.destroy?.();
       } catch {
