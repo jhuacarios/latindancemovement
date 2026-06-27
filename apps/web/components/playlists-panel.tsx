@@ -196,7 +196,7 @@ export function PlaylistsPanel({
                 >
                   <div className="truncate text-sm font-medium">{p.name}</div>
                   <div className="text-[11px] text-neutral-500">
-                    {p.items?.length ?? 0} canciones · {p.status}
+                    {p.items?.length ?? 0} canciones
                   </div>
                 </button>
               ))}

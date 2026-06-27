@@ -184,7 +184,7 @@ export default function PlaylistsPage() {
                   {p.name}
                 </div>
                 <div className="mt-1 text-sm text-neutral-400">
-                  {p.items?.length ?? 0} canciones · {p.status}
+                  {p.items?.length ?? 0} canciones
                 </div>
                 {p.targetBachataPct != null && (
                   <div className="mt-2 text-xs text-neutral-500">

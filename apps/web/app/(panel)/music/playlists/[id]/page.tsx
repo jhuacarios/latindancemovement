@@ -164,7 +164,7 @@ export default function PlaylistDetailPage() {
             <div>
               <h1 className="text-2xl font-bold">{data.name}</h1>
               <p className="text-sm text-neutral-400">
-                {items.length} canciones · estado {data.status}
+                {items.length} canciones
                 {data.targetBachataPct != null &&
                   ` · mix objetivo ${data.targetBachataPct}% bachata`}
               </p>
