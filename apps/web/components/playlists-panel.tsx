@@ -181,10 +181,30 @@ export function PlaylistsPanel({
     setDropIndex(null);
   }
 
-  // Auto-scroll + recálculo del destino mientras reordenas (pointer).
+  // Mientras reordenas, escucha el puntero a nivel de ventana: así sigue
+  // funcionando aunque el cursor salga del panel (o de la ventana, con el botón
+  // presionado), y el `pointerup` cierra el arrastre suelte donde suelte.
   useEffect(() => {
     if (!reordering) return;
-    const EDGE = 70;
+    const onMove = (e: PointerEvent) => moveReorder(e.clientY);
+    const onUp = (e: PointerEvent) => endReorder(e.clientY);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', cancelReorder);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', cancelReorder);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reordering]);
+
+  // Auto-scroll + recálculo del destino mientras reordenas. Usa el último Y
+  // conocido (pointerYRef), así basta con mantener el asa cerca del borde para
+  // que la lista siga bajando/subiendo sola hasta el final, sin salir del panel.
+  useEffect(() => {
+    if (!reordering) return;
+    const EDGE = 96; // zona "caliente" más amplia para alcanzarla fácil
     let raf = 0;
     const tick = () => {
       const el = scrollRef.current;
@@ -201,7 +221,7 @@ export function PlaylistsPanel({
           speed = Math.min(1, (y - (r.bottom - EDGE)) / EDGE);
         }
         if (dir !== 0) {
-          el.scrollTop += dir * (4 + speed * 18);
+          el.scrollTop += dir * (6 + speed * 26);
           const idx = computeDropIndex(y);
           setDropIndex((prev) => (prev === idx ? prev : idx));
         }
@@ -416,16 +436,6 @@ export function PlaylistsPanel({
                           e.stopPropagation();
                           startReorder(it.id, e.clientY, e.currentTarget, e.pointerId);
                         }}
-                        onPointerMove={(e) => moveReorder(e.clientY)}
-                        onPointerUp={(e) => {
-                          endReorder(e.clientY);
-                          try {
-                            e.currentTarget.releasePointerCapture(e.pointerId);
-                          } catch {
-                            /* noop */
-                          }
-                        }}
-                        onPointerCancel={cancelReorder}
                         className="-ml-0.5 flex h-8 w-6 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded text-base leading-none text-neutral-500 transition hover:bg-neutral-700/50 hover:text-neutral-200 active:cursor-grabbing"
                       >
                         ⠿
