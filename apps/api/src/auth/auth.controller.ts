@@ -61,7 +61,11 @@ export class AuthController {
     @Query('error') error: string,
     @Res() reply: FastifyReply,
   ) {
-    const web = process.env.WEB_URL ?? 'http://localhost:3001';
+    // WEB_URL puede traer varias URLs separadas por coma (CORS); para redirigir
+    // usamos solo la primera (la principal).
+    const web = (process.env.WEB_URL ?? 'http://localhost:3001')
+      .split(',')[0]
+      .trim();
     try {
       if (error) throw new Error(error);
       if (!code || !state) throw new Error('Faltan parámetros.');
