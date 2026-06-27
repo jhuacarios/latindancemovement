@@ -65,11 +65,14 @@ function loadYTApi(): Promise<void> {
   return ytApiPromise;
 }
 
-/** Lee el volumen guardado (0-100). Default 100. */
+/** Lee el volumen guardado (0-100). Default 30% la primera vez (sin valor guardado). */
 function readStoredVolume(): number {
-  if (typeof window === 'undefined') return 100;
-  const v = Number(localStorage.getItem('bl_volume'));
-  return Number.isFinite(v) && v >= 0 && v <= 100 ? v : 100;
+  const DEFAULT = 30;
+  if (typeof window === 'undefined') return DEFAULT;
+  const raw = localStorage.getItem('bl_volume');
+  if (raw === null) return DEFAULT; // primera vez: no muteado
+  const v = Number(raw);
+  return Number.isFinite(v) && v >= 0 && v <= 100 ? v : DEFAULT;
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
