@@ -23,14 +23,25 @@ export class LibraryService {
 
     const where: Prisma.TrackWhereInput = { savedBy: { some: { userId } } };
     if (q.style) where.style = q.style;
-    if (q.substyle) where.substyle = { contains: q.substyle };
     if (q.source) where.source = q.source;
+
+    const and: Prisma.TrackWhereInput[] = [];
     if (q.search) {
-      where.OR = [
-        { title: { contains: q.search } },
-        { artist: { contains: q.search } },
-      ];
+      and.push({
+        OR: [
+          { title: { contains: q.search } },
+          { artist: { contains: q.search } },
+        ],
+      });
     }
+    if (q.substyles?.length) {
+      and.push({
+        OR: q.substyles.map((s) => ({ substyle: { contains: s } })),
+      });
+    } else if (q.substyle) {
+      where.substyle = { contains: q.substyle };
+    }
+    if (and.length) where.AND = and;
 
     const dir: Prisma.SortOrder = q.sortDir === 'desc' ? 'desc' : 'asc';
     const orderBy: Prisma.TrackOrderByWithRelationInput =

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { Paginated, Track } from '@baile-latino/types';
+import type { DanceStyle, Paginated, Tag, Track } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
 import { TrackThumb } from './track-thumb';
+import { clsx } from './clsx';
 
 /**
  * Panel lateral de "Mis Canciones": busca en la biblioteca del usuario y permite
@@ -25,17 +26,45 @@ export function LibraryDrawer({
 }) {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [style, setStyle] = useState<DanceStyle | ''>('');
+  const [substyles, setSubstyles] = useState<string[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
     return () => clearTimeout(t);
   }, [search]);
 
+  // Vocabulario de sub-estilos (para los tags activables del estilo elegido).
+  const { data: vocab } = useQuery({
+    queryKey: ['tags-vocab'],
+    queryFn: () => api<Tag[]>('/music/tags'),
+  });
+  const substyleOptions = useMemo(
+    () =>
+      style
+        ? (vocab ?? []).filter((t) => t.style === style).map((t) => t.name)
+        : [],
+    [vocab, style],
+  );
+
+  // Al cambiar de estilo, el mismo botón lo desactiva (vuelve a "todos").
+  function selectStyle(s: DanceStyle) {
+    setStyle((prev) => (prev === s ? '' : s));
+    setSubstyles([]);
+  }
+  function toggleSubstyle(name: string) {
+    setSubstyles((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  }
+
   const { data, isLoading } = useQuery({
-    queryKey: ['library-drawer', debounced],
+    queryKey: ['library-drawer', debounced, style, substyles],
     queryFn: () => {
       const p = new URLSearchParams({ pageSize: '50', sort: 'recent' });
       if (debounced) p.set('search', debounced);
+      if (style) p.set('style', style);
+      if (substyles.length) p.set('substyles', substyles.join(','));
       return api<Paginated<Track>>(`/music/library?${p.toString()}`);
     },
   });
@@ -64,7 +93,56 @@ export function LibraryDrawer({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <p className="mt-1 px-1 text-[11px] text-neutral-500">
+
+        {/* Switch de estilo: bachata primero. Vuelve a "todos" al re-tocar. */}
+        <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+          {(['BACHATA', 'SALSA'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => selectStyle(s)}
+              className={clsx(
+                'rounded-md py-1 text-xs font-medium transition',
+                style === s
+                  ? 'bg-brand text-white'
+                  : 'text-neutral-300 hover:bg-neutral-700/60',
+              )}
+            >
+              {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
+            </button>
+          ))}
+        </div>
+
+        {/* Tags de sub-estilos del estilo elegido (activables, multi). */}
+        {style && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {substyleOptions.length === 0 && (
+              <span className="text-[11px] text-neutral-500">
+                Sin sub-estilos en el vocabulario.
+              </span>
+            )}
+            {substyleOptions.map((name) => {
+              const active = substyles.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggleSubstyle(name)}
+                  className={clsx(
+                    'rounded-full px-2 py-0.5 text-[11px] transition',
+                    active
+                      ? 'bg-brand/20 text-brand'
+                      : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700',
+                  )}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="mt-2 px-1 text-[11px] text-neutral-500">
           Arrastra una canción a la playlist para agregarla.
         </p>
       </div>

@@ -1,5 +1,6 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -29,6 +30,17 @@ export class QueryTracksDto {
   @IsOptional()
   @IsString()
   substyle?: string;
+
+  /** Varios sub-estilos (CSV); se combinan con OR. */
+  @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string'
+      ? value.split(',').map((s) => s.trim()).filter(Boolean)
+      : value,
+  )
+  @IsArray()
+  @IsString({ each: true })
+  substyles?: string[];
 
   @IsOptional()
   @IsIn(TRACK_SOURCES)
