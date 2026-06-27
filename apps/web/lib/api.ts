@@ -95,26 +95,48 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
 }
 
 /** Sube un archivo (multipart) a un endpoint protegido y devuelve el JSON. */
-export async function uploadFile<T>(path: string, file: File): Promise<T> {
+export async function uploadFile<T>(
+  path: string,
+  file: File,
+  _retried = false,
+): Promise<T> {
   const token = getAccessToken();
   const fd = new FormData();
   fd.append('file', file);
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
+    // Sin Content-Type: el navegador fija el boundary del multipart.
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: fd,
   });
+
+  // Mismo manejo que api(): si expiró el token, refresca y reintenta una vez.
+  if (res.status === 401 && !_retried) {
+    const refreshed = await tryRefresh();
+    if (refreshed) return uploadFile<T>(path, file, true);
+    clearTokens();
+  }
+
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
   return (await res.json()) as T;
 }
 
 /** Descarga un archivo protegido (p. ej. el Excel) y dispara el guardado. */
-export async function downloadFile(path: string, filename: string): Promise<void> {
+export async function downloadFile(
+  path: string,
+  filename: string,
+  _retried = false,
+): Promise<void> {
   const token = getAccessToken();
   const res = await fetch(`${BASE}${path}`, {
     cache: 'no-store',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
+  if (res.status === 401 && !_retried) {
+    const refreshed = await tryRefresh();
+    if (refreshed) return downloadFile(path, filename, true);
+    clearTokens();
+  }
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
