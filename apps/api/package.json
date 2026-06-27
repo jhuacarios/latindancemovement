@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node prisma/seed.ts",
+    "db:gen-catalog": "ts-node prisma/gen-catalog.ts",
     "db:migrate-sqlite": "ts-node prisma/migrate-from-sqlite.ts",
     "db:studio": "prisma studio"
   },
