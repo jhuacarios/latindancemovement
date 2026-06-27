@@ -179,7 +179,7 @@ export function AddTrackForm({
         />
         <div className="md:col-span-2">
           <label className="mb-1 block text-xs text-neutral-400">
-            Sub-estilos (máx 3)
+            Sub-estilos (máx 4)
           </label>
           <SubstyleMultiSelect
             style={form.style}

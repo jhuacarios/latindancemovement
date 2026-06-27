@@ -41,7 +41,7 @@ export function SubstyleFilterSelect({
 }
 
 /**
- * Selección múltiple de sub-estilos (máx 3) desde el vocabulario administrable,
+ * Selección múltiple de sub-estilos (máx 4) desde el vocabulario administrable,
  * filtrado por el estilo. Los seleccionados se muestran como píldoras.
  */
 export function SubstyleMultiSelect({
