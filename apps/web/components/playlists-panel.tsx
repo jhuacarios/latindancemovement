@@ -325,6 +325,31 @@ export function PlaylistsPanel({
                         'shadow-[inset_0_-3px_0_0_var(--color-brand),inset_0_-11px_11px_-9px_var(--color-brand)]',
                     )}
                   >
+                    {/* Asa de arrastre dedicada a la izquierda (solo desde aquí se reordena). */}
+                    {canReorder && (
+                      <span
+                        role="button"
+                        aria-label="Arrastra para reordenar"
+                        title="Arrastra para reordenar"
+                        draggable
+                        onClick={(e) => e.stopPropagation()}
+                        onDragStart={(e) => {
+                          setReorderDragId(it.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', it.id);
+                          // La imagen de arrastre es la fila completa (estilo YouTube).
+                          const row = e.currentTarget.parentElement;
+                          if (row) e.dataTransfer.setDragImage(row, 16, 16);
+                        }}
+                        onDragEnd={() => {
+                          setReorderDragId(null);
+                          setDropIndex(null);
+                        }}
+                        className="shrink-0 cursor-grab select-none px-0.5 text-sm leading-none text-neutral-600 transition hover:text-neutral-300 active:cursor-grabbing"
+                      >
+                        ⠿
+                      </span>
+                    )}
                     <span className="w-4 shrink-0 text-right text-[10px] text-neutral-600">
                       {i + 1}
                     </span>
@@ -363,31 +388,6 @@ export function PlaylistsPanel({
                     >
                       🗑
                     </button>
-                    {/* Asa de arrastre dedicada (solo desde aquí se reordena). */}
-                    {canReorder && (
-                      <span
-                        role="button"
-                        aria-label="Arrastra para reordenar"
-                        title="Arrastra para reordenar"
-                        draggable
-                        onClick={(e) => e.stopPropagation()}
-                        onDragStart={(e) => {
-                          setReorderDragId(it.id);
-                          e.dataTransfer.effectAllowed = 'move';
-                          e.dataTransfer.setData('text/plain', it.id);
-                          // La imagen de arrastre es la fila completa (estilo YouTube).
-                          const row = e.currentTarget.parentElement;
-                          if (row) e.dataTransfer.setDragImage(row, 16, 16);
-                        }}
-                        onDragEnd={() => {
-                          setReorderDragId(null);
-                          setDropIndex(null);
-                        }}
-                        className="shrink-0 cursor-grab select-none px-1 text-sm leading-none text-neutral-600 transition hover:text-neutral-300 active:cursor-grabbing"
-                      >
-                        ⠿
-                      </span>
-                    )}
                   </div>
                 );
               })}
