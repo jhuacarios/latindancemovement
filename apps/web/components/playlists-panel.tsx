@@ -14,13 +14,11 @@ import { clsx } from './clsx';
  * Panel lateral de playlists internas con drill-down:
  * - Nivel 1: lista de playlists (el buscador filtra por nombre).
  * - Nivel 2 (al entrar a una): sus canciones (el buscador filtra por título/artista).
- *   Soporta dos drag-and-drop:
- *     a) agregar canciones arrastradas desde la tabla Mis Canciones (`draggedTrackId`),
- *     b) reordenar las propias filas arrastrándolas (PATCH /reorder), con orden optimista.
- *
- * `selectedId` es controlado por la página (para que la tabla sepa qué playlist
- * está abierta al hacer doble click). `draggedTrackId` es la canción que se está
- * arrastrando desde la tabla; al soltar, llama `onAddTrack(trackId, atIndex)`.
+ *   Dos interacciones de arrastre:
+ *     a) AGREGAR: canciones arrastradas desde la tabla Mis Canciones (`draggedTrackId`,
+ *        usa drag-and-drop nativo HTML5; soltar -> `onAddTrack`).
+ *     b) REORDENAR: desde el asa (⠿) de cada fila, con *pointer events* (no DnD nativo,
+ *        para que funcione también con arrastres rápidos), PATCH /reorder + optimista.
  */
 export function PlaylistsPanel({
   onClose,
@@ -37,9 +35,11 @@ export function PlaylistsPanel({
 }) {
   const [search, setSearch] = useState('');
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  const [reorderDragId, setReorderDragId] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null); // reorden (pointer)
   const [optimistic, setOptimistic] = useState<PlaylistItem[] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dragIdRef = useRef<string | null>(null);
+  const pointerYRef = useRef<number | null>(null);
   const player = usePlayer();
   const qc = useQueryClient();
 
@@ -80,8 +80,7 @@ export function PlaylistsPanel({
   // Orden mostrado: el optimista si lo hay (tras reordenar), si no el del servidor.
   const serverItems = useMemo(() => selected?.items ?? [], [selected]);
   // Si cambia la playlist o su *membresía* (alta/baja), descartamos el optimista.
-  // Un reorder NO cambia la membresía, así que el optimista sobrevive al refetch
-  // (evita el parpadeo "vuelve al orden viejo y luego salta al nuevo").
+  // Un reorder NO cambia la membresía, así que el optimista sobrevive al refetch.
   const memberKey = useMemo(
     () => serverItems.map((i) => i.id).slice().sort().join(','),
     [serverItems],
@@ -102,8 +101,8 @@ export function PlaylistsPanel({
     });
   }, [songs, q]);
 
-  const externalActive = Boolean(draggedTrackId && selected); // agregar desde la tabla
-  const reordering = Boolean(reorderDragId && selected); // mover una fila propia
+  const externalActive = Boolean(draggedTrackId && selected); // agregar desde la tabla (DnD nativo)
+  const reordering = dragId !== null; // mover una fila (pointer)
   const anyDnd = externalActive || reordering;
 
   function moveItem(
@@ -122,31 +121,112 @@ export function PlaylistsPanel({
     return copy;
   }
 
-  function handleDrop() {
-    const idx = dropIndex ?? songs.length;
-    setDropIndex(null);
-    if (reorderDragId) {
-      const arr = moveItem(songs, reorderDragId, idx);
-      setReorderDragId(null);
-      if (!arr) return;
-      const before = songs.map((i) => i.id).join(',');
-      const after = arr.map((i) => i.id).join(',');
-      if (before === after) return; // soltó en el mismo lugar
-      setOptimistic(arr);
-      reorderMut.mutate(arr.map((i) => i.id));
-    } else if (draggedTrackId) {
-      onAddTrack(draggedTrackId, idx);
+  // Índice de inserción según la posición vertical del cursor (lee el DOM en vivo,
+  // por eso aguanta movimientos rápidos y la lista scrolleando).
+  function computeDropIndex(clientY: number): number {
+    const el = scrollRef.current;
+    if (!el) return songs.length;
+    const rows = Array.from(
+      el.querySelectorAll<HTMLElement>('[data-song-row]'),
+    );
+    for (let k = 0; k < rows.length; k++) {
+      const r = rows[k].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return k;
     }
+    return rows.length;
   }
 
-  // Auto-scroll mientras arrastras (agregar o reordenar): si el mouse está cerca
-  // del borde (o fuera del panel, arriba/abajo), la lista sube/baja sola. Escucha
-  // a nivel de documento para que funcione aunque el cursor salga del panel.
+  function commitReorder(id: string, insertIndex: number) {
+    const arr = moveItem(songs, id, insertIndex);
+    if (!arr) return;
+    const before = songs.map((i) => i.id).join(',');
+    const after = arr.map((i) => i.id).join(',');
+    if (before === after) return; // soltó en el mismo lugar
+    setOptimistic(arr);
+    reorderMut.mutate(arr.map((i) => i.id));
+  }
+
+  // --- Reorden por pointer events --------------------------------------------
+  function startReorder(id: string, clientY: number, el: HTMLElement, pid: number) {
+    dragIdRef.current = id;
+    pointerYRef.current = clientY;
+    setDragId(id);
+    setDropIndex(computeDropIndex(clientY));
+    try {
+      el.setPointerCapture(pid);
+    } catch {
+      /* noop */
+    }
+  }
+  function moveReorder(clientY: number) {
+    if (dragIdRef.current == null) return;
+    pointerYRef.current = clientY;
+    const idx = computeDropIndex(clientY);
+    setDropIndex((prev) => (prev === idx ? prev : idx));
+  }
+  function endReorder(clientY: number) {
+    const id = dragIdRef.current;
+    if (id == null) return;
+    const idx = computeDropIndex(clientY);
+    dragIdRef.current = null;
+    pointerYRef.current = null;
+    setDragId(null);
+    setDropIndex(null);
+    commitReorder(id, idx);
+  }
+  function cancelReorder() {
+    dragIdRef.current = null;
+    pointerYRef.current = null;
+    setDragId(null);
+    setDropIndex(null);
+  }
+
+  // Auto-scroll + recálculo del destino mientras reordenas (pointer).
   useEffect(() => {
-    if (!anyDnd) return;
-    const EDGE = 70; // zona "caliente" en px
-    let dir = 0; // -1 arriba, 1 abajo
-    let speed = 0; // 0..1
+    if (!reordering) return;
+    const EDGE = 70;
+    let raf = 0;
+    const tick = () => {
+      const el = scrollRef.current;
+      const y = pointerYRef.current;
+      if (el && y != null) {
+        const r = el.getBoundingClientRect();
+        let dir = 0;
+        let speed = 0;
+        if (y < r.top + EDGE) {
+          dir = -1;
+          speed = Math.min(1, (r.top + EDGE - y) / EDGE);
+        } else if (y > r.bottom - EDGE) {
+          dir = 1;
+          speed = Math.min(1, (y - (r.bottom - EDGE)) / EDGE);
+        }
+        if (dir !== 0) {
+          el.scrollTop += dir * (4 + speed * 18);
+          const idx = computeDropIndex(y);
+          setDropIndex((prev) => (prev === idx ? prev : idx));
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reordering]);
+
+  // --- Agregar desde la tabla (DnD nativo) -----------------------------------
+  function handleExternalDrop() {
+    const idx = dropIndex ?? songs.length;
+    setDropIndex(null);
+    if (draggedTrackId) onAddTrack(draggedTrackId, idx);
+  }
+
+  // Auto-scroll para el arrastre nativo (agregar desde la tabla): escucha a nivel
+  // de documento para seguir aunque el cursor salga del panel.
+  useEffect(() => {
+    if (!externalActive) return;
+    const EDGE = 70;
+    let dir = 0;
+    let speed = 0;
     const onDragOver = (e: DragEvent) => {
       const el = scrollRef.current;
       if (!el) return;
@@ -166,9 +246,7 @@ export function PlaylistsPanel({
     let raf = 0;
     const tick = () => {
       const el = scrollRef.current;
-      if (el && dir !== 0) {
-        el.scrollTop += dir * (4 + speed * 18);
-      }
+      if (el && dir !== 0) el.scrollTop += dir * (4 + speed * 18);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -176,7 +254,7 @@ export function PlaylistsPanel({
       document.removeEventListener('dragover', onDragOver);
       cancelAnimationFrame(raf);
     };
-  }, [anyDnd]);
+  }, [externalActive]);
 
   return (
     <aside className="sticky top-0 flex max-h-[calc(100vh-7rem)] w-72 shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60">
@@ -222,15 +300,14 @@ export function PlaylistsPanel({
           anyDnd && 'rounded-b-xl ring-1 ring-inset ring-brand/40',
         )}
         onDragOver={(e) => {
-          if (!anyDnd) return;
+          if (!externalActive) return;
           e.preventDefault();
-          // Fallback: soltar en zona vacía -> al final.
-          setDropIndex(songs.length);
+          setDropIndex(songs.length); // fallback: zona vacía -> al final
         }}
         onDrop={(e) => {
-          if (!anyDnd) return;
+          if (!externalActive) return;
           e.preventDefault();
-          handleDrop();
+          handleExternalDrop();
         }}
       >
         {isLoading && <Spinner />}
@@ -283,9 +360,9 @@ export function PlaylistsPanel({
               </p>
             )}
             <div className="flex flex-col">
-              {/* Al arrastrar se muestra la lista completa (índices reales para
-                  posicionar bien); sin arrastrar, la filtrada por el buscador.
-                  La línea de destino es un box-shadow (no ocupa layout, no parpadea). */}
+              {/* Al arrastrar se muestra la lista completa (índices reales); sin
+                  arrastrar, la filtrada por el buscador. La línea de destino es un
+                  box-shadow (no ocupa layout, no parpadea). */}
               {(anyDnd ? songs : visibleSongs).map((it, i, arr) => {
                 const t = it.track;
                 const url = t ? trackThumbUrl(t) : null;
@@ -295,18 +372,20 @@ export function PlaylistsPanel({
                 const playable = !!t && player.canPlay(t);
                 const isPlaying =
                   !!t && player.playingKey === `${t.source}:${t.sourceId}`;
-                const isDragged = reorderDragId === it.id;
+                const isDragged = dragId === it.id;
                 // Reordenar solo sin filtro de texto (los índices deben ser reales).
                 const canReorder = !q;
                 return (
                   <div
                     key={it.id}
+                    data-song-row
                     title={playable ? 'Reproducir' : undefined}
                     onClick={() => {
                       if (t && playable) player.playAudio(t);
                     }}
                     onDragOver={(e) => {
-                      if (!anyDnd) return;
+                      // Solo para el arrastre nativo (agregar desde la tabla).
+                      if (!externalActive) return;
                       e.preventDefault();
                       e.stopPropagation();
                       const r = e.currentTarget.getBoundingClientRect();
@@ -325,32 +404,28 @@ export function PlaylistsPanel({
                         'shadow-[inset_0_-3px_0_0_var(--color-brand),inset_0_-11px_11px_-9px_var(--color-brand)]',
                     )}
                   >
-                    {/* Asa de arrastre dedicada a la izquierda (solo desde aquí se reordena). */}
+                    {/* Asa de arrastre (pointer events; robusto con arrastres rápidos). */}
                     {canReorder && (
                       <span
                         role="button"
                         aria-label="Arrastra para reordenar"
                         title="Arrastra para reordenar"
-                        draggable
                         onClick={(e) => e.stopPropagation()}
-                        onDragStart={(e) => {
-                          setReorderDragId(it.id);
-                          e.dataTransfer.effectAllowed = 'move';
-                          e.dataTransfer.setData('text/plain', it.id);
-                          // La imagen de arrastre es la fila completa (estilo YouTube).
-                          const row = e.currentTarget.parentElement;
-                          if (row) {
-                            try {
-                              e.dataTransfer.setDragImage(row, 16, 16);
-                            } catch {
-                              /* algunos navegadores pueden no soportarlo */
-                            }
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          startReorder(it.id, e.clientY, e.currentTarget, e.pointerId);
+                        }}
+                        onPointerMove={(e) => moveReorder(e.clientY)}
+                        onPointerUp={(e) => {
+                          endReorder(e.clientY);
+                          try {
+                            e.currentTarget.releasePointerCapture(e.pointerId);
+                          } catch {
+                            /* noop */
                           }
                         }}
-                        onDragEnd={() => {
-                          setReorderDragId(null);
-                          setDropIndex(null);
-                        }}
+                        onPointerCancel={cancelReorder}
                         className="-ml-0.5 flex h-8 w-6 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded text-base leading-none text-neutral-500 transition hover:bg-neutral-700/50 hover:text-neutral-200 active:cursor-grabbing"
                       >
                         ⠿
@@ -366,7 +441,7 @@ export function PlaylistsPanel({
                         alt=""
                         loading="lazy"
                         draggable={false}
-                        className="aspect-video w-12 shrink-0 rounded bg-neutral-800 object-cover"
+                        className="aspect-video w-12 shrink-0 select-none rounded bg-neutral-800 object-cover"
                       />
                     ) : (
                       <div className="aspect-video w-12 shrink-0 rounded bg-neutral-800" />
@@ -384,7 +459,6 @@ export function PlaylistsPanel({
                       type="button"
                       title="Quitar de la playlist"
                       aria-label="Quitar de la playlist"
-                      draggable={false}
                       onClick={(e) => {
                         e.stopPropagation();
                         setOptimistic(songs.filter((s) => s.id !== it.id));
