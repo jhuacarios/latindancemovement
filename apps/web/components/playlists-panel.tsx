@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import type { Playlist } from '@baile-latino/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Playlist, PlaylistItem } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
 import { trackThumbUrl } from './track-thumb';
@@ -13,8 +13,10 @@ import { clsx } from './clsx';
 /**
  * Panel lateral de playlists internas con drill-down:
  * - Nivel 1: lista de playlists (el buscador filtra por nombre).
- * - Nivel 2 (al entrar a una): sus canciones (el buscador filtra por título/artista),
- *   y acepta agregar canciones arrastradas desde la tabla (con línea de destino).
+ * - Nivel 2 (al entrar a una): sus canciones (el buscador filtra por título/artista).
+ *   Soporta dos drag-and-drop:
+ *     a) agregar canciones arrastradas desde la tabla Mis Canciones (`draggedTrackId`),
+ *     b) reordenar las propias filas arrastrándolas (PATCH /reorder), con orden optimista.
  *
  * `selectedId` es controlado por la página (para que la tabla sepa qué playlist
  * está abierta al hacer doble click). `draggedTrackId` es la canción que se está
@@ -35,12 +37,24 @@ export function PlaylistsPanel({
 }) {
   const [search, setSearch] = useState('');
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [reorderDragId, setReorderDragId] = useState<string | null>(null);
+  const [optimistic, setOptimistic] = useState<PlaylistItem[] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const player = usePlayer();
+  const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['playlists'],
     queryFn: () => api<Playlist[]>('/music/playlists'),
+  });
+
+  const reorderMut = useMutation({
+    mutationFn: (itemIds: string[]) =>
+      api(`/music/playlists/${selectedId}/reorder`, {
+        method: 'PATCH',
+        body: { itemIds },
+      }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
   });
 
   const playlists = data ?? [];
@@ -55,8 +69,20 @@ export function PlaylistsPanel({
     [playlists, q],
   );
 
-  // Sin filtro de texto al soltar (para que el índice coincida con el orden real).
-  const songs = selected?.items ?? [];
+  // Orden mostrado: el optimista si lo hay (tras reordenar), si no el del servidor.
+  const serverItems = useMemo(() => selected?.items ?? [], [selected]);
+  // Si cambia la playlist o su *membresía* (alta/baja), descartamos el optimista.
+  // Un reorder NO cambia la membresía, así que el optimista sobrevive al refetch
+  // (evita el parpadeo "vuelve al orden viejo y luego salta al nuevo").
+  const memberKey = useMemo(
+    () => serverItems.map((i) => i.id).slice().sort().join(','),
+    [serverItems],
+  );
+  useEffect(() => {
+    setOptimistic(null);
+  }, [selectedId, memberKey]);
+
+  const songs = optimistic ?? serverItems;
   const visibleSongs = useMemo(() => {
     if (!q) return songs;
     return songs.filter((it) => {
@@ -68,19 +94,48 @@ export function PlaylistsPanel({
     });
   }, [songs, q]);
 
+  const externalActive = Boolean(draggedTrackId && selected); // agregar desde la tabla
+  const reordering = Boolean(reorderDragId && selected); // mover una fila propia
+  const anyDnd = externalActive || reordering;
+
+  function moveItem(
+    arr: PlaylistItem[],
+    id: string,
+    insertIndex: number,
+  ): PlaylistItem[] | null {
+    const from = arr.findIndex((i) => i.id === id);
+    if (from === -1) return null;
+    const copy = arr.slice();
+    const [moved] = copy.splice(from, 1);
+    let to = insertIndex;
+    if (from < insertIndex) to -= 1; // compensa el hueco que dejó al sacarlo
+    to = Math.max(0, Math.min(to, copy.length));
+    copy.splice(to, 0, moved);
+    return copy;
+  }
+
   function handleDrop() {
     const idx = dropIndex ?? songs.length;
     setDropIndex(null);
-    if (draggedTrackId) onAddTrack(draggedTrackId, idx);
+    if (reorderDragId) {
+      const arr = moveItem(songs, reorderDragId, idx);
+      setReorderDragId(null);
+      if (!arr) return;
+      const before = songs.map((i) => i.id).join(',');
+      const after = arr.map((i) => i.id).join(',');
+      if (before === after) return; // soltó en el mismo lugar
+      setOptimistic(arr);
+      reorderMut.mutate(arr.map((i) => i.id));
+    } else if (draggedTrackId) {
+      onAddTrack(draggedTrackId, idx);
+    }
   }
 
-  const dndActive = Boolean(draggedTrackId && selected);
-
-  // Auto-scroll mientras arrastras: si el mouse está cerca del borde (o fuera del
-  // panel, arriba/abajo), la lista sube/baja sola. Escucha a nivel de documento
-  // para que funcione aunque el cursor salga del panel.
+  // Auto-scroll mientras arrastras (agregar o reordenar): si el mouse está cerca
+  // del borde (o fuera del panel, arriba/abajo), la lista sube/baja sola. Escucha
+  // a nivel de documento para que funcione aunque el cursor salga del panel.
   useEffect(() => {
-    if (!dndActive) return;
+    if (!anyDnd) return;
     const EDGE = 70; // zona "caliente" en px
     let dir = 0; // -1 arriba, 1 abajo
     let speed = 0; // 0..1
@@ -103,9 +158,6 @@ export function PlaylistsPanel({
     let raf = 0;
     const tick = () => {
       const el = scrollRef.current;
-      // Sigue scrolleando en la última dirección aunque el cursor salga de la
-      // ventana; se frena al soltar (cleanup por dragEnd) o al volver a la zona
-      // central (dir = 0).
       if (el && dir !== 0) {
         el.scrollTop += dir * (4 + speed * 18);
       }
@@ -116,7 +168,7 @@ export function PlaylistsPanel({
       document.removeEventListener('dragover', onDragOver);
       cancelAnimationFrame(raf);
     };
-  }, [dndActive]);
+  }, [anyDnd]);
 
   return (
     <aside className="sticky top-0 flex max-h-[calc(100vh-7rem)] w-72 shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60">
@@ -159,16 +211,16 @@ export function PlaylistsPanel({
         ref={scrollRef}
         className={clsx(
           'flex-1 overflow-y-auto p-2',
-          dndActive && 'rounded-b-xl ring-1 ring-inset ring-brand/40',
+          anyDnd && 'rounded-b-xl ring-1 ring-inset ring-brand/40',
         )}
         onDragOver={(e) => {
-          if (!dndActive) return;
+          if (!anyDnd) return;
           e.preventDefault();
           // Fallback: soltar en zona vacía -> al final.
           setDropIndex(songs.length);
         }}
         onDrop={(e) => {
-          if (!dndActive) return;
+          if (!anyDnd) return;
           e.preventDefault();
           handleDrop();
         }}
@@ -204,12 +256,17 @@ export function PlaylistsPanel({
           </>
         )}
 
-        {/* Nivel 2: canciones de la playlist (drop target) */}
+        {/* Nivel 2: canciones de la playlist (drop target + reordenable) */}
         {selected && (
           <>
-            {dndActive && (
+            {externalActive && (
               <p className="mb-1 px-1 text-center text-[10px] text-brand">
                 Suelta para agregar
+              </p>
+            )}
+            {!anyDnd && songs.length > 0 && !q && (
+              <p className="mb-1 px-1 text-[10px] text-neutral-500">
+                Arrastra una canción para reordenar.
               </p>
             )}
             {visibleSongs.length === 0 && (
@@ -221,26 +278,38 @@ export function PlaylistsPanel({
               {/* Al arrastrar se muestra la lista completa (índices reales para
                   posicionar bien); sin arrastrar, la filtrada por el buscador.
                   La línea de destino es un box-shadow (no ocupa layout, no parpadea). */}
-              {(dndActive ? songs : visibleSongs).map((it, i, arr) => {
+              {(anyDnd ? songs : visibleSongs).map((it, i, arr) => {
                 const t = it.track;
                 const url = t ? trackThumbUrl(t) : null;
-                const showTop = dndActive && dropIndex === i;
+                const showTop = anyDnd && dropIndex === i;
                 const showBottom =
-                  dndActive &&
-                  dropIndex === songs.length &&
-                  i === arr.length - 1;
+                  anyDnd && dropIndex === songs.length && i === arr.length - 1;
                 const playable = !!t && player.canPlay(t);
                 const isPlaying =
                   !!t && player.playingKey === `${t.source}:${t.sourceId}`;
+                const isDragged = reorderDragId === it.id;
+                // Reordenar solo sin filtro de texto (los índices deben ser reales).
+                const canReorder = !q;
                 return (
                   <div
                     key={it.id}
-                    title={playable ? 'Reproducir' : undefined}
+                    draggable={canReorder}
+                    title={playable ? 'Reproducir · arrastra para reordenar' : undefined}
                     onClick={() => {
                       if (t && playable) player.playAudio(t);
                     }}
+                    onDragStart={(e) => {
+                      if (!canReorder) return;
+                      setReorderDragId(it.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', it.id);
+                    }}
+                    onDragEnd={() => {
+                      setReorderDragId(null);
+                      setDropIndex(null);
+                    }}
                     onDragOver={(e) => {
-                      if (!dndActive) return;
+                      if (!anyDnd) return;
                       e.preventDefault();
                       e.stopPropagation();
                       const r = e.currentTarget.getBoundingClientRect();
@@ -251,7 +320,9 @@ export function PlaylistsPanel({
                     className={clsx(
                       'flex items-center gap-2 rounded-lg p-1 hover:bg-neutral-800/40',
                       playable && 'cursor-pointer',
+                      canReorder && 'select-none active:cursor-grabbing',
                       isPlaying && 'bg-brand/15',
+                      isDragged && 'opacity-40',
                       showTop &&
                         'shadow-[inset_0_3px_0_0_var(--color-brand),inset_0_11px_11px_-9px_var(--color-brand)]',
                       showBottom &&
@@ -267,6 +338,7 @@ export function PlaylistsPanel({
                         src={url}
                         alt=""
                         loading="lazy"
+                        draggable={false}
                         className="aspect-video w-12 shrink-0 rounded bg-neutral-800 object-cover"
                       />
                     ) : (
