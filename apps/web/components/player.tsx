@@ -29,6 +29,8 @@ interface PlayerContextValue {
   canPlay: (track: Track) => boolean;
   /** ¿El video de esta canción se detectó como no reproducible fuera de YouTube? */
   isBlocked: (track: Track) => boolean;
+  /** Clave (`source:sourceId`) de la canción que está sonando, o null. */
+  playingKey: string | null;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -128,8 +130,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [qc],
   );
 
+  const cur = audio ?? video;
+  const playingKey = cur ? `${cur.source}:${cur.sourceId}` : null;
+
   return (
-    <PlayerContext.Provider value={{ playAudio, playVideo, canPlay, isBlocked }}>
+    <PlayerContext.Provider
+      value={{ playAudio, playVideo, canPlay, isBlocked, playingKey }}
+    >
       {children}
       {audio && (
         <AudioBar

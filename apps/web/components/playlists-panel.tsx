@@ -7,6 +7,7 @@ import type { Playlist } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
 import { trackThumbUrl } from './track-thumb';
+import { usePlayer } from './player';
 import { clsx } from './clsx';
 
 /**
@@ -35,6 +36,7 @@ export function PlaylistsPanel({
   const [search, setSearch] = useState('');
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const player = usePlayer();
 
   const { data, isLoading } = useQuery({
     queryKey: ['playlists'],
@@ -227,9 +229,16 @@ export function PlaylistsPanel({
                   dndActive &&
                   dropIndex === songs.length &&
                   i === arr.length - 1;
+                const playable = !!t && player.canPlay(t);
+                const isPlaying =
+                  !!t && player.playingKey === `${t.source}:${t.sourceId}`;
                 return (
                   <div
                     key={it.id}
+                    title={playable ? 'Reproducir' : undefined}
+                    onClick={() => {
+                      if (t && playable) player.playAudio(t);
+                    }}
                     onDragOver={(e) => {
                       if (!dndActive) return;
                       e.preventDefault();
@@ -241,6 +250,8 @@ export function PlaylistsPanel({
                     }}
                     className={clsx(
                       'flex items-center gap-2 rounded-lg p-1 hover:bg-neutral-800/40',
+                      playable && 'cursor-pointer',
+                      isPlaying && 'bg-brand/15',
                       showTop &&
                         'shadow-[inset_0_3px_0_0_var(--color-brand),inset_0_11px_11px_-9px_var(--color-brand)]',
                       showBottom &&

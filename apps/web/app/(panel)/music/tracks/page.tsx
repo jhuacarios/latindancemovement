@@ -13,6 +13,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { PlayButtons } from '@/components/play-buttons';
+import { usePlayer } from '@/components/player';
 import { SearchInput } from '@/components/search-input';
 import { StyleFilter } from '@/components/style-filter';
 import { PlaylistsPanel } from '@/components/playlists-panel';
@@ -36,6 +37,7 @@ const PAGE_SIZE = 30;
 
 export default function MyTracksPage() {
   const qc = useQueryClient();
+  const player = usePlayer();
   const { user } = useAuth();
   const perms = usePermissions();
   const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
@@ -70,7 +72,6 @@ export default function MyTracksPage() {
   const [tagTrack, setTagTrack] = useState<Track | null>(null);
   const [showYtPlaylist, setShowYtPlaylist] = useState(false);
   const [showThumb, toggleThumb] = useThumbs();
-  const [activeRowId, setActiveRowId] = useState<string | null>(null);
 
   // Agrega una canción a la playlist abierta del panel en la posición indicada
   // (atIndex 0-based; un número grande = al final).
@@ -398,7 +399,7 @@ export default function MyTracksPage() {
                   className={
                     'border-b border-neutral-800/60 last:border-0 ' +
                     (panelSelectedId ? 'cursor-grab select-none ' : '') +
-                    (activeRowId === t.id
+                    (player.playingKey === `${t.source}:${t.sourceId}`
                       ? 'bg-brand/10'
                       : selected.has(t.id)
                         ? 'bg-brand/5'
@@ -458,10 +459,7 @@ export default function MyTracksPage() {
                     {formatDuration(t.durationSec)}
                   </td>
                   <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
-                  <td
-                    className="px-4 py-3 text-right"
-                    onClick={() => setActiveRowId(t.id)}
-                  >
+                  <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <PlayButtons track={t} />
                       {canEdit && (
