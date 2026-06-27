@@ -315,7 +315,7 @@ export function PlaylistsPanel({
                       if (idx !== dropIndex) setDropIndex(idx);
                     }}
                     className={clsx(
-                      'flex items-center gap-2 rounded-lg p-1 hover:bg-neutral-800/40',
+                      'flex select-none items-center gap-2 rounded-lg p-1 hover:bg-neutral-800/40',
                       playable && 'cursor-pointer',
                       isPlaying && 'bg-brand/15',
                       isDragged && 'opacity-40',
@@ -339,13 +339,19 @@ export function PlaylistsPanel({
                           e.dataTransfer.setData('text/plain', it.id);
                           // La imagen de arrastre es la fila completa (estilo YouTube).
                           const row = e.currentTarget.parentElement;
-                          if (row) e.dataTransfer.setDragImage(row, 16, 16);
+                          if (row) {
+                            try {
+                              e.dataTransfer.setDragImage(row, 16, 16);
+                            } catch {
+                              /* algunos navegadores pueden no soportarlo */
+                            }
+                          }
                         }}
                         onDragEnd={() => {
                           setReorderDragId(null);
                           setDropIndex(null);
                         }}
-                        className="shrink-0 cursor-grab select-none px-0.5 text-sm leading-none text-neutral-600 transition hover:text-neutral-300 active:cursor-grabbing"
+                        className="-ml-0.5 flex h-8 w-6 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded text-base leading-none text-neutral-500 transition hover:bg-neutral-700/50 hover:text-neutral-200 active:cursor-grabbing"
                       >
                         ⠿
                       </span>
