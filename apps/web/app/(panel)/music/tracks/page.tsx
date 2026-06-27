@@ -100,14 +100,22 @@ export default function MyTracksPage() {
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['playlists'] }),
     onError: () => {
-      /* el flujo por arrastre no notifica; el doble click maneja su propio toast */
+      /* cada llamador (arrastre / doble click) muestra su propio toast de error */
     },
   });
 
-  // Arrastre: agrega en la posición indicada, sin toast (feedback visual del panel).
-  function addToOpenPlaylist(trackId: string, atIndex: number) {
+  // Arrastre: agrega en la posición indicada. El éxito no notifica (feedback
+  // visual del panel), pero el error sí (ej: "La canción ya está en la playlist").
+  async function addToOpenPlaylist(trackId: string, atIndex: number) {
     if (!panelSelectedId) return;
-    addTrack.mutate({ playlistId: panelSelectedId, trackId, atIndex });
+    try {
+      await addTrack.mutateAsync({ playlistId: panelSelectedId, trackId, atIndex });
+    } catch (e) {
+      pushToast(
+        e instanceof ApiError ? e.message : 'No se pudo agregar la canción',
+        'error',
+      );
+    }
   }
 
   // Doble click: agrega al final y notifica con un toast (éxito o error).
