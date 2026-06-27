@@ -1,19 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type DanceStyle,
   type LibrarySummary,
   type Paginated,
+  type Playlist,
   type Track,
 } from '@baile-latino/types';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { PlayButtons } from '@/components/play-buttons';
 import { SearchInput } from '@/components/search-input';
 import { StyleFilter } from '@/components/style-filter';
+import { PlaylistsPanel } from '@/components/playlists-panel';
 import { TrackThumb } from '@/components/track-thumb';
 import { formatDuration } from '@/lib/format';
 import { useThumbs } from '@/lib/use-thumbs';
@@ -42,6 +44,20 @@ export default function MyTracksPage() {
   const [style, setStyle] = useState('');
   const [substyle, setSubstyle] = useState('');
   const [page, setPage] = useState(1);
+  const [panelOpen, setPanelOpen] = useState(false);
+  // Panel de playlists: playlist abierta + canción que se arrastra desde la tabla.
+  const [panelSelectedId, setPanelSelectedId] = useState<string | null>(null);
+  const [draggedTrackId, setDraggedTrackId] = useState<string | null>(null);
+  // Toasts flotantes (abajo al centro) para el feedback de agregar por doble click.
+  const [toasts, setToasts] = useState<
+    { id: number; message: string; type: 'success' | 'error' }[]
+  >([]);
+  const toastId = useRef(0);
+  function pushToast(message: string, type: 'success' | 'error') {
+    const id = ++toastId.current;
+    setToasts((t) => [...t, { id, message, type }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800);
+  }
   const [sort, setSort] = useState<SortState>({ by: '', dir: 'asc' });
   const onSort = (col: string, primary: 'asc' | 'desc') => {
     setSort((s) => nextSort(s, col, primary));
@@ -55,6 +71,61 @@ export default function MyTracksPage() {
   const [showYtPlaylist, setShowYtPlaylist] = useState(false);
   const [showThumb, toggleThumb] = useThumbs();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
+
+  // Agrega una canción a la playlist abierta del panel en la posición indicada
+  // (atIndex 0-based; un número grande = al final).
+  const addTrack = useMutation({
+    mutationFn: async (args: {
+      playlistId: string;
+      trackId: string;
+      atIndex: number;
+    }) => {
+      const updated = await api<Playlist>(
+        `/music/playlists/${args.playlistId}/items`,
+        { method: 'POST', body: { trackId: args.trackId } },
+      );
+      const items = updated.items ?? [];
+      const newItem = items.find((i) => i.trackId === args.trackId);
+      if (!newItem) return;
+      const rest = items.filter((i) => i.id !== newItem.id);
+      const idx = Math.max(0, Math.min(args.atIndex, rest.length));
+      if (idx < rest.length) {
+        rest.splice(idx, 0, newItem);
+        await api(`/music/playlists/${args.playlistId}/reorder`, {
+          method: 'PATCH',
+          body: { itemIds: rest.map((i) => i.id) },
+        });
+      }
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['playlists'] }),
+    onError: () => {
+      /* el flujo por arrastre no notifica; el doble click maneja su propio toast */
+    },
+  });
+
+  // Arrastre: agrega en la posición indicada, sin toast (feedback visual del panel).
+  function addToOpenPlaylist(trackId: string, atIndex: number) {
+    if (!panelSelectedId) return;
+    addTrack.mutate({ playlistId: panelSelectedId, trackId, atIndex });
+  }
+
+  // Doble click: agrega al final y notifica con un toast (éxito o error).
+  async function addByDoubleClick(t: Track) {
+    if (!panelSelectedId) return;
+    try {
+      await addTrack.mutateAsync({
+        playlistId: panelSelectedId,
+        trackId: t.id,
+        atIndex: Number.MAX_SAFE_INTEGER,
+      });
+      pushToast(`✓ “${t.title}” agregada a la playlist`, 'success');
+    } catch (e) {
+      pushToast(
+        e instanceof ApiError ? e.message : 'No se pudo agregar la canción',
+        'error',
+      );
+    }
+  }
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -262,13 +333,31 @@ export default function MyTracksPage() {
             />
           </div>
         )}
+        <div className="ml-auto">
+          <label className="mb-1 block text-xs text-neutral-400">&nbsp;</label>
+          <button
+            type="button"
+            onClick={() => setPanelOpen((o) => !o)}
+            title="Ver mis playlists internas"
+            className={
+              'rounded-lg border px-3 py-2 text-sm transition ' +
+              (panelOpen
+                ? 'border-brand bg-brand/15 text-brand'
+                : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
+            }
+          >
+            🎵 Playlists
+          </button>
+        </div>
       </Card>
 
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1 space-y-4">
       {isLoading && <Spinner />}
       {error && <p className="text-sm text-red-300">No se pudieron cargar tus canciones.</p>}
 
       {data && (
-        <Card className="p-0">
+        <Card className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="border-b border-neutral-800 text-left text-neutral-400">
               <tr>
@@ -297,8 +386,18 @@ export default function MyTracksPage() {
               {data.data.map((t) => (
                 <tr
                   key={t.id}
+                  draggable={!!panelSelectedId}
+                  onDragStart={() => setDraggedTrackId(t.id)}
+                  onDragEnd={() => setDraggedTrackId(null)}
+                  onDoubleClick={() => addByDoubleClick(t)}
+                  title={
+                    panelSelectedId
+                      ? 'Doble click: agregar al final · Arrastra: posición exacta'
+                      : undefined
+                  }
                   className={
                     'border-b border-neutral-800/60 last:border-0 ' +
+                    (panelSelectedId ? 'cursor-grab select-none ' : '') +
                     (activeRowId === t.id
                       ? 'bg-brand/10'
                       : selected.has(t.id)
@@ -442,6 +541,17 @@ export default function MyTracksPage() {
           </Button>
         </div>
       )}
+        </div>
+        {panelOpen && (
+          <PlaylistsPanel
+            onClose={() => setPanelOpen(false)}
+            selectedId={panelSelectedId}
+            onSelectedChange={setPanelSelectedId}
+            draggedTrackId={draggedTrackId}
+            onAddTrack={addToOpenPlaylist}
+          />
+        )}
+      </div>
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
 
@@ -457,6 +567,21 @@ export default function MyTracksPage() {
       {showYtPlaylist && (
         <YoutubePlaylistModal onClose={() => setShowYtPlaylist(false)} />
       )}
+
+      {/* Toasts flotantes abajo al centro (sobre la barra del reproductor). */}
+      <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={
+              'rounded-lg px-4 py-2 text-sm text-white shadow-lg backdrop-blur-md ' +
+              (t.type === 'success' ? 'bg-emerald-600/40' : 'bg-red-600/40')
+            }
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
