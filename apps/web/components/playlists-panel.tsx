@@ -211,14 +211,18 @@ export function PlaylistsPanel({
       const y = pointerYRef.current;
       if (el && y != null) {
         const r = el.getBoundingClientRect();
+        // Acota la zona caliente a lo VISIBLE: el fondo del contenedor puede caer
+        // bajo el viewport (detrás del reproductor), donde el cursor no llega.
+        const top = Math.max(r.top, 0);
+        const bottom = Math.min(r.bottom, window.innerHeight);
         let dir = 0;
         let speed = 0;
-        if (y < r.top + EDGE) {
+        if (y < top + EDGE) {
           dir = -1;
-          speed = Math.min(1, (r.top + EDGE - y) / EDGE);
-        } else if (y > r.bottom - EDGE) {
+          speed = Math.min(1, (top + EDGE - y) / EDGE);
+        } else if (y > bottom - EDGE) {
           dir = 1;
-          speed = Math.min(1, (y - (r.bottom - EDGE)) / EDGE);
+          speed = Math.min(1, (y - (bottom - EDGE)) / EDGE);
         }
         if (dir !== 0) {
           el.scrollTop += dir * (6 + speed * 26);
