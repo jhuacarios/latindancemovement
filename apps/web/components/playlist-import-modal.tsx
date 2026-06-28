@@ -7,9 +7,22 @@ import {
   type DanceStyle,
   type ExtractedTrackMetadata,
   type PlaylistImportResult,
+  type Track,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Input, Select, Spinner } from './ui';
+import { usePlayer } from './player';
+import { trackThumbUrl } from './track-thumb';
+import { clsx } from './clsx';
+
+/** Mapea un item del preview a algo reproducible por el player (audio). */
+function toPlayable(it: ExtractedTrackMetadata): Track {
+  return {
+    ...(it as unknown as Track),
+    id: '', // sin id real: evita el callback de "no embebible"
+    artist: it.artist ?? it.channelTitle ?? '—',
+  };
+}
 
 export function PlaylistImportModal({
   onClose,
@@ -20,6 +33,7 @@ export function PlaylistImportModal({
   target?: 'catalog' | 'library';
 }) {
   const qc = useQueryClient();
+  const player = usePlayer();
   const isLibrary = target === 'library';
   const previewPath = isLibrary
     ? '/music/library/playlist-preview'
@@ -91,10 +105,13 @@ export function PlaylistImportModal({
         setSkipped(res.length - shown.length);
       }
       setItems(shown);
-      // Estilo inicial por fila: el detectado, o el por defecto si no hay.
+      // Estilo inicial por fila. En Mis Canciones, las NO detectadas quedan sin
+      // estilo (sin marcar); en el catálogo se usa el estilo por defecto.
       const init: Record<string, DanceStyle> = {};
-      for (const it of shown)
-        init[it.sourceId] = it.detectedStyle ?? defaultStyle;
+      for (const it of shown) {
+        if (it.detectedStyle) init[it.sourceId] = it.detectedStyle;
+        else if (!isLibrary) init[it.sourceId] = defaultStyle;
+      }
       setRowStyles(init);
       setTouched(new Set());
     } catch (e) {
@@ -110,7 +127,9 @@ export function PlaylistImportModal({
     try {
       const res = await api<PlaylistImportResult>(importPath, {
         method: 'POST',
-        body: { link, defaultStyle, overrides: rowStyles },
+        body: isLibrary
+          ? { link, overrides: rowStyles } // sin estilo por defecto
+          : { link, defaultStyle, overrides: rowStyles },
       });
       setResult(res);
       if (isLibrary) {
@@ -127,6 +146,13 @@ export function PlaylistImportModal({
       setSaving(false);
     }
   }
+
+  // En Mis Canciones, solo se importan las que tienen estilo elegido.
+  const willImport =
+    items && isLibrary
+      ? items.filter((it) => rowStyles[it.sourceId]).length
+      : (items?.length ?? 0);
+  const missing = items && isLibrary ? items.length - willImport : 0;
 
   return (
     <div
@@ -205,72 +231,142 @@ export function PlaylistImportModal({
               <span className="text-sm text-neutral-400">
                 {items.length}{' '}
                 {isLibrary ? 'canciones nuevas' : 'canciones encontradas'}
+                {isLibrary && missing > 0 && (
+                  <span className="ml-2 text-amber-300/90">
+                    · {missing} sin estilo (elige para incluirla)
+                  </span>
+                )}
               </span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-400">
-                  Estilo por defecto:
-                </span>
-                <Select
-                  value={defaultStyle}
-                  onChange={(e) => applyDefault(e.target.value as DanceStyle)}
-                >
-                  {DANCE_STYLES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+              {!isLibrary && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-400">
+                    Estilo por defecto:
+                  </span>
+                  <Select
+                    value={defaultStyle}
+                    onChange={(e) => applyDefault(e.target.value as DanceStyle)}
+                  >
+                    {DANCE_STYLES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="mt-3 flex-1 overflow-auto rounded-lg border border-neutral-800">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 border-b border-neutral-800 bg-neutral-900 text-left text-neutral-400">
                   <tr>
+                    <th className="w-14 px-2 py-2"></th>
                     <th className="px-3 py-2">Título</th>
                     <th className="px-3 py-2">Artista</th>
+                    <th className="w-10 px-2 py-2"></th>
                     <th className="px-3 py-2">Estilo</th>
-                    <th className="px-3 py-2 w-16">Año</th>
+                    <th className="w-16 px-3 py-2">Año</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it) => (
-                    <tr
-                      key={it.sourceId}
-                      className="border-b border-neutral-800/60 last:border-0"
-                    >
-                      <td className="px-3 py-2 font-medium">{it.title}</td>
-                      <td className="px-3 py-2 text-neutral-300">
-                        {it.artist ?? it.channelTitle ?? '—'}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <Select
-                            value={rowStyles[it.sourceId] ?? defaultStyle}
-                            onChange={(e) =>
-                              setRowStyle(it.sourceId, e.target.value as DanceStyle)
-                            }
+                  {items.map((it) => {
+                    const playing =
+                      player.playingKey === `${it.source}:${it.sourceId}`;
+                    const url = trackThumbUrl(toPlayable(it));
+                    const value = rowStyles[it.sourceId];
+                    return (
+                      <tr
+                        key={it.sourceId}
+                        className="border-b border-neutral-800/60 last:border-0"
+                      >
+                        <td className="px-2 py-2">
+                          {url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={url}
+                              alt=""
+                              loading="lazy"
+                              className="aspect-video w-12 rounded bg-neutral-800 object-cover"
+                            />
+                          ) : (
+                            <div className="aspect-video w-12 rounded bg-neutral-800" />
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-medium">{it.title}</td>
+                        <td className="px-3 py-2 text-neutral-300">
+                          {it.artist ?? it.channelTitle ?? '—'}
+                        </td>
+                        <td className="px-2 py-2">
+                          <button
+                            type="button"
+                            title="Reproducir (audio)"
+                            aria-label="Reproducir"
+                            onClick={() => player.playAudio(toPlayable(it))}
+                            className={clsx(
+                              'rounded-md px-2 py-1 text-sm transition',
+                              playing
+                                ? 'bg-brand/20 text-brand'
+                                : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100',
+                            )}
                           >
-                            {DANCE_STYLES.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </Select>
-                          <span className="text-[10px] text-neutral-500">
-                            {touched.has(it.sourceId)
-                              ? '(manual)'
-                              : it.detectedStyle
-                                ? '(auto)'
-                                : '(defecto)'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-neutral-400">
-                        {it.year ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
+                            {playing ? '♪' : '▶'}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          {isLibrary ? (
+                            <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+                              {(['BACHATA', 'SALSA'] as const).map((s) => {
+                                const active = value === s;
+                                return (
+                                  <button
+                                    key={s}
+                                    type="button"
+                                    onClick={() => setRowStyle(it.sourceId, s)}
+                                    className={clsx(
+                                      'rounded-md px-2 py-0.5 text-xs font-medium transition',
+                                      active
+                                        ? 'bg-brand text-white'
+                                        : 'text-neutral-300 hover:bg-neutral-700/60',
+                                    )}
+                                  >
+                                    {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Select
+                                value={value ?? defaultStyle}
+                                onChange={(e) =>
+                                  setRowStyle(
+                                    it.sourceId,
+                                    e.target.value as DanceStyle,
+                                  )
+                                }
+                              >
+                                {DANCE_STYLES.map((s) => (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                ))}
+                              </Select>
+                              <span className="text-[10px] text-neutral-500">
+                                {touched.has(it.sourceId)
+                                  ? '(manual)'
+                                  : it.detectedStyle
+                                    ? '(auto)'
+                                    : '(defecto)'}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-neutral-400">
+                          {it.year ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -279,11 +375,14 @@ export function PlaylistImportModal({
               <Button variant="ghost" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button disabled={saving} onClick={save}>
+              <Button
+                disabled={saving || (isLibrary && willImport === 0)}
+                onClick={save}
+              >
                 {saving
                   ? 'Guardando…'
                   : isLibrary
-                    ? `Guardar ${items.length} a Mis Canciones`
+                    ? `Guardar ${willImport} a Mis Canciones`
                     : `Guardar ${items.length} al catálogo`}
               </Button>
             </div>

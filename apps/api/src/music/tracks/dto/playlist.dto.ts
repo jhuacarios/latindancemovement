@@ -12,9 +12,14 @@ export class ImportPlaylistDto {
   @MinLength(1)
   link!: string;
 
-  /** Estilo por defecto para las canciones cuyo estilo no se detecte. */
+  /**
+   * Estilo por defecto para las no detectadas (catálogo). En Mis Canciones no
+   * se envía: las no detectadas quedan sin estilo y se omiten si el usuario no
+   * eligió una.
+   */
+  @IsOptional()
   @IsIn(DANCE_STYLES)
-  defaultStyle!: DanceStyle;
+  defaultStyle?: DanceStyle;
 
   /**
    * Estilo elegido por fila en el preview: { sourceId: estilo }.

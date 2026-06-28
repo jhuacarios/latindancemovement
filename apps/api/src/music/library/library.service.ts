@@ -189,7 +189,7 @@ export class LibraryService {
    */
   async importPlaylistItems(
     items: ExtractedTrackMetadata[],
-    defaultStyle: DanceStyle,
+    defaultStyle: DanceStyle | undefined,
     userId: string,
     overrides?: Record<string, DanceStyle>,
   ): Promise<PlaylistImportResult> {
@@ -200,10 +200,10 @@ export class LibraryService {
     for (const it of items) {
       try {
         const override = overrides?.[it.sourceId];
-        const style: DanceStyle =
+        const style: DanceStyle | undefined =
           override && DANCE_STYLES.includes(override)
             ? override
-            : (it.detectedStyle ?? defaultStyle);
+            : (it.detectedStyle ?? defaultStyle ?? undefined);
 
         // ¿ya la tengo en mi biblioteca (catálogo o personal)?
         const inLib = await this.prisma.track.findFirst({
@@ -216,6 +216,12 @@ export class LibraryService {
         });
         if (inLib) {
           updated++;
+          continue;
+        }
+
+        // Sin estilo (no detectado y el usuario no eligió): se omite.
+        if (!style) {
+          errors.push(`${it.title}: sin estilo, no importada`);
           continue;
         }
 
