@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   Playlist,
@@ -191,6 +192,12 @@ export default function PlaylistsPage() {
                     Mix objetivo: {p.targetBachataPct}% bachata
                   </div>
                 )}
+                {p.bachatasPerBlock != null && p.salsasPerBlock != null && (
+                  <div className="mt-1 text-[11px] text-neutral-500">
+                    Patrón: {p.bachatasPerBlock} bachatas → {p.salsasPerBlock}{' '}
+                    salsas por bloque
+                  </div>
+                )}
 
                 {!selectMode && (
                   <button
@@ -235,6 +242,7 @@ export default function PlaylistsPage() {
 
 function Generator() {
   const qc = useQueryClient();
+  const router = useRouter();
   const [bachatas, setBachatas] = useState<number | ''>(5);
   const [salsas, setSalsas] = useState<number | ''>(3);
   const [limitMode, setLimitMode] = useState<'count' | 'duration'>('count');
@@ -271,6 +279,40 @@ function Generator() {
     onError: (e) =>
       setErr(e instanceof ApiError ? e.message : 'No se pudo generar'),
   });
+
+  // Crea una playlist VACÍA solo con su configuración de distribución, para
+  // llenarla a mano después. Lleva al detalle al crearla.
+  const createEmpty = useMutation({
+    mutationFn: () => {
+      const b = bachatas === '' ? 0 : bachatas;
+      const s = salsas === '' ? 0 : salsas;
+      const pct = b + s > 0 ? Math.round((b / (b + s)) * 100) : undefined;
+      return api<Playlist>('/music/playlists', {
+        method: 'POST',
+        body: {
+          name: name.trim(),
+          bachatasPerBlock: b,
+          salsasPerBlock: s,
+          targetBachataPct: pct,
+        },
+      });
+    },
+    onSuccess: (pl) => {
+      void qc.invalidateQueries({ queryKey: ['playlists'] });
+      router.push(`/music/playlists/${pl.id}`);
+    },
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo crear'),
+  });
+
+  function onCreateEmpty() {
+    setErr(null);
+    if (!name.trim()) {
+      setErr('Ponle un nombre para crear la playlist vacía.');
+      return;
+    }
+    createEmpty.mutate();
+  }
 
   return (
     <Card>
@@ -416,10 +458,21 @@ function Generator() {
           </p>
         )}
 
-        <div className="md:col-span-2">
+        <div className="flex flex-wrap items-center gap-3 md:col-span-2">
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending ? 'Generando…' : 'Generar playlist'}
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={createEmpty.isPending}
+            onClick={onCreateEmpty}
+          >
+            {createEmpty.isPending ? 'Creando…' : '➕ Crear vacía (sin canciones)'}
+          </Button>
+          <span className="text-[11px] text-neutral-500">
+            Crea la playlist solo con su distribución; la llenas tú después.
+          </span>
         </div>
       </form>
 

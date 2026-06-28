@@ -144,6 +144,8 @@ model Playlist {
   status           String   @default("BORRADOR") // PlaylistStatus
   visibility       String   @default("SOLO_ENTRADA") // PlaylistVisibility
   targetBachataPct Int? // 0-100; resto se asume salsa
+  bachatasPerBlock Int? // patrón de distribución: bachatas por bloque
+  salsasPerBlock   Int? // patrón de distribución: salsas por bloque
   ownerId          String
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

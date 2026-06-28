@@ -146,6 +146,9 @@ export interface Playlist {
   visibility: PlaylistVisibility;
   /** Objetivo de mezcla bachata (0-100); el resto se asume salsa. */
   targetBachataPct: number | null;
+  /** Patrón de distribución por bloque (si se definió al crearla). */
+  bachatasPerBlock: number | null;
+  salsasPerBlock: number | null;
   ownerId: string;
   createdAt: string;
   updatedAt: string;

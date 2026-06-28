@@ -38,4 +38,18 @@ export class CreatePlaylistDto {
   @Min(0)
   @Max(100)
   targetBachataPct?: number;
+
+  /** Patrón de distribución: bachatas por bloque. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(50)
+  bachatasPerBlock?: number;
+
+  /** Patrón de distribución: salsas por bloque. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(50)
+  salsasPerBlock?: number;
 }

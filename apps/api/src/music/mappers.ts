@@ -78,6 +78,8 @@ export function toPublicPlaylist(p: PrismaPlaylistWithItems): Playlist {
     status: p.status as PlaylistStatus,
     visibility: p.visibility as PlaylistVisibility,
     targetBachataPct: p.targetBachataPct,
+    bachatasPerBlock: p.bachatasPerBlock,
+    salsasPerBlock: p.salsasPerBlock,
     ownerId: p.ownerId,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),

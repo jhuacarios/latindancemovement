@@ -28,6 +28,8 @@ export class PlaylistsService {
         status: dto.status ?? 'BORRADOR',
         visibility: dto.visibility ?? 'SOLO_ENTRADA',
         targetBachataPct: dto.targetBachataPct ?? null,
+        bachatasPerBlock: dto.bachatasPerBlock ?? null,
+        salsasPerBlock: dto.salsasPerBlock ?? null,
         ownerId: userId,
       },
       include: ITEMS_INCLUDE,
