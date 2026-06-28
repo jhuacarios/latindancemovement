@@ -23,6 +23,7 @@ import { EditTrackModal } from '@/components/edit-track-modal';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import { PlaylistImportModal } from '@/components/playlist-import-modal';
+import { SpotifyImportModal } from '@/components/spotify-import-modal';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -434,6 +435,7 @@ function AdminImportExport() {
   const [result, setResult] = useState<ExcelImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [showSpotify, setShowSpotify] = useState(false);
 
   async function onFile(file: File) {
     setError(null);
@@ -489,6 +491,9 @@ function AdminImportExport() {
         <Button onClick={() => setShowPlaylist(true)}>
           📺 Importar playlist YouTube
         </Button>
+        <Button onClick={() => setShowSpotify(true)}>
+          🟢 Importar playlist Spotify
+        </Button>
       </div>
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
@@ -501,6 +506,9 @@ function AdminImportExport() {
 
       {showPlaylist && (
         <PlaylistImportModal onClose={() => setShowPlaylist(false)} />
+      )}
+      {showSpotify && (
+        <SpotifyImportModal onClose={() => setShowSpotify(false)} />
       )}
     </Card>
   );
