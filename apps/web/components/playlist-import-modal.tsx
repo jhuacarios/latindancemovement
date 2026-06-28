@@ -74,14 +74,15 @@ export function PlaylistImportModal({
         method: 'POST',
         body: { link },
       });
-      // En Mis Canciones, ignora las que ya tengo (avisa cuántas).
-      let shown = res;
-      if (isLibrary) {
-        const existing = await api<string[]>('/music/library/youtube-source-ids');
-        const have = new Set(existing);
-        shown = res.filter((it) => !have.has(it.sourceId));
-        setSkipped(res.length - shown.length);
-      }
+      // Ignora las que ya están (en Mis Canciones o en el catálogo) y avisa cuántas.
+      const existing = await api<string[]>(
+        isLibrary
+          ? '/music/library/youtube-source-ids'
+          : '/music/tracks/catalog-youtube-ids',
+      );
+      const have = new Set(existing);
+      const shown = res.filter((it) => !have.has(it.sourceId));
+      setSkipped(res.length - shown.length);
       setItems(shown);
       // Estilo inicial por fila: el detectado (catálogo en Mis Canciones / por
       // palabras en el catálogo). Las NO detectadas quedan SIN estilo (sin marcar).
@@ -188,14 +189,15 @@ export function PlaylistImportModal({
         {skipped > 0 && !result && (
           <p className="mt-3 rounded-lg border border-clave/30 bg-clave/10 px-3 py-2 text-xs text-clave">
             ℹ️ {skipped} {skipped === 1 ? 'canción ya estaba' : 'canciones ya estaban'}{' '}
-            en Mis Canciones — se {skipped === 1 ? 'ignora' : 'ignoran'}.
+            en {isLibrary ? 'Mis Canciones' : 'el catálogo'} — se{' '}
+            {skipped === 1 ? 'ignora' : 'ignoran'}.
           </p>
         )}
 
         {items && items.length === 0 && !result && (
           <p className="mt-4 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-4 text-center text-sm text-neutral-400">
-            {isLibrary && skipped > 0
-              ? 'Todas las canciones de la playlist ya están en Mis Canciones.'
+            {skipped > 0
+              ? `Todas las canciones de la playlist ya están en ${isLibrary ? 'Mis Canciones' : 'el catálogo'}.`
               : 'No se encontraron canciones nuevas.'}
           </p>
         )}
@@ -344,8 +346,7 @@ export function PlaylistImportModal({
           <div className="mt-4">
             <p className="text-sm text-neutral-300">
               ✓ Importación completa: {result.created}{' '}
-              {isLibrary ? 'agregadas' : 'creadas'},{' '}
-              {result.updated} {isLibrary ? 'ya estaban' : 'actualizadas'}
+              {isLibrary ? 'agregadas' : 'creadas'}, {result.updated} ya estaban
               {result.errors.length ? `, ${result.errors.length} errores` : ''}{' '}
               (de {result.total}).
             </p>

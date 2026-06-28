@@ -65,6 +65,13 @@ export class TracksController {
     return this.youtube.extract(link);
   }
 
+  /** sourceIds de YouTube ya en el catálogo (para ignorar al cargar playlists). */
+  @Get('catalog-youtube-ids')
+  @Roles('SUPER_ADMIN')
+  catalogYoutubeIds() {
+    return this.tracks.catalogYoutubeSourceIds();
+  }
+
   /** Descarga una plantilla .xlsx para importar canciones. */
   @Get('template.xlsx')
   async template(@Res() reply: FastifyReply) {

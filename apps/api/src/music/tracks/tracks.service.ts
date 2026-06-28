@@ -375,6 +375,15 @@ export class TracksService {
   }
 
   /** Guarda en el catálogo las canciones extraídas de una playlist de YouTube. */
+  /** sourceIds de YouTube ya presentes en el catálogo. */
+  async catalogYoutubeSourceIds(): Promise<string[]> {
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'YOUTUBE', scope: 'CATALOG' },
+      select: { sourceId: true },
+    });
+    return rows.map((r) => r.sourceId);
+  }
+
   async importPlaylistItems(
     items: ExtractedTrackMetadata[],
     defaultStyle: DanceStyle | undefined,
@@ -382,11 +391,21 @@ export class TracksService {
     overrides?: Record<string, DanceStyle>,
   ): Promise<PlaylistImportResult> {
     let created = 0;
-    let updated = 0;
+    let updated = 0; // ya estaban en el catálogo (se omiten)
     const errors: string[] = [];
 
     for (const it of items) {
       try {
+        // ¿ya está en el catálogo? -> se omite (no se toca).
+        const existing = await this.prisma.track.findFirst({
+          where: { source: 'YOUTUBE', sourceId: it.sourceId, scope: 'CATALOG' },
+          select: { id: true },
+        });
+        if (existing) {
+          updated++;
+          continue;
+        }
+
         const override = overrides?.[it.sourceId];
         const style: DanceStyle | undefined =
           override && DANCE_STYLES.includes(override)
