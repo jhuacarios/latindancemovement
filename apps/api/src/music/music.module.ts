@@ -5,6 +5,7 @@ import { TracksExportService } from './tracks/tracks-export.service';
 import { TracksImportExcelService } from './tracks/tracks-import-excel.service';
 import { YoutubeMetadataService } from './tracks/youtube-metadata.service';
 import { SpotifyService } from './tracks/spotify.service';
+import { SpotifyMatchService } from './tracks/spotify-match.service';
 import { DiscogsService } from './tracks/discogs.service';
 import { PlaylistsController } from './playlists/playlists.controller';
 import { PlaylistsService } from './playlists/playlists.service';
@@ -33,6 +34,7 @@ import { YoutubeOAuthService } from './youtube/youtube-oauth.service';
     TracksImportExcelService,
     YoutubeMetadataService,
     SpotifyService,
+    SpotifyMatchService,
     DiscogsService,
     PlaylistsService,
     PlaylistGenerationService,

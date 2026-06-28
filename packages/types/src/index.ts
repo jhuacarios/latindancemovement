@@ -248,6 +248,27 @@ export interface ExcelImportResult {
   errors: { row: number; reason: string }[];
 }
 
+/** Datos resumidos de un track de Spotify (para el matching con YouTube). */
+export interface SpotifyTrackBrief {
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+}
+
+/** Confianza del match Spotify→YouTube. */
+export type MatchConfidence = 'high' | 'medium' | 'low' | 'none';
+
+/** Un track de Spotify con sus candidatos de YouTube ya puntuados. */
+export interface SpotifyImportMatch {
+  spotify: SpotifyTrackBrief;
+  /** Mejor candidato (el de mayor puntaje), o null si no se encontró nada. */
+  best: ExtractedTrackMetadata | null;
+  /** Hasta 4 candidatos ordenados por puntaje (incluye `best`). */
+  candidates: ExtractedTrackMetadata[];
+  confidence: MatchConfidence;
+}
+
 export interface PlaylistGenerationSummary {
   requested: { bachataPct: number; maxTracks: number; byPopularity: boolean };
   trackCount: number;

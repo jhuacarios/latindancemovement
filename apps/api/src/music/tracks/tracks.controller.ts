@@ -27,6 +27,8 @@ import { UpdateTrackDto } from './dto/update-track.dto';
 import { QueryTracksDto } from './dto/query-tracks.dto';
 import { ImportTracksDto } from './dto/import-tracks.dto';
 import { ImportPlaylistDto, PlaylistPreviewDto } from './dto/playlist.dto';
+import { SpotifyImportDto, SpotifyPreviewDto } from './dto/spotify-import.dto';
+import { SpotifyMatchService } from './spotify-match.service';
 
 @Controller('music/tracks')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,6 +38,7 @@ export class TracksController {
     private readonly exporter: TracksExportService,
     private readonly excelImporter: TracksImportExcelService,
     private readonly youtube: YoutubeMetadataService,
+    private readonly spotifyMatch: SpotifyMatchService,
   ) {}
 
   /** Lista el catálogo global (anota inLibrary para el usuario actual). */
@@ -118,6 +121,29 @@ export class TracksController {
       user.id,
       dto.overrides,
     );
+  }
+
+  /** Matchea una playlist de Spotify con los mejores videos de YouTube (no guarda). */
+  @Post('spotify-preview')
+  @Roles('SUPER_ADMIN')
+  spotifyPreview(@Body() dto: SpotifyPreviewDto) {
+    return this.spotifyMatch.matchPlaylist(dto.link);
+  }
+
+  /** Importa al catálogo los videos de YouTube elegidos para cada track. */
+  @Post('spotify-import')
+  @Roles('SUPER_ADMIN')
+  async spotifyImport(
+    @Body() dto: SpotifyImportDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const items = await this.youtube.fetchByIds(
+      dto.selections.map((s) => s.sourceId),
+    );
+    const overrides = Object.fromEntries(
+      dto.selections.map((s) => [s.sourceId, s.style]),
+    );
+    return this.tracks.importPlaylistItems(items, undefined, user.id, overrides);
   }
 
   @Get(':id')

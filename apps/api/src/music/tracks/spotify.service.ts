@@ -1,9 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { DanceStyle, DanceSubstyle } from '@baile-latino/types';
 
 interface StyleGuess {
   style: DanceStyle | null;
   substyle: DanceSubstyle | null;
+}
+
+/** Datos de un track de una playlist de Spotify (para matchear con YouTube). */
+export interface SpotifyTrackInfo {
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+  isrc: string | null;
 }
 
 /** Resultado de buscar un track en Spotify: estilo inferido + año real del álbum. */
@@ -73,6 +82,52 @@ export class SpotifyService {
     }
   }
 
+  /** Lee todos los tracks de una playlist pública de Spotify (paginado). */
+  async getPlaylistTracks(link: string): Promise<SpotifyTrackInfo[]> {
+    if (!this.enabled) {
+      throw new BadRequestException(
+        'Spotify no está configurado (SPOTIFY_CLIENT_ID/SECRET).',
+      );
+    }
+    const id = parsePlaylistId(link);
+    if (!id) {
+      throw new BadRequestException(
+        'No se reconoció una playlist de Spotify en el link.',
+      );
+    }
+    const token = await this.getToken();
+    const out: SpotifyTrackInfo[] = [];
+    const fields =
+      'next,items(track(name,duration_ms,external_ids(isrc),artists(name),album(release_date)))';
+    let url: string | null =
+      `https://api.spotify.com/v1/playlists/${id}/tracks?limit=100&fields=${encodeURIComponent(fields)}`;
+    while (url) {
+      const res: Response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        if (res.status === 401) this.token = null;
+        throw new BadRequestException(
+          'No se pudo leer la playlist de Spotify (¿es pública?).',
+        );
+      }
+      const json = (await res.json()) as any;
+      for (const it of json.items ?? []) {
+        const t = it.track;
+        if (!t || !t.name) continue;
+        out.push({
+          title: String(t.name),
+          artist: t.artists?.[0]?.name ?? null,
+          durationSec: t.duration_ms ? Math.round(t.duration_ms / 1000) : null,
+          year: parseYear(t.album?.release_date),
+          isrc: t.external_ids?.isrc ?? null,
+        });
+      }
+      url = (json.next as string | null) ?? null;
+    }
+    return out;
+  }
+
   private async genresForArtist(artistId: string, token: string): Promise<string[]> {
     const cached = this.artistGenres.get(artistId);
     if (cached) return cached;
@@ -112,6 +167,12 @@ export class SpotifyService {
     };
     return this.token.value;
   }
+}
+
+/** Extrae el id de una playlist de Spotify (link web o URI). */
+function parsePlaylistId(link: string): string | null {
+  const m = link.match(/playlist[/:]([a-zA-Z0-9]+)/);
+  return m ? m[1] : null;
 }
 
 /** "2021-05-10" | "2021-05" | "2021" -> 2021 (o null si no es válido). */

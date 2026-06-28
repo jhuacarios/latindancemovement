@@ -97,6 +97,45 @@ export class YoutubeMetadataService {
     return this.enrichManyExternal(out);
   }
 
+  /** Trae la metadata de varios videos por id (videos.list, 1 unidad de cuota). */
+  async fetchByIds(ids: string[]): Promise<ExtractedTrackMetadata[]> {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey || !ids.length) return [];
+    const out: ExtractedTrackMetadata[] = [];
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,status,topicDetails&id=${chunk.join(',')}&key=${apiKey}`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const json = (await res.json()) as any;
+      for (const item of json.items ?? []) {
+        out.push(this.toExtracted(String(item.id), this.buildVideoData(item)));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Busca videos en YouTube por texto y devuelve candidatos enriquecidos
+   * (con duración/canal/stats para poder puntuarlos). `search.list` cuesta
+   * 100 unidades de cuota; `videos.list` 1.
+   */
+  async search(query: string, max = 6): Promise<ExtractedTrackMetadata[]> {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      throw new BadRequestException('Buscar requiere YOUTUBE_API_KEY.');
+    }
+    const q = encodeURIComponent(query);
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${max}&q=${q}&key=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const json = (await res.json()) as any;
+    const ids: string[] = (json.items ?? [])
+      .map((i: any) => i.id?.videoId)
+      .filter(Boolean);
+    return this.fetchByIds(ids);
+  }
+
   /**
    * Enriquece el estilo/año con fuentes externas, por lotes para no saturar
    * las APIs. Si ninguna fuente está habilitada, no hace nada.
