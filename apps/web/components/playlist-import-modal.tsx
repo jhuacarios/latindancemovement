@@ -11,6 +11,7 @@ import {
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Input, Select, Spinner } from './ui';
+import { InlineAudioPlayer } from './player';
 import { trackThumbUrl } from './track-thumb';
 import { clsx } from './clsx';
 
@@ -250,33 +251,20 @@ export function PlaylistImportModal({
               )}
             </div>
 
-            {/* Reproductor propio del modal (la fila elegida suena aquí). */}
+            {/* Reproductor de audio propio del modal (la fila elegida suena aquí). */}
             {nowPlaying && (
-              <div className="mt-3 flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
-                <iframe
+              <div className="mt-3">
+                <InlineAudioPlayer
                   key={nowPlaying.sourceId}
-                  src={`https://www.youtube-nocookie.com/embed/${nowPlaying.sourceId}?autoplay=1&rel=0`}
-                  title={nowPlaying.title}
-                  allow="autoplay; encrypted-media"
-                  allowFullScreen
-                  className="aspect-video h-20 w-36 shrink-0 rounded bg-black"
+                  track={
+                    {
+                      ...(nowPlaying as unknown as Track),
+                      artist:
+                        nowPlaying.artist ?? nowPlaying.channelTitle ?? '—',
+                    } as Track
+                  }
+                  onClose={() => setNowPlaying(null)}
                 />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">
-                    {nowPlaying.title}
-                  </div>
-                  <div className="truncate text-xs text-neutral-400">
-                    {nowPlaying.artist ?? nowPlaying.channelTitle ?? ''}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setNowPlaying(null)}
-                  title="Cerrar reproductor"
-                  className="shrink-0 rounded-md bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
-                >
-                  ✕
-                </button>
               </div>
             )}
 

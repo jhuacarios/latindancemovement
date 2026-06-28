@@ -368,6 +368,201 @@ function AudioBar({
   );
 }
 
+// --- Reproductor de audio embebible (mismos controles que la barra de pie) ---
+/**
+ * Mini reproductor de audio para usar EN LÍNEA (p. ej. dentro de un modal),
+ * no fijo abajo. Maneja su propio volumen (persistido en localStorage). El video
+ * va oculto: solo suena el audio.
+ */
+export function InlineAudioPlayer({
+  track,
+  onClose,
+}: {
+  track: Track;
+  onClose?: () => void;
+}) {
+  const id = ytId(track);
+  const holderRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null);
+  const [volume, setVol] = useState<number>(readStoredVolume);
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(true);
+  const [cur, setCur] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [seeking, setSeeking] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+
+  function setVolume(v: number) {
+    const c = Math.max(0, Math.min(100, Math.round(v)));
+    setVol(c);
+    try {
+      localStorage.setItem('bl_volume', String(c));
+    } catch {
+      /* noop */
+    }
+    playerRef.current?.setVolume?.(c);
+  }
+
+  useEffect(() => {
+    if (!id) return;
+    let destroyed = false;
+    const interval = setInterval(() => {
+      const p = playerRef.current;
+      if (p?.getCurrentTime) {
+        if (!seeking) setCur(p.getCurrentTime() || 0);
+        const d = p.getDuration?.() || 0;
+        if (d) setDur(d);
+      }
+    }, 400);
+
+    loadYTApi().then(() => {
+      if (destroyed || !holderRef.current) return;
+      playerRef.current = new window.YT.Player(holderRef.current, {
+        videoId: id,
+        playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1 },
+        events: {
+          onReady: (e: any) => {
+            setReady(true);
+            setDur(e.target.getDuration() || 0);
+            e.target.setVolume(volumeRef.current);
+            e.target.playVideo();
+          },
+          onStateChange: (e: any) => {
+            setPlaying(e.data === window.YT.PlayerState.PLAYING);
+          },
+          onError: (e: any) => {
+            if (EMBED_BLOCKED_CODES.includes(e.data)) setBlocked(true);
+          },
+        },
+      });
+    });
+
+    return () => {
+      destroyed = true;
+      clearInterval(interval);
+      try {
+        playerRef.current?.destroy?.();
+      } catch {
+        /* noop */
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const toggle = () => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (playing) p.pauseVideo();
+    else p.playVideo();
+  };
+
+  return (
+    <div className="relative flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
+      <span className="text-lg text-brand">♪</span>
+      <div className="w-40 min-w-0 shrink-0">
+        <div className="truncate text-sm font-medium">{track.title}</div>
+        <div className="truncate text-xs text-neutral-400">{track.artist}</div>
+      </div>
+
+      {blocked ? (
+        <div className="flex flex-1 items-center gap-2 text-sm">
+          <span className="text-red-400">🚫 No reproducible fuera de YouTube</span>
+          <a
+            href={`https://www.youtube.com/watch?v=${id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand hover:underline"
+          >
+            Ver ↗
+          </a>
+        </div>
+      ) : (
+        <>
+          <button
+            onClick={toggle}
+            disabled={!ready}
+            className="rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            title={playing ? 'Pausar' : 'Reproducir'}
+          >
+            {playing ? '⏸' : '▶'}
+          </button>
+          <span className="w-9 text-right text-xs tabular-nums text-neutral-400">
+            {fmt(cur)}
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={dur || 0}
+            step={1}
+            value={Math.min(cur, dur || 0)}
+            disabled={!ready || !dur}
+            onMouseDown={() => setSeeking(true)}
+            onTouchStart={() => setSeeking(true)}
+            onChange={(e) => setCur(Number(e.target.value))}
+            onMouseUp={(e) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              playerRef.current?.seekTo?.(v, true);
+              setSeeking(false);
+            }}
+            onTouchEnd={(e) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              playerRef.current?.seekTo?.(v, true);
+              setSeeking(false);
+            }}
+            className="h-1 flex-1 cursor-pointer accent-[var(--color-brand)]"
+          />
+          <span className="w-9 text-xs tabular-nums text-neutral-400">
+            {fmt(dur)}
+          </span>
+          <div
+            className="flex shrink-0 items-center gap-1"
+            title={`Volumen: ${volume}%`}
+          >
+            <span className="text-sm text-neutral-400">
+              {volume === 0 ? '🔇' : volume < 50 ? '🔉' : '🔊'}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={volume}
+              onChange={(e) => setVolume(Number(e.target.value))}
+              className="h-1 w-16 cursor-pointer accent-[var(--color-brand)]"
+            />
+          </div>
+        </>
+      )}
+
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="shrink-0 rounded-lg bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
+          title="Cerrar"
+        >
+          ✕
+        </button>
+      )}
+
+      {/* player oculto: suena el audio sin mostrar el video */}
+      <div
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          left: -9999,
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        <div ref={holderRef} />
+      </div>
+    </div>
+  );
+}
+
 // --- Modal de video --------------------------------------------------------
 function VideoModal({
   track,
