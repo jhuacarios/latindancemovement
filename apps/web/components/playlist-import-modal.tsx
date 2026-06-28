@@ -167,13 +167,16 @@ export function PlaylistImportModal({
           </Button>
         </div>
 
-        <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
-          ⚠️ La playlist debe ser <strong>Pública</strong> o{' '}
-          <strong>No listada</strong> (Unlisted). Las <strong>privadas</strong>{' '}
-          no se pueden cargar (en YouTube: editar playlist → Visibilidad).
-        </p>
-
-        {err && <p className="mt-3 text-sm text-red-300">{err}</p>}
+        {err &&
+          (/no es p[úu]blica|vac[íi]a/i.test(err) ? (
+            <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+              ⚠️ No se pudo leer la playlist: debe ser <strong>Pública</strong> o{' '}
+              <strong>No listada</strong> (Unlisted), no <strong>privada</strong>{' '}
+              (en YouTube: editar playlist → Visibilidad).
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-red-300">{err}</p>
+          ))}
 
         {loading && (
           <div className="mt-4">
