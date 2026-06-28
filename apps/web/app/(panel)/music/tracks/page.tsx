@@ -422,7 +422,7 @@ export default function MyTracksPage() {
                     'border-b border-neutral-800/60 last:border-0 ' +
                     (panelSelectedId ? 'cursor-grab select-none ' : '') +
                     (openPlaylistTrackIds.has(t.id)
-                      ? 'bg-clave/10 shadow-[inset_3px_0_0_0_var(--color-clave)] '
+                      ? 'shadow-[inset_3px_0_0_0_var(--color-clave)] '
                       : '') +
                     (player.playingKey === `${t.source}:${t.sourceId}`
                       ? 'bg-brand/10'
