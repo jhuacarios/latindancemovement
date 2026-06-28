@@ -167,7 +167,7 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
         </p>
 
         {err &&
-          (/no es p[úu]blica|vac[íi]a|spotify/i.test(err) ? (
+          (/no es p[úu]blica|vac[íi]a/i.test(err) ? (
             <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
               ⚠️ No se pudo leer la playlist. Debe ser <strong>pública</strong> y
               un link válido de Spotify.

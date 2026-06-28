@@ -82,50 +82,61 @@ export class SpotifyService {
     }
   }
 
-  /** Lee todos los tracks de una playlist pública de Spotify (paginado). */
+  /**
+   * Lee los tracks de una playlist pública de Spotify desde el **embed** público
+   * (`open.spotify.com/embed/playlist/{id}`), no desde la Web API: Spotify
+   * bloqueó la lectura de canciones de playlists con tokens client-credentials
+   * (cambio de su API, fines de 2024). El embed no requiere auth y trae
+   * título/artista/duración — suficiente para matchear con YouTube.
+   */
   async getPlaylistTracks(link: string): Promise<SpotifyTrackInfo[]> {
-    if (!this.enabled) {
-      throw new BadRequestException(
-        'Spotify no está configurado (SPOTIFY_CLIENT_ID/SECRET).',
-      );
-    }
     const id = parsePlaylistId(link);
     if (!id) {
       throw new BadRequestException(
         'No se reconoció una playlist de Spotify en el link.',
       );
     }
-    const token = await this.getToken();
-    const out: SpotifyTrackInfo[] = [];
-    const fields =
-      'next,items(track(name,duration_ms,external_ids(isrc),artists(name),album(release_date)))';
-    let url: string | null =
-      `https://api.spotify.com/v1/playlists/${id}/tracks?limit=100&fields=${encodeURIComponent(fields)}`;
-    while (url) {
-      const res: Response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        if (res.status === 401) this.token = null;
-        throw new BadRequestException(
-          'No se pudo leer la playlist de Spotify (¿es pública?).',
-        );
-      }
-      const json = (await res.json()) as any;
-      for (const it of json.items ?? []) {
-        const t = it.track;
-        if (!t || !t.name) continue;
-        out.push({
-          title: String(t.name),
-          artist: t.artists?.[0]?.name ?? null,
-          durationSec: t.duration_ms ? Math.round(t.duration_ms / 1000) : null,
-          year: parseYear(t.album?.release_date),
-          isrc: t.external_ids?.isrc ?? null,
-        });
-      }
-      url = (json.next as string | null) ?? null;
+    const res = await fetch(
+      `https://open.spotify.com/embed/playlist/${id}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } },
+    );
+    if (!res.ok) {
+      throw new BadRequestException(
+        'No se pudo leer la playlist de Spotify (¿es pública?).',
+      );
     }
-    return out;
+    const html = await res.text();
+    const m = html.match(
+      /<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s,
+    );
+    if (!m) {
+      throw new BadRequestException(
+        'No se pudo leer la playlist de Spotify (formato inesperado).',
+      );
+    }
+    let data: unknown;
+    try {
+      data = JSON.parse(m[1]);
+    } catch {
+      throw new BadRequestException(
+        'No se pudo interpretar la playlist de Spotify.',
+      );
+    }
+    const list = findTrackList(data);
+    if (!list || !list.length) {
+      throw new BadRequestException('La playlist está vacía o no es pública.');
+    }
+    return list
+      .map((t) => ({
+        title: String(t.title ?? '').trim(),
+        artist: t.subtitle
+          ? String(t.subtitle).split(/[,&]/)[0].trim() || null
+          : null,
+        durationSec: t.duration ? Math.round(Number(t.duration) / 1000) : null,
+        year: null,
+        isrc: null,
+      }))
+      .filter((t) => t.title);
   }
 
   private async genresForArtist(artistId: string, token: string): Promise<string[]> {
@@ -173,6 +184,32 @@ export class SpotifyService {
 function parsePlaylistId(link: string): string | null {
   const m = link.match(/playlist[/:]([a-zA-Z0-9]+)/);
   return m ? m[1] : null;
+}
+
+interface EmbedTrack {
+  title?: string;
+  subtitle?: string;
+  duration?: number;
+}
+
+/** Busca recursivamente el array `trackList` dentro del JSON del embed. */
+function findTrackList(o: unknown): EmbedTrack[] | null {
+  if (Array.isArray(o)) {
+    for (const v of o) {
+      const r = findTrackList(v);
+      if (r) return r;
+    }
+    return null;
+  }
+  if (o && typeof o === 'object') {
+    const rec = o as Record<string, unknown>;
+    if (Array.isArray(rec.trackList)) return rec.trackList as EmbedTrack[];
+    for (const v of Object.values(rec)) {
+      const r = findTrackList(v);
+      if (r) return r;
+    }
+  }
+  return null;
 }
 
 /** "2021-05-10" | "2021-05" | "2021" -> 2021 (o null si no es válido). */
