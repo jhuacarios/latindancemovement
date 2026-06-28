@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -167,6 +167,18 @@ export default function MyTracksPage() {
       return api<Paginated<Track>>(`/music/library?${p.toString()}`);
     },
   });
+
+  // Playlists (compartido con el panel): para resaltar en la tabla las canciones
+  // que ya están en la playlist abierta a la derecha.
+  const { data: playlists } = useQuery({
+    queryKey: ['playlists'],
+    queryFn: () => api<Playlist[]>('/music/playlists'),
+  });
+  const openPlaylistTrackIds = useMemo(() => {
+    if (!panelSelectedId) return new Set<string>();
+    const pl = playlists?.find((p) => p.id === panelSelectedId);
+    return new Set((pl?.items ?? []).map((i) => i.trackId));
+  }, [playlists, panelSelectedId]);
 
   const { data: summary } = useQuery({
     queryKey: ['library-summary'],
@@ -406,19 +418,24 @@ export default function MyTracksPage() {
                   onDragStart={() => setDraggedTrackId(t.id)}
                   onDragEnd={() => setDraggedTrackId(null)}
                   onDoubleClick={() => addByDoubleClick(t)}
-                  title={
-                    panelSelectedId
-                      ? 'Doble click: agregar al final · Arrastra: posición exacta'
-                      : undefined
-                  }
                   className={
                     'border-b border-neutral-800/60 last:border-0 ' +
                     (panelSelectedId ? 'cursor-grab select-none ' : '') +
+                    (openPlaylistTrackIds.has(t.id)
+                      ? 'bg-clave/10 shadow-[inset_3px_0_0_0_var(--color-clave)] '
+                      : '') +
                     (player.playingKey === `${t.source}:${t.sourceId}`
                       ? 'bg-brand/10'
                       : selected.has(t.id)
                         ? 'bg-brand/5'
                         : '')
+                  }
+                  title={
+                    openPlaylistTrackIds.has(t.id)
+                      ? 'Ya está en esta playlist'
+                      : panelSelectedId
+                        ? 'Doble click: agregar al final · Arrastra: posición exacta'
+                        : undefined
                   }
                 >
                   {selectMode && (
