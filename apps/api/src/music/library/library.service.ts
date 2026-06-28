@@ -113,6 +113,15 @@ export class LibraryService {
     return { bachata, salsa };
   }
 
+  /** sourceIds de YouTube ya en mi biblioteca (para ignorar duplicados al cargar). */
+  async myYoutubeSourceIds(userId: string): Promise<string[]> {
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'YOUTUBE', savedBy: { some: { userId } } },
+      select: { sourceId: true },
+    });
+    return rows.map((r) => r.sourceId);
+  }
+
   async myTrackIds(userId: string): Promise<string[]> {
     const rows = await this.prisma.userTrack.findMany({
       where: { userId },

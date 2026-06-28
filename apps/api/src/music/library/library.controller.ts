@@ -41,6 +41,12 @@ export class LibraryController {
     return this.library.myTrackIds(user.id);
   }
 
+  /** sourceIds de YouTube ya en mi biblioteca (para ignorar al cargar playlists). */
+  @Get('youtube-source-ids')
+  youtubeSourceIds(@CurrentUser() user: AuthUser) {
+    return this.library.myYoutubeSourceIds(user.id);
+  }
+
   /** Conteo de mis canciones por estilo (bachatas vs salsas). */
   @Get('summary')
   summary(@CurrentUser() user: AuthUser) {

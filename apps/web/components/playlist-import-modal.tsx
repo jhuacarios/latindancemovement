@@ -38,6 +38,8 @@ export function PlaylistImportModal({
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<PlaylistImportResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /** Cuántas canciones de la playlist ya estaban en Mis Canciones (se ignoran). */
+  const [skipped, setSkipped] = useState(0);
 
   function applyDefault(style: DanceStyle) {
     setDefaultStyle(style);
@@ -73,16 +75,26 @@ export function PlaylistImportModal({
     setErr(null);
     setResult(null);
     setItems(null);
+    setSkipped(0);
     setLoading(true);
     try {
       const res = await api<ExtractedTrackMetadata[]>(previewPath, {
         method: 'POST',
         body: { link },
       });
-      setItems(res);
+      // En Mis Canciones, ignora las que ya tengo (avisa cuántas).
+      let shown = res;
+      if (isLibrary) {
+        const existing = await api<string[]>('/music/library/youtube-source-ids');
+        const have = new Set(existing);
+        shown = res.filter((it) => !have.has(it.sourceId));
+        setSkipped(res.length - shown.length);
+      }
+      setItems(shown);
       // Estilo inicial por fila: el detectado, o el por defecto si no hay.
       const init: Record<string, DanceStyle> = {};
-      for (const it of res) init[it.sourceId] = it.detectedStyle ?? defaultStyle;
+      for (const it of shown)
+        init[it.sourceId] = it.detectedStyle ?? defaultStyle;
       setRowStyles(init);
       setTouched(new Set());
     } catch (e) {
@@ -169,11 +181,27 @@ export function PlaylistImportModal({
           </div>
         )}
 
-        {items && !result && (
+        {skipped > 0 && !result && (
+          <p className="mt-3 rounded-lg border border-clave/30 bg-clave/10 px-3 py-2 text-xs text-clave">
+            ℹ️ {skipped} {skipped === 1 ? 'canción ya estaba' : 'canciones ya estaban'}{' '}
+            en Mis Canciones — se {skipped === 1 ? 'ignora' : 'ignoran'}.
+          </p>
+        )}
+
+        {items && items.length === 0 && !result && (
+          <p className="mt-4 rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-4 text-center text-sm text-neutral-400">
+            {isLibrary && skipped > 0
+              ? 'Todas las canciones de la playlist ya están en Mis Canciones.'
+              : 'No se encontraron canciones nuevas.'}
+          </p>
+        )}
+
+        {items && items.length > 0 && !result && (
           <>
             <div className="mt-4 flex items-center justify-between">
               <span className="text-sm text-neutral-400">
-                {items.length} canciones encontradas
+                {items.length}{' '}
+                {isLibrary ? 'canciones nuevas' : 'canciones encontradas'}
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-neutral-400">
