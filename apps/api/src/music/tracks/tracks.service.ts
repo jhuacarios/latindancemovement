@@ -105,14 +105,15 @@ export class TracksService {
 
     const where: Prisma.TrackWhereInput = { scope: 'CATALOG' };
     if (q.style) where.style = q.style;
-    if (q.substyle) where.substyle = { contains: q.substyle };
+    if (q.substyle)
+      where.substyle = { contains: q.substyle, mode: 'insensitive' };
     if (q.source) where.source = q.source;
     if (q.approvalStatus) where.approvalStatus = q.approvalStatus;
     if (q.isRelease !== undefined) where.isRelease = q.isRelease;
     if (q.search) {
       where.OR = [
-        { title: { contains: q.search } },
-        { artist: { contains: q.search } },
+        { title: { contains: q.search, mode: 'insensitive' } },
+        { artist: { contains: q.search, mode: 'insensitive' } },
       ];
     }
 

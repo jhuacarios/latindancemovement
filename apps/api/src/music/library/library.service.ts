@@ -37,17 +37,19 @@ export class LibraryService {
     if (q.search) {
       and.push({
         OR: [
-          { title: { contains: q.search } },
-          { artist: { contains: q.search } },
+          { title: { contains: q.search, mode: 'insensitive' } },
+          { artist: { contains: q.search, mode: 'insensitive' } },
         ],
       });
     }
     if (q.substyles?.length) {
       and.push({
-        OR: q.substyles.map((s) => ({ substyle: { contains: s } })),
+        OR: q.substyles.map((s) => ({
+          substyle: { contains: s, mode: 'insensitive' as const },
+        })),
       });
     } else if (q.substyle) {
-      where.substyle = { contains: q.substyle };
+      where.substyle = { contains: q.substyle, mode: 'insensitive' };
     }
     if (and.length) where.AND = and;
 
