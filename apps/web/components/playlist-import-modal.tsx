@@ -11,18 +11,8 @@ import {
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Input, Select, Spinner } from './ui';
-import { usePlayer } from './player';
 import { trackThumbUrl } from './track-thumb';
 import { clsx } from './clsx';
-
-/** Mapea un item del preview a algo reproducible por el player (audio). */
-function toPlayable(it: ExtractedTrackMetadata): Track {
-  return {
-    ...(it as unknown as Track),
-    id: '', // sin id real: evita el callback de "no embebible"
-    artist: it.artist ?? it.channelTitle ?? '—',
-  };
-}
 
 export function PlaylistImportModal({
   onClose,
@@ -33,7 +23,6 @@ export function PlaylistImportModal({
   target?: 'catalog' | 'library';
 }) {
   const qc = useQueryClient();
-  const player = usePlayer();
   const isLibrary = target === 'library';
   const previewPath = isLibrary
     ? '/music/library/playlist-preview'
@@ -54,6 +43,10 @@ export function PlaylistImportModal({
   const [err, setErr] = useState<string | null>(null);
   /** Cuántas canciones de la playlist ya estaban en Mis Canciones (se ignoran). */
   const [skipped, setSkipped] = useState(0);
+  /** Canción sonando en el reproductor propio del modal (arriba de la tabla). */
+  const [nowPlaying, setNowPlaying] = useState<ExtractedTrackMetadata | null>(
+    null,
+  );
 
   function applyDefault(style: DanceStyle) {
     setDefaultStyle(style);
@@ -90,6 +83,7 @@ export function PlaylistImportModal({
     setResult(null);
     setItems(null);
     setSkipped(0);
+    setNowPlaying(null);
     setLoading(true);
     try {
       const res = await api<ExtractedTrackMetadata[]>(previewPath, {
@@ -256,6 +250,36 @@ export function PlaylistImportModal({
               )}
             </div>
 
+            {/* Reproductor propio del modal (la fila elegida suena aquí). */}
+            {nowPlaying && (
+              <div className="mt-3 flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-950 p-2">
+                <iframe
+                  key={nowPlaying.sourceId}
+                  src={`https://www.youtube-nocookie.com/embed/${nowPlaying.sourceId}?autoplay=1&rel=0`}
+                  title={nowPlaying.title}
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
+                  className="aspect-video h-20 w-36 shrink-0 rounded bg-black"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">
+                    {nowPlaying.title}
+                  </div>
+                  <div className="truncate text-xs text-neutral-400">
+                    {nowPlaying.artist ?? nowPlaying.channelTitle ?? ''}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNowPlaying(null)}
+                  title="Cerrar reproductor"
+                  className="shrink-0 rounded-md bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <div className="mt-3 flex-1 overflow-auto rounded-lg border border-neutral-800">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 border-b border-neutral-800 bg-neutral-900 text-left text-neutral-400">
@@ -270,9 +294,8 @@ export function PlaylistImportModal({
                 </thead>
                 <tbody>
                   {items.map((it) => {
-                    const playing =
-                      player.playingKey === `${it.source}:${it.sourceId}`;
-                    const url = trackThumbUrl(toPlayable(it));
+                    const playing = nowPlaying?.sourceId === it.sourceId;
+                    const url = trackThumbUrl(it as unknown as Track);
                     const value = rowStyles[it.sourceId];
                     return (
                       <tr
@@ -299,9 +322,9 @@ export function PlaylistImportModal({
                         <td className="px-2 py-2">
                           <button
                             type="button"
-                            title="Reproducir (audio)"
-                            aria-label="Reproducir"
-                            onClick={() => player.playAudio(toPlayable(it))}
+                            title={playing ? 'Detener' : 'Reproducir'}
+                            aria-label={playing ? 'Detener' : 'Reproducir'}
+                            onClick={() => setNowPlaying(playing ? null : it)}
                             className={clsx(
                               'rounded-md px-2 py-1 text-sm transition',
                               playing
@@ -309,30 +332,37 @@ export function PlaylistImportModal({
                                 : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100',
                             )}
                           >
-                            {playing ? '♪' : '▶'}
+                            {playing ? '⏸' : '▶'}
                           </button>
                         </td>
                         <td className="px-3 py-2">
                           {isLibrary ? (
-                            <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
-                              {(['BACHATA', 'SALSA'] as const).map((s) => {
-                                const active = value === s;
-                                return (
-                                  <button
-                                    key={s}
-                                    type="button"
-                                    onClick={() => setRowStyle(it.sourceId, s)}
-                                    className={clsx(
-                                      'rounded-md px-2 py-0.5 text-xs font-medium transition',
-                                      active
-                                        ? 'bg-brand text-white'
-                                        : 'text-neutral-300 hover:bg-neutral-700/60',
-                                    )}
-                                  >
-                                    {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
-                                  </button>
-                                );
-                              })}
+                            <div className="flex items-center gap-1">
+                              <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+                                {(['BACHATA', 'SALSA'] as const).map((s) => {
+                                  const active = value === s;
+                                  return (
+                                    <button
+                                      key={s}
+                                      type="button"
+                                      onClick={() => setRowStyle(it.sourceId, s)}
+                                      className={clsx(
+                                        'rounded-md px-2 py-0.5 text-xs font-medium transition',
+                                        active
+                                          ? 'bg-brand text-white'
+                                          : 'text-neutral-300 hover:bg-neutral-700/60',
+                                      )}
+                                    >
+                                      {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {it.detectedStyle && !touched.has(it.sourceId) && (
+                                <span className="text-[10px] text-neutral-500">
+                                  (catálogo)
+                                </span>
+                              )}
                             </div>
                           ) : (
                             <div className="flex items-center gap-1">

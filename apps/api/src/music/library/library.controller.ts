@@ -65,10 +65,11 @@ export class LibraryController {
     return this.library.addPersonal(user.id, dto);
   }
 
-  /** Previsualiza una playlist de YouTube (no guarda). Para el modal de carga. */
+  /** Previsualiza una playlist de YouTube (no guarda). El estilo sale del catálogo. */
   @Post('playlist-preview')
-  playlistPreview(@Body() dto: PlaylistPreviewDto) {
-    return this.youtube.extractPlaylist(dto.link);
+  async playlistPreview(@Body() dto: PlaylistPreviewDto) {
+    const items = await this.youtube.extractPlaylist(dto.link);
+    return this.library.applyCatalogStyles(items);
   }
 
   /** Importa una playlist de YouTube a MIS canciones (personales, privadas). */
@@ -77,10 +78,14 @@ export class LibraryController {
     @Body() dto: ImportPlaylistDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const items = await this.youtube.extractPlaylist(dto.link);
+    const items = await this.library.applyCatalogStyles(
+      await this.youtube.extractPlaylist(dto.link),
+    );
+    // Sin estilo por defecto: el estilo viene del catálogo o de la elección del
+    // usuario (overrides). Las que queden sin estilo se omiten.
     return this.library.importPlaylistItems(
       items,
-      dto.defaultStyle,
+      undefined,
       user.id,
       dto.overrides,
     );

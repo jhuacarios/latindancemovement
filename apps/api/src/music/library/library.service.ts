@@ -113,6 +113,27 @@ export class LibraryService {
     return { bachata, salsa };
   }
 
+  /**
+   * Anota cada item con el estilo del CATÁLOGO si la canción ya existe ahí
+   * (match por source+sourceId). Si no está en el catálogo, queda sin estilo
+   * (null). Reemplaza la detección por palabras: el estilo lo manda el catálogo.
+   */
+  async applyCatalogStyles(
+    items: ExtractedTrackMetadata[],
+  ): Promise<ExtractedTrackMetadata[]> {
+    if (items.length === 0) return items;
+    const sourceIds = items.map((i) => i.sourceId);
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'YOUTUBE', scope: 'CATALOG', sourceId: { in: sourceIds } },
+      select: { sourceId: true, style: true },
+    });
+    const byId = new Map(rows.map((r) => [r.sourceId, r.style as DanceStyle]));
+    return items.map((it) => ({
+      ...it,
+      detectedStyle: byId.get(it.sourceId) ?? null,
+    }));
+  }
+
   /** sourceIds de YouTube ya en mi biblioteca (para ignorar duplicados al cargar). */
   async myYoutubeSourceIds(userId: string): Promise<string[]> {
     const rows = await this.prisma.track.findMany({
