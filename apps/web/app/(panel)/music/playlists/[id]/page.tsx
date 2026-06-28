@@ -19,6 +19,14 @@ import { useLayoutUI } from '@/lib/layout-ui';
 
 type DropSide = { id: string; side: 'before' | 'after' } | null;
 
+/** Baraja un array in-place (Fisher-Yates). */
+function shuffleInPlace<T>(a: T[]): void {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+}
+
 export default function PlaylistDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -107,12 +115,17 @@ export default function PlaylistDetailPage() {
 
   // Reordena la playlist según el patrón configurado (N bachatas → M salsas,
   // repetido). Lo que sobra (no alcanza para un bloque completo) va al final.
-  function applyBlockOrder() {
+  // Si `shuffle`, baraja cada estilo antes de armar los bloques.
+  function applyBlockOrder(shuffle = false) {
     const n = data?.bachatasPerBlock ?? 0;
     const m = data?.salsasPerBlock ?? 0;
     if (n + m === 0) return;
     const bachatas = items.filter((i) => i.track?.style === 'BACHATA');
     const salsas = items.filter((i) => i.track?.style !== 'BACHATA');
+    if (shuffle) {
+      shuffleInPlace(bachatas);
+      shuffleInPlace(salsas);
+    }
     const result: PlaylistItem[] = [];
     let bi = 0;
     let si = 0;
@@ -194,15 +207,25 @@ export default function PlaylistDetailPage() {
               {(data.bachatasPerBlock != null ||
                 data.salsasPerBlock != null) &&
                 items.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    onClick={applyBlockOrder}
-                    disabled={reorder.isPending}
-                    title={`Reordena en bloques de ${data.bachatasPerBlock ?? 0} bachatas → ${data.salsasPerBlock ?? 0} salsas; los sobrantes van al final`}
-                  >
-                    🧱 Ordenar en bloques ({data.bachatasPerBlock ?? 0}/
-                    {data.salsasPerBlock ?? 0})
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      onClick={() => applyBlockOrder(false)}
+                      disabled={reorder.isPending}
+                      title={`Reordena en bloques de ${data.bachatasPerBlock ?? 0} bachatas → ${data.salsasPerBlock ?? 0} salsas; los sobrantes van al final`}
+                    >
+                      🧱 Ordenar en bloques ({data.bachatasPerBlock ?? 0}/
+                      {data.salsasPerBlock ?? 0})
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => applyBlockOrder(true)}
+                      disabled={reorder.isPending}
+                      title="Igual que ordenar en bloques, pero baraja las canciones de cada estilo antes"
+                    >
+                      🔀 Ordenar + barajar
+                    </Button>
+                  </>
                 )}
               <Button
                 variant={drawerOpen ? 'primary' : 'ghost'}
