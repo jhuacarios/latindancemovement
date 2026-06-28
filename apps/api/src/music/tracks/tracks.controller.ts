@@ -103,10 +103,11 @@ export class TracksController {
     @CurrentUser() user: AuthUser,
   ) {
     const items = await this.youtube.extractPlaylist(dto.link);
-    // El catálogo siempre define un estilo por defecto; fallback por seguridad.
+    // Sin estilo por defecto: el estilo sale de lo detectado o de la elección
+    // del usuario (overrides). Las que queden sin estilo se omiten.
     return this.tracks.importPlaylistItems(
       items,
-      dto.defaultStyle ?? 'BACHATA',
+      undefined,
       user.id,
       dto.overrides,
     );

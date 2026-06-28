@@ -3,14 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  DANCE_STYLES,
   type DanceStyle,
   type ExtractedTrackMetadata,
   type PlaylistImportResult,
   type Track,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Input, Select, Spinner } from './ui';
+import { Button, Input, Spinner } from './ui';
 import { InlineAudioPlayer } from './player';
 import { trackThumbUrl } from './track-thumb';
 import { clsx } from './clsx';
@@ -32,7 +31,6 @@ export function PlaylistImportModal({
     ? '/music/library/import-playlist'
     : '/music/tracks/import-playlist';
   const [link, setLink] = useState('');
-  const [defaultStyle, setDefaultStyle] = useState<DanceStyle>('BACHATA');
   const [items, setItems] = useState<ExtractedTrackMetadata[] | null>(null);
   /** Estilo elegido por fila (sourceId -> estilo). Editable en el preview. */
   const [rowStyles, setRowStyles] = useState<Record<string, DanceStyle>>({});
@@ -48,21 +46,6 @@ export function PlaylistImportModal({
   const [nowPlaying, setNowPlaying] = useState<ExtractedTrackMetadata | null>(
     null,
   );
-
-  function applyDefault(style: DanceStyle) {
-    setDefaultStyle(style);
-    // El default solo pisa filas sin estilo detectado y no editadas a mano.
-    if (!items) return;
-    setRowStyles((prev) => {
-      const next = { ...prev };
-      for (const it of items) {
-        if (!it.detectedStyle && !touched.has(it.sourceId)) {
-          next[it.sourceId] = style;
-        }
-      }
-      return next;
-    });
-  }
 
   function setRowStyle(sourceId: string, style: DanceStyle) {
     setRowStyles((prev) => ({ ...prev, [sourceId]: style }));
@@ -100,12 +83,11 @@ export function PlaylistImportModal({
         setSkipped(res.length - shown.length);
       }
       setItems(shown);
-      // Estilo inicial por fila. En Mis Canciones, las NO detectadas quedan sin
-      // estilo (sin marcar); en el catálogo se usa el estilo por defecto.
+      // Estilo inicial por fila: el detectado (catálogo en Mis Canciones / por
+      // palabras en el catálogo). Las NO detectadas quedan SIN estilo (sin marcar).
       const init: Record<string, DanceStyle> = {};
       for (const it of shown) {
         if (it.detectedStyle) init[it.sourceId] = it.detectedStyle;
-        else if (!isLibrary) init[it.sourceId] = defaultStyle;
       }
       setRowStyles(init);
       setTouched(new Set());
@@ -122,9 +104,8 @@ export function PlaylistImportModal({
     try {
       const res = await api<PlaylistImportResult>(importPath, {
         method: 'POST',
-        body: isLibrary
-          ? { link, overrides: rowStyles } // sin estilo por defecto
-          : { link, defaultStyle, overrides: rowStyles },
+        // Sin estilo por defecto: el estilo sale de lo detectado o de la elección.
+        body: { link, overrides: rowStyles },
       });
       setResult(res);
       if (isLibrary) {
@@ -142,12 +123,11 @@ export function PlaylistImportModal({
     }
   }
 
-  // En Mis Canciones, solo se importan las que tienen estilo elegido.
-  const willImport =
-    items && isLibrary
-      ? items.filter((it) => rowStyles[it.sourceId]).length
-      : (items?.length ?? 0);
-  const missing = items && isLibrary ? items.length - willImport : 0;
+  // Solo se importan las que tienen estilo (detectado o elegido).
+  const willImport = items
+    ? items.filter((it) => rowStyles[it.sourceId]).length
+    : 0;
+  const missing = items ? items.length - willImport : 0;
 
   return (
     <div
@@ -226,29 +206,12 @@ export function PlaylistImportModal({
               <span className="text-sm text-neutral-400">
                 {items.length}{' '}
                 {isLibrary ? 'canciones nuevas' : 'canciones encontradas'}
-                {isLibrary && missing > 0 && (
+                {missing > 0 && (
                   <span className="ml-2 text-amber-300/90">
                     · {missing} sin estilo (elige para incluirla)
                   </span>
                 )}
               </span>
-              {!isLibrary && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-400">
-                    Estilo por defecto:
-                  </span>
-                  <Select
-                    value={defaultStyle}
-                    onChange={(e) => applyDefault(e.target.value as DanceStyle)}
-                  >
-                    {DANCE_STYLES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              )}
             </div>
 
             {/* Reproductor de audio propio del modal (la fila elegida suena aquí). */}
@@ -324,60 +287,33 @@ export function PlaylistImportModal({
                           </button>
                         </td>
                         <td className="px-3 py-2">
-                          {isLibrary ? (
-                            <div className="flex items-center gap-1">
-                              <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
-                                {(['BACHATA', 'SALSA'] as const).map((s) => {
-                                  const active = value === s;
-                                  return (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      onClick={() => setRowStyle(it.sourceId, s)}
-                                      className={clsx(
-                                        'rounded-md px-2 py-0.5 text-xs font-medium transition',
-                                        active
-                                          ? 'bg-brand text-white'
-                                          : 'text-neutral-300 hover:bg-neutral-700/60',
-                                      )}
-                                    >
-                                      {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {it.detectedStyle && !touched.has(it.sourceId) && (
-                                <span className="text-[10px] text-neutral-500">
-                                  (catálogo)
-                                </span>
-                              )}
+                          <div className="flex items-center gap-1">
+                            <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+                              {(['BACHATA', 'SALSA'] as const).map((s) => {
+                                const active = value === s;
+                                return (
+                                  <button
+                                    key={s}
+                                    type="button"
+                                    onClick={() => setRowStyle(it.sourceId, s)}
+                                    className={clsx(
+                                      'rounded-md px-2 py-0.5 text-xs font-medium transition',
+                                      active
+                                        ? 'bg-brand text-white'
+                                        : 'text-neutral-300 hover:bg-neutral-700/60',
+                                    )}
+                                  >
+                                    {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
+                                  </button>
+                                );
+                              })}
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <Select
-                                value={value ?? defaultStyle}
-                                onChange={(e) =>
-                                  setRowStyle(
-                                    it.sourceId,
-                                    e.target.value as DanceStyle,
-                                  )
-                                }
-                              >
-                                {DANCE_STYLES.map((s) => (
-                                  <option key={s} value={s}>
-                                    {s}
-                                  </option>
-                                ))}
-                              </Select>
+                            {it.detectedStyle && !touched.has(it.sourceId) && (
                               <span className="text-[10px] text-neutral-500">
-                                {touched.has(it.sourceId)
-                                  ? '(manual)'
-                                  : it.detectedStyle
-                                    ? '(auto)'
-                                    : '(defecto)'}
+                                {isLibrary ? '(catálogo)' : '(auto)'}
                               </span>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-neutral-400">
                           {it.year ?? '—'}
@@ -393,15 +329,12 @@ export function PlaylistImportModal({
               <Button variant="ghost" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button
-                disabled={saving || (isLibrary && willImport === 0)}
-                onClick={save}
-              >
+              <Button disabled={saving || willImport === 0} onClick={save}>
                 {saving
                   ? 'Guardando…'
                   : isLibrary
                     ? `Guardar ${willImport} a Mis Canciones`
-                    : `Guardar ${items.length} al catálogo`}
+                    : `Guardar ${willImport} al catálogo`}
               </Button>
             </div>
           </>
