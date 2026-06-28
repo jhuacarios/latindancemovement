@@ -329,6 +329,9 @@ export default function PlaylistDetailPage() {
                 setExternalDragId(null);
                 setDropTarget(null);
               }}
+              onAddTrack={(tid) =>
+                addTrack.mutate({ trackId: tid, target: null })
+              }
             />
           )}
         </div>

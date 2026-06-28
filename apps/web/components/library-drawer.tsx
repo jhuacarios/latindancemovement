@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { DanceStyle, Paginated, Tag, Track } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
 import { TrackThumb } from './track-thumb';
+import { usePlayer } from './player';
 import { clsx } from './clsx';
 
 /**
@@ -17,17 +18,24 @@ export function LibraryDrawer({
   onClose,
   onItemDragStart,
   onItemDragEnd,
+  onAddTrack,
 }: {
   /** Canciones ya en la playlist (se excluyen de la lista). */
   excludeTrackIds: Set<string>;
   onClose: () => void;
   onItemDragStart: (trackId: string) => void;
   onItemDragEnd: () => void;
+  /** Doble click en una canción: agregar al final de la playlist. */
+  onAddTrack?: (trackId: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [style, setStyle] = useState<DanceStyle | ''>('');
   const [substyles, setSubstyles] = useState<string[]>([]);
+  const player = usePlayer();
+  // Distingue click (reproducir) de doble click (agregar): el click espera un
+  // pelín por si viene un segundo click.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
@@ -143,7 +151,8 @@ export function LibraryDrawer({
         )}
 
         <p className="mt-2 px-1 text-[11px] text-neutral-500">
-          Arrastra una canción a la playlist para agregarla.
+          Click reproduce · doble click agrega al final · o arrastra a la
+          playlist.
         </p>
       </div>
 
@@ -157,26 +166,53 @@ export function LibraryDrawer({
           </p>
         )}
         <div className="flex flex-col gap-1">
-          {items.map((t) => (
-            <div
-              key={t.id}
-              draggable
-              onDragStart={() => onItemDragStart(t.id)}
-              onDragEnd={onItemDragEnd}
-              className="flex cursor-grab select-none items-center gap-2 rounded-lg border border-transparent p-1.5 transition hover:border-neutral-700 hover:bg-neutral-800/60 active:cursor-grabbing"
-            >
-              <span className="shrink-0">
-                <TrackThumb track={t} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-medium">{t.title}</div>
-                <div className="truncate text-[11px] text-neutral-500">
-                  {t.artist}
+          {items.map((t) => {
+            const isPlaying =
+              player.playingKey === `${t.source}:${t.sourceId}`;
+            return (
+              <div
+                key={t.id}
+                draggable
+                onDragStart={() => onItemDragStart(t.id)}
+                onDragEnd={onItemDragEnd}
+                onClick={() => {
+                  // Click: reproducir abajo (esperando por si es doble click).
+                  if (clickTimer.current) clearTimeout(clickTimer.current);
+                  clickTimer.current = setTimeout(() => {
+                    clickTimer.current = null;
+                    if (player.canPlay(t)) player.playAudio(t);
+                  }, 220);
+                }}
+                onDoubleClick={() => {
+                  if (clickTimer.current) {
+                    clearTimeout(clickTimer.current);
+                    clickTimer.current = null;
+                  }
+                  onAddTrack?.(t.id);
+                }}
+                title={
+                  onAddTrack
+                    ? 'Click para reproducir · doble click para agregar al final'
+                    : 'Click para reproducir'
+                }
+                className={clsx(
+                  'flex cursor-pointer select-none items-center gap-2 rounded-lg border border-transparent p-1.5 transition hover:border-neutral-700 hover:bg-neutral-800/60 active:cursor-grabbing',
+                  isPlaying && 'bg-brand/15',
+                )}
+              >
+                <span className="shrink-0">
+                  <TrackThumb track={t} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium">{t.title}</div>
+                  <div className="truncate text-[11px] text-neutral-500">
+                    {t.artist}
+                  </div>
                 </div>
+                <StyleBadge style={t.style} />
               </div>
-              <StyleBadge style={t.style} />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </aside>
