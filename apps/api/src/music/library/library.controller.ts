@@ -17,12 +17,17 @@ import { LibraryService } from './library.service';
 import { AddCatalogDto } from './dto/add-catalog.dto';
 import { CreateTrackDto } from '../tracks/dto/create-track.dto';
 import { QueryTracksDto } from '../tracks/dto/query-tracks.dto';
+import { YoutubeMetadataService } from '../tracks/youtube-metadata.service';
+import { ImportPlaylistDto, PlaylistPreviewDto } from '../tracks/dto/playlist.dto';
 
 @Controller('music/library')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
 export class LibraryController {
-  constructor(private readonly library: LibraryService) {}
+  constructor(
+    private readonly library: LibraryService,
+    private readonly youtube: YoutubeMetadataService,
+  ) {}
 
   /** Mis Canciones (seleccionadas del catálogo + personales). */
   @Get()
@@ -52,6 +57,27 @@ export class LibraryController {
   @Post('personal')
   addPersonal(@Body() dto: CreateTrackDto, @CurrentUser() user: AuthUser) {
     return this.library.addPersonal(user.id, dto);
+  }
+
+  /** Previsualiza una playlist de YouTube (no guarda). Para el modal de carga. */
+  @Post('playlist-preview')
+  playlistPreview(@Body() dto: PlaylistPreviewDto) {
+    return this.youtube.extractPlaylist(dto.link);
+  }
+
+  /** Importa una playlist de YouTube a MIS canciones (personales, privadas). */
+  @Post('import-playlist')
+  async importPlaylist(
+    @Body() dto: ImportPlaylistDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const items = await this.youtube.extractPlaylist(dto.link);
+    return this.library.importPlaylistItems(
+      items,
+      dto.defaultStyle,
+      user.id,
+      dto.overrides,
+    );
   }
 
   /** Quitar de mis canciones (si es personal mía, se elimina). */

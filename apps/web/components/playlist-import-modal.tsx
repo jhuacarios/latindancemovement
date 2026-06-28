@@ -11,8 +11,22 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { Button, Input, Select, Spinner } from './ui';
 
-export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
+export function PlaylistImportModal({
+  onClose,
+  target = 'catalog',
+}: {
+  onClose: () => void;
+  /** 'catalog' = catálogo global (admin); 'library' = Mis Canciones (privadas). */
+  target?: 'catalog' | 'library';
+}) {
   const qc = useQueryClient();
+  const isLibrary = target === 'library';
+  const previewPath = isLibrary
+    ? '/music/library/playlist-preview'
+    : '/music/tracks/playlist-preview';
+  const importPath = isLibrary
+    ? '/music/library/import-playlist'
+    : '/music/tracks/import-playlist';
   const [link, setLink] = useState('');
   const [defaultStyle, setDefaultStyle] = useState<DanceStyle>('BACHATA');
   const [items, setItems] = useState<ExtractedTrackMetadata[] | null>(null);
@@ -61,10 +75,10 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
     setItems(null);
     setLoading(true);
     try {
-      const res = await api<ExtractedTrackMetadata[]>(
-        '/music/tracks/playlist-preview',
-        { method: 'POST', body: { link } },
-      );
+      const res = await api<ExtractedTrackMetadata[]>(previewPath, {
+        method: 'POST',
+        body: { link },
+      });
       setItems(res);
       // Estilo inicial por fila: el detectado, o el por defecto si no hay.
       const init: Record<string, DanceStyle> = {};
@@ -82,13 +96,19 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
     setErr(null);
     setSaving(true);
     try {
-      const res = await api<PlaylistImportResult>(
-        '/music/tracks/import-playlist',
-        { method: 'POST', body: { link, defaultStyle, overrides: rowStyles } },
-      );
+      const res = await api<PlaylistImportResult>(importPath, {
+        method: 'POST',
+        body: { link, defaultStyle, overrides: rowStyles },
+      });
       setResult(res);
-      void qc.invalidateQueries({ queryKey: ['catalog'] });
-      void qc.invalidateQueries({ queryKey: ['catalog-summary'] });
+      if (isLibrary) {
+        void qc.invalidateQueries({ queryKey: ['library'] });
+        void qc.invalidateQueries({ queryKey: ['library-summary'] });
+        void qc.invalidateQueries({ queryKey: ['library-drawer'] });
+      } else {
+        void qc.invalidateQueries({ queryKey: ['catalog'] });
+        void qc.invalidateQueries({ queryKey: ['catalog-summary'] });
+      }
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'No se pudo importar');
     } finally {
@@ -106,7 +126,11 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">📺 Importar playlist de YouTube</h2>
+          <h2 className="font-semibold">
+            {isLibrary
+              ? '📺 Cargar playlist a Mis Canciones'
+              : '📺 Importar playlist de YouTube'}
+          </h2>
           <button
             onClick={onClose}
             className="rounded-lg bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
@@ -219,7 +243,11 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
                 Cancelar
               </Button>
               <Button disabled={saving} onClick={save}>
-                {saving ? 'Guardando…' : `Guardar ${items.length} al catálogo`}
+                {saving
+                  ? 'Guardando…'
+                  : isLibrary
+                    ? `Guardar ${items.length} a Mis Canciones`
+                    : `Guardar ${items.length} al catálogo`}
               </Button>
             </div>
           </>
@@ -228,8 +256,9 @@ export function PlaylistImportModal({ onClose }: { onClose: () => void }) {
         {result && (
           <div className="mt-4">
             <p className="text-sm text-neutral-300">
-              ✓ Importación completa: {result.created} creadas,{' '}
-              {result.updated} actualizadas
+              ✓ Importación completa: {result.created}{' '}
+              {isLibrary ? 'agregadas' : 'creadas'},{' '}
+              {result.updated} {isLibrary ? 'ya estaban' : 'actualizadas'}
               {result.errors.length ? `, ${result.errors.length} errores` : ''}{' '}
               (de {result.total}).
             </p>

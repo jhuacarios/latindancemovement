@@ -1,6 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { LibrarySummary, Paginated, Track } from '@baile-latino/types';
+import { DANCE_STYLES } from '@baile-latino/types';
+import type {
+  DanceStyle,
+  ExtractedTrackMetadata,
+  LibrarySummary,
+  Paginated,
+  PlaylistImportResult,
+  Track,
+} from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toPublicTrack } from '../mappers';
 import { TracksService } from '../tracks/tracks.service';
@@ -163,6 +171,86 @@ export class LibraryService {
       update: {},
     });
     return toPublicTrack(track);
+  }
+
+  /**
+   * Importa a MI biblioteca todas las canciones de una playlist de YouTube,
+   * como canciones PERSONALES (privadas). Deduplica: si ya tengo esa canción
+   * en mi biblioteca (de catálogo o personal), la salta.
+   */
+  async importPlaylistItems(
+    items: ExtractedTrackMetadata[],
+    defaultStyle: DanceStyle,
+    userId: string,
+    overrides?: Record<string, DanceStyle>,
+  ): Promise<PlaylistImportResult> {
+    let created = 0;
+    let updated = 0; // ya estaban en mi biblioteca
+    const errors: string[] = [];
+
+    for (const it of items) {
+      try {
+        const override = overrides?.[it.sourceId];
+        const style: DanceStyle =
+          override && DANCE_STYLES.includes(override)
+            ? override
+            : (it.detectedStyle ?? defaultStyle);
+
+        // ¿ya la tengo en mi biblioteca (catálogo o personal)?
+        const inLib = await this.prisma.track.findFirst({
+          where: {
+            source: 'YOUTUBE',
+            sourceId: it.sourceId,
+            savedBy: { some: { userId } },
+          },
+          select: { id: true },
+        });
+        if (inLib) {
+          updated++;
+          continue;
+        }
+
+        // Reusa mi canción personal si ya la creé antes; si no, créala.
+        let track = await this.prisma.track.findFirst({
+          where: {
+            ownerId: userId,
+            scope: 'PERSONAL',
+            source: 'YOUTUBE',
+            sourceId: it.sourceId,
+          },
+          select: { id: true },
+        });
+        if (!track) {
+          track = await this.prisma.track.create({
+            data: {
+              title: it.title,
+              artist: it.artist ?? it.channelTitle ?? 'Desconocido',
+              style,
+              source: 'YOUTUBE',
+              sourceId: it.sourceId,
+              year: it.year ?? null,
+              coverUrl: it.coverUrl ?? null,
+              durationSec: it.durationSec ?? null,
+              ytMetadata: it.details ? JSON.stringify(it.details) : null,
+              scope: 'PERSONAL',
+              ownerId: userId,
+              createdById: userId,
+            },
+            select: { id: true },
+          });
+        }
+        await this.prisma.userTrack.upsert({
+          where: { userId_trackId: { userId, trackId: track.id } },
+          create: { userId, trackId: track.id },
+          update: {},
+        });
+        created++;
+      } catch (e) {
+        errors.push(`${it.title}: ${e instanceof Error ? e.message : 'error'}`);
+      }
+    }
+
+    return { total: items.length, created, updated, errors };
   }
 
   /**

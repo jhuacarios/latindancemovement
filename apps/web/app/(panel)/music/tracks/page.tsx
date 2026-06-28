@@ -25,6 +25,7 @@ import { TagEditor } from '@/components/tag-editor';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import { YoutubePlaylistModal } from '@/components/youtube-playlist-modal';
+import { PlaylistImportModal } from '@/components/playlist-import-modal';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -71,6 +72,7 @@ export default function MyTracksPage() {
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const [tagTrack, setTagTrack] = useState<Track | null>(null);
   const [showYtPlaylist, setShowYtPlaylist] = useState(false);
+  const [showImportPlaylist, setShowImportPlaylist] = useState(false);
   const [showThumb, toggleThumb] = useThumbs();
 
   // Agrega una canción a la playlist abierta del panel en la posición indicada
@@ -233,6 +235,11 @@ export default function MyTracksPage() {
               onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
             >
               {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
+            </Button>
+          )}
+          {canEdit && (
+            <Button variant="ghost" onClick={() => setShowImportPlaylist(true)}>
+              📺 Cargar playlist
             </Button>
           )}
           {canEdit && (
@@ -567,6 +574,13 @@ export default function MyTracksPage() {
           title={`${tagTrack.title} — ${tagTrack.artist}`}
           style={tagTrack.style}
           onClose={() => setTagTrack(null)}
+        />
+      )}
+
+      {showImportPlaylist && (
+        <PlaylistImportModal
+          target="library"
+          onClose={() => setShowImportPlaylist(false)}
         />
       )}
 
