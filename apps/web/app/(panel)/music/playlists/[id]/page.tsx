@@ -105,6 +105,27 @@ export default function PlaylistDetailPage() {
       setErr(e instanceof ApiError ? e.message : 'No se pudo agregar la canción.'),
   });
 
+  // Reordena la playlist según el patrón configurado (N bachatas → M salsas,
+  // repetido). Lo que sobra (no alcanza para un bloque completo) va al final.
+  function applyBlockOrder() {
+    const n = data?.bachatasPerBlock ?? 0;
+    const m = data?.salsasPerBlock ?? 0;
+    if (n + m === 0) return;
+    const bachatas = items.filter((i) => i.track?.style === 'BACHATA');
+    const salsas = items.filter((i) => i.track?.style !== 'BACHATA');
+    const result: PlaylistItem[] = [];
+    let bi = 0;
+    let si = 0;
+    while (bachatas.length - bi >= n && salsas.length - si >= m) {
+      for (let k = 0; k < n; k++) result.push(bachatas[bi++]);
+      for (let k = 0; k < m; k++) result.push(salsas[si++]);
+    }
+    while (bi < bachatas.length) result.push(bachatas[bi++]); // extras
+    while (si < salsas.length) result.push(salsas[si++]);
+    setLocalItems(result); // optimista
+    reorder.mutate(result.map((i) => i.id));
+  }
+
   function handleDrop() {
     const target = dropTarget;
     setDropTarget(null);
@@ -170,6 +191,19 @@ export default function PlaylistDetailPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {(data.bachatasPerBlock != null ||
+                data.salsasPerBlock != null) &&
+                items.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    onClick={applyBlockOrder}
+                    disabled={reorder.isPending}
+                    title={`Reordena en bloques de ${data.bachatasPerBlock ?? 0} bachatas → ${data.salsasPerBlock ?? 0} salsas; los sobrantes van al final`}
+                  >
+                    🧱 Ordenar en bloques ({data.bachatasPerBlock ?? 0}/
+                    {data.salsasPerBlock ?? 0})
+                  </Button>
+                )}
               <Button
                 variant={drawerOpen ? 'primary' : 'ghost'}
                 onClick={() => setDrawerOpen((o) => !o)}
