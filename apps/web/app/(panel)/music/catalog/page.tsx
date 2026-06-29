@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type DanceStyle,
@@ -63,6 +63,17 @@ export default function CatalogPage() {
     setSort((s) => nextSort(s, col, primary));
     setPage(1);
   };
+
+  // Pone al día las reproducciones (viewCount) faltantes desde la metadata, para
+  // poder ordenar por esa columna. Solo super admin; idempotente. Lo ignora si no.
+  useEffect(() => {
+    if (!isAdmin) return;
+    api<{ updated: number }>('/music/tracks/backfill-views', { method: 'POST' })
+      .then((r) => {
+        if (r.updated > 0) qc.invalidateQueries({ queryKey: ['catalog'] });
+      })
+      .catch(() => {});
+  }, [isAdmin, qc]);
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -270,7 +281,8 @@ export default function CatalogPage() {
                 <th className="px-4 py-3">Estilo</th>
                 <th className="px-4 py-3">Duración</th>
                 <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
-                <th className="px-4 py-3">Reproducciones</th>
+                <SortTh label="Reproducciones" col="views" primary="desc" sort={sort} onSort={onSort} />
+
                 <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
               </tr>

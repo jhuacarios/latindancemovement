@@ -65,12 +65,31 @@ export class TracksService {
     if (existing.coverUrl == null && dto.coverUrl != null) patch.coverUrl = dto.coverUrl;
     if (existing.durationSec == null && dto.durationSec != null)
       patch.durationSec = dto.durationSec;
-    if (existing.ytMetadata == null && dto.ytMetadata != null)
+    if (existing.ytMetadata == null && dto.ytMetadata != null) {
       patch.ytMetadata = dto.ytMetadata;
+      patch.viewCount = this.viewsFromMeta(dto.ytMetadata);
+    }
     const sub = this.joinSubstyles(dto.substyles);
     if (!existing.substyle && sub) patch.substyle = sub;
     if (!existing.artist && dto.artist) patch.artist = dto.artist;
     return patch;
+  }
+
+  /**
+   * Extrae las reproducciones (viewCount) del JSON de metadata de YouTube como
+   * BigInt, para poder ordenar por ese campo. Devuelve null si no hay dato.
+   */
+  private viewsFromMeta(json: string | null | undefined): bigint | null {
+    if (!json) return null;
+    try {
+      const meta = JSON.parse(json) as { viewCount?: unknown };
+      const v = meta?.viewCount;
+      if (v == null) return null;
+      const s = String(v).trim();
+      return /^\d+$/.test(s) ? BigInt(s) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Une hasta 3 sub-estilos en un CSV para guardar en la columna `substyle`. */
@@ -110,6 +129,7 @@ export class TracksService {
         ownerId: null,
         artistUserId: dto.artistUserId ?? null,
         ytMetadata: dto.ytMetadata ?? null,
+        viewCount: this.viewsFromMeta(dto.ytMetadata),
         createdById: userId,
       },
     });
@@ -232,6 +252,7 @@ export class TracksService {
             coverUrl: dto.coverUrl ?? null,
             durationSec: dto.durationSec ?? null,
             ytMetadata: dto.ytMetadata ?? null,
+            viewCount: this.viewsFromMeta(dto.ytMetadata),
           };
 
       if (Object.keys(patch).length) {
@@ -250,6 +271,7 @@ export class TracksService {
         coverUrl: dto.coverUrl ?? null,
         durationSec: dto.durationSec ?? null,
         ytMetadata: dto.ytMetadata ?? null,
+        viewCount: this.viewsFromMeta(dto.ytMetadata),
         source,
         sourceId,
         scope: 'CATALOG',
@@ -284,6 +306,10 @@ export class TracksService {
       isRelease: dto.isRelease,
       approvalStatus: dto.approvalStatus,
       ytMetadata: dto.ytMetadata,
+      viewCount:
+        dto.ytMetadata !== undefined
+          ? this.viewsFromMeta(dto.ytMetadata)
+          : undefined,
     };
 
     // Si se cambia el link, re-resolvemos la fuente y evitamos duplicados.
@@ -409,6 +435,29 @@ export class TracksService {
       where: { scope: 'CATALOG', source: 'YOUTUBE', durationSec: null },
       select: { id: true, sourceId: true },
     });
+  }
+
+  /**
+   * Rellena `viewCount` (desde ytMetadata) en las canciones del catálogo que aún
+   * no lo tienen. Idempotente; sirve para ponerse al día con datos ya guardados.
+   */
+  async backfillViewCounts(): Promise<{ updated: number }> {
+    const rows = await this.prisma.track.findMany({
+      where: { scope: 'CATALOG', viewCount: null, ytMetadata: { not: null } },
+      select: { id: true, ytMetadata: true },
+    });
+    let updated = 0;
+    for (const r of rows) {
+      const v = this.viewsFromMeta(r.ytMetadata);
+      if (v != null) {
+        await this.prisma.track.update({
+          where: { id: r.id },
+          data: { viewCount: v },
+        });
+        updated++;
+      }
+    }
+    return { updated };
   }
 
   /** Aplica duraciones (en segundos) por id de track. */
@@ -579,6 +628,9 @@ export class TracksService {
           return { year: dir };
         case 'createdAt':
           return { createdAt: dir };
+        case 'views':
+          // Las que no tienen dato de reproducciones van siempre al final.
+          return { viewCount: { sort: dir, nulls: 'last' } };
       }
     }
     switch (q.sort) {

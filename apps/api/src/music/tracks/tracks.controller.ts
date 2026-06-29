@@ -107,6 +107,13 @@ export class TracksController {
     return { missing: missing.length, updated };
   }
 
+  /** Rellena las reproducciones (viewCount) faltantes desde la metadata guardada. */
+  @Post('backfill-views')
+  @Roles('SUPER_ADMIN')
+  backfillViews() {
+    return this.tracks.backfillViewCounts();
+  }
+
   /** Descarga una plantilla .xlsx para importar canciones. */
   @Get('template.xlsx')
   async template(@Res() reply: FastifyReply) {

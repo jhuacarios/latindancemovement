@@ -53,6 +53,7 @@ model Track {
   sourceId       String
   coverUrl       String?
   durationSec    Int?
+  viewCount      BigInt? // reproducciones (de ytMetadata.viewCount), para ordenar
   isRelease      Boolean  @default(false)
   approvalStatus String   @default("APROBADA") // TrackApprovalStatus
   scope          String   @default("CATALOG") // TrackScope: CATALOG (global) | PERSONAL (privada del DJ)
@@ -78,6 +79,7 @@ model Track {
   @@index([ownerId])
   @@index([style])
   @@index([substyle])
+  @@index([viewCount])
 }
 
 /// Configuración global de la plataforma (clave/valor JSON). P.ej. la matriz

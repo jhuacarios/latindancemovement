@@ -25,6 +25,18 @@ interface SeedTrack {
   ytMetadata: string | null;
 }
 
+/** Reproducciones (BigInt) desde el JSON de metadata, o null. */
+const viewsFromMeta = (json: string | null): bigint | null => {
+  if (!json) return null;
+  try {
+    const v = (JSON.parse(json) as { viewCount?: unknown })?.viewCount;
+    const s = String(v ?? '').trim();
+    return /^\d+$/.test(s) ? BigInt(s) : null;
+  } catch {
+    return null;
+  }
+};
+
 const slugify = (s: string) =>
   s
     .normalize('NFD')
@@ -110,6 +122,7 @@ async function main() {
       isRelease: t.isRelease,
       approvalStatus: t.approvalStatus,
       ytMetadata: t.ytMetadata,
+      viewCount: viewsFromMeta(t.ytMetadata),
     };
     const existing = await prisma.track.findFirst({
       where: { source: t.source, sourceId: t.sourceId, scope: 'CATALOG' },
