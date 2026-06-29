@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.4.4',
+    date: '2026-06-29',
+    module: 'music',
+    type: 'improvement',
+    title: 'Filtra Mis Canciones por tus tags',
+    description:
+      'El filtro de sub-estilos en Mis Canciones usa TUS tags (los que ves y editas). Sin ningún tag seleccionado vienen todas las del estilo. Tus canciones antiguas heredan automáticamente los sub-estilos del catálogo.',
+  },
+  {
+    version: '0.4.4',
+    date: '2026-06-29',
+    module: 'music.youtube.catalog',
+    type: 'feature',
+    title: 'Ordenar el catálogo por reproducciones',
+    description:
+      'La columna Reproducciones del catálogo ahora es ordenable: clic en el encabezado para ver las más (o menos) reproducidas.',
+  },
+  {
     version: '0.4.3',
     date: '2026-06-29',
     module: 'general',
