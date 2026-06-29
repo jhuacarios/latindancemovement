@@ -39,6 +39,10 @@ export function YoutubeFromTemplateModal({
   const [err, setErr] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // El error sugiere que hay que (re)conectar la cuenta (token vencido/revocado).
+  const needsReconnect =
+    !!err && /conect|youtube|token|expir|sesi[oó]n|autoriz|credencial/i.test(err);
+
   useEffect(() => {
     api<YoutubeConnectionStatus>('/music/youtube/status')
       .then((s) => setStatus(s.connected ? 'connected' : 'disconnected'))
@@ -172,9 +176,18 @@ export function YoutubeFromTemplateModal({
             )}
 
             {err && (
-              <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                {err}
-              </p>
+              <div className="space-y-2">
+                <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                  {err}
+                </p>
+                {/* La conexión guardada puede estar vencida/revocada aunque el
+                    estado diga "conectado": ofrece reconectar sin salir del modal. */}
+                {needsReconnect && (
+                  <Button variant="ghost" disabled={creating} onClick={connect}>
+                    🔗 Reconectar cuenta de YouTube
+                  </Button>
+                )}
+              </div>
             )}
 
             <div className="flex justify-end gap-2 pt-1">
