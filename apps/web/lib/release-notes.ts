@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.4.5',
+    date: '2026-06-29',
+    module: 'music.youtube.playlists',
+    type: 'fix',
+    title: 'Reconectar YouTube sin salir del modal',
+    description:
+      'Al crear una playlist en YouTube, si la conexión estaba vencida aparecía el error sin salida. Ahora se muestra un botón "Reconectar cuenta de YouTube" para re-autorizar al instante.',
+  },
+  {
     version: '0.4.4',
     date: '2026-06-29',
     module: 'music',
