@@ -20,6 +20,13 @@ import { useLayoutUI } from '@/lib/layout-ui';
 
 type DropSide = { id: string; side: 'before' | 'after' } | null;
 
+/** Duración total amigable: "1h 23min" o "45 min". */
+function fmtTotalDuration(sec: number): string {
+  const m = Math.round(sec / 60);
+  const h = Math.floor(m / 60);
+  return h > 0 ? `${h}h ${m % 60}min` : `${m} min`;
+}
+
 /** Baraja un array in-place (Fisher-Yates). */
 function shuffleInPlace<T>(a: T[]): void {
   for (let i = a.length - 1; i > 0; i--) {
@@ -208,9 +215,57 @@ export default function PlaylistDetailPage() {
                 <span className="text-red-300">
                   {items.filter((i) => i.track?.style === 'SALSA').length} salsas
                 </span>
+                {' · '}
+                {fmtTotalDuration(
+                  items.reduce((a, i) => a + (i.track?.durationSec ?? 0), 0),
+                )}
+                {(() => {
+                  const nd = items.filter(
+                    (i) => i.track && i.track.durationSec == null,
+                  ).length;
+                  return nd > 0 ? ` (${nd} sin duración)` : '';
+                })()}
                 {data.targetBachataPct != null &&
                   ` · mix objetivo ${data.targetBachataPct}% bachata`}
               </p>
+              {(data.bachatasPerBlock ?? 0) + (data.salsasPerBlock ?? 0) > 0 &&
+                items.length > 0 &&
+                (() => {
+                  const n = data.bachatasPerBlock ?? 0;
+                  const m = data.salsasPerBlock ?? 0;
+                  const b = items.filter(
+                    (i) => i.track?.style === 'BACHATA',
+                  ).length;
+                  const s = items.filter(
+                    (i) => i.track?.style === 'SALSA',
+                  ).length;
+                  // Bloques objetivo: los necesarios para contener todas las
+                  // canciones del estilo más "lleno" (redondeando hacia arriba).
+                  const blocks = Math.max(
+                    n > 0 ? Math.ceil(b / n) : 0,
+                    m > 0 ? Math.ceil(s / m) : 0,
+                  );
+                  const missB = n > 0 ? blocks * n - b : 0;
+                  const missS = m > 0 ? blocks * m - s : 0;
+                  if (blocks === 0 || (missB === 0 && missS === 0)) {
+                    return (
+                      <p className="text-xs text-clave">
+                        ✓ {blocks} bloques completos ({n}/{m})
+                      </p>
+                    );
+                  }
+                  const parts: string[] = [];
+                  if (missB > 0)
+                    parts.push(`${missB} bachata${missB === 1 ? '' : 's'}`);
+                  if (missS > 0)
+                    parts.push(`${missS} salsa${missS === 1 ? '' : 's'}`);
+                  return (
+                    <p className="text-xs text-amber-300/90">
+                      Para {blocks} bloques completos ({n}/{m}) faltan:{' '}
+                      {parts.join(' y ')}.
+                    </p>
+                  );
+                })()}
             </div>
             <div className="flex flex-wrap gap-2">
               {(data.bachatasPerBlock != null ||

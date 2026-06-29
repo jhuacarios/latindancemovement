@@ -292,7 +292,7 @@ function AudioBar({
             <button
               onClick={toggle}
               disabled={!ready}
-              className="rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-base text-white hover:bg-brand-dark disabled:opacity-50"
               title={playing ? 'Pausar' : 'Reproducir'}
             >
               {playing ? '⏸' : '▶'}
@@ -491,7 +491,7 @@ export function InlineAudioPlayer({
           <button
             onClick={toggle}
             disabled={!ready}
-            className="rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-base text-white hover:bg-brand-dark disabled:opacity-50"
             title={playing ? 'Pausar' : 'Reproducir'}
           >
             {playing ? '⏸' : '▶'}
