@@ -170,6 +170,37 @@ export class TagsService {
     return this.getTrackTags(trackId, userId);
   }
 
+  /**
+   * Siembra los tags PERSONALES del usuario para una canción a partir del
+   * sub-estilo del CATÁLOGO, **solo si aún no tiene tags propios** (para no
+   * pisar sus ediciones). Se usa al agregar una canción a Mis Canciones: hereda
+   * los sub-estilos del catálogo, y desde ahí son del usuario.
+   */
+  async seedUserTagsFromTrack(trackId: string, userId: string): Promise<void> {
+    const existing = await this.prisma.trackTag.count({
+      where: { trackId, userId },
+    });
+    if (existing > 0) return;
+    const track = await this.prisma.track.findUnique({
+      where: { id: trackId },
+      select: { substyle: true, style: true },
+    });
+    if (!track?.substyle) return;
+    const names = track.substyle
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const style = track.style as DanceStyle;
+    for (const name of names) {
+      const tag = await this.create(name, style, userId);
+      await this.prisma.trackTag.upsert({
+        where: { trackId_userId_tagId: { trackId, userId, tagId: tag.id } },
+        create: { trackId, userId, tagId: tag.id },
+        update: {},
+      });
+    }
+  }
+
   /** Crea (o reutiliza) tags por nombre y los asocia al usuario en una canción. */
   async addTagsByName(
     trackId: string,

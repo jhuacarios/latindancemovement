@@ -456,24 +456,29 @@ export default function MyTracksPage() {
                   <td className="px-4 py-3 font-medium">{t.title}</td>
                   <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
                   <td className="px-4 py-3">
+                    {/* Sub-estilos PERSONALES (heredados del catálogo al agregar,
+                        editables solo para ti). Si aún no tienes tags propios,
+                        se muestran los del catálogo como referencia. El estilo
+                        (Bachata/Salsa) es de solo lectura: lo administra el admin. */}
                     <div className="flex flex-wrap items-center gap-1">
                       <StyleBadge style={t.style} />
-                      {t.substyles?.map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                      {t.tags?.map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
+                      {t.tags && t.tags.length > 0
+                        ? t.tags.map((tag) => (
+                            <span
+                              key={tag.id}
+                              className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
+                            >
+                              {tag.name}
+                            </span>
+                          ))
+                        : t.substyles?.map((s) => (
+                            <span
+                              key={s}
+                              className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                            >
+                              {s}
+                            </span>
+                          ))}
                     </div>
                   </td>
                   <td className="px-4 py-3">

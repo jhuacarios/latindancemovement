@@ -165,6 +165,8 @@ export class LibraryService {
       create: { userId, trackId },
       update: {},
     });
+    // Hereda los sub-estilos del catálogo como tags personales (si no tiene aún).
+    await this.tags.seedUserTagsFromTrack(trackId, userId);
     return { added: true };
   }
 
@@ -202,6 +204,7 @@ export class LibraryService {
       create: { userId, trackId: track.id },
       update: {},
     });
+    await this.tags.seedUserTagsFromTrack(track.id, userId);
     return toPublicTrack(track);
   }
 
