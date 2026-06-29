@@ -41,8 +41,12 @@ export default function MyTracksPage() {
   const player = usePlayer();
   const { user } = useAuth();
   const perms = usePermissions();
-  const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
-  const canDelete = user ? perms.can(user.role, 'music', 'eliminar') : false;
+  const canEdit = user
+    ? perms.can(user.role, 'music.youtube.tracks', 'editar')
+    : false;
+  const canDelete = user
+    ? perms.can(user.role, 'music.youtube.tracks', 'eliminar')
+    : false;
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
   const [substyle, setSubstyle] = useState('');

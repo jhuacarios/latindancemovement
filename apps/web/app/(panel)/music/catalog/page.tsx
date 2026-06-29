@@ -39,8 +39,12 @@ export default function CatalogPage() {
   const perms = usePermissions();
   const qc = useQueryClient();
   const isAdmin = user?.role === 'SUPER_ADMIN';
-  const canEdit = user ? perms.can(user.role, 'music', 'editar') : false;
-  const canDelete = user ? perms.can(user.role, 'music', 'eliminar') : false;
+  const canEdit = user
+    ? perms.can(user.role, 'music.youtube.catalog', 'editar')
+    : false;
+  const canDelete = user
+    ? perms.can(user.role, 'music.youtube.catalog', 'eliminar')
+    : false;
   const [editTrack, setEditTrack] = useState<Track | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
 
