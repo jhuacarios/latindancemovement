@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.4.3',
+    date: '2026-06-29',
+    module: 'general',
+    type: 'fix',
+    title: 'Contador de Novedades arreglado',
+    description:
+      'El número rojo de la campanita ahora cuenta bien las novedades sin leer, incluso cuando hay varias el mismo día (antes se contaba por fecha y se saltaba alguna).',
+  },
+  {
     version: '0.4.2',
     date: '2026-06-29',
     module: 'admin.roles',
