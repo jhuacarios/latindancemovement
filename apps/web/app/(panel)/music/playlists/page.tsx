@@ -316,7 +316,11 @@ function Generator() {
 
   return (
     <Card>
-      <h2 className="mb-4 font-semibold">🎲 Generador automático</h2>
+      <h2 className="mb-1 font-semibold">🎲 Generador automático</h2>
+      <p className="mb-4 text-xs text-neutral-500">
+        Arma la lista con tus canciones de <strong>Mis Canciones</strong>,
+        respetando el patrón por bloque.
+      </p>
       <form
         className="grid grid-cols-1 gap-4 md:grid-cols-2"
         onSubmit={(e) => {
