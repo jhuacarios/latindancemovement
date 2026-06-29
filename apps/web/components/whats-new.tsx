@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
 import {
   RELEASE_NOTES,
+  type ReleaseNote,
   type ReleaseNoteType,
 } from '@/lib/release-notes';
 
@@ -48,13 +49,20 @@ export function WhatsNew() {
   const visible = RELEASE_NOTES.filter(
     (n) => n.module === 'general' || perms.can(user.role, n.module, 'ver'),
   );
-  const unseen = visible.filter((n) => n.date > lastSeen);
+  // "Visto" = la novedad más nueva al momento de abrir (no la fecha). Así, varias
+  // novedades del mismo día se cuentan por separado. Las no-leídas son las que
+  // están por encima de la marcada como vista (RELEASE_NOTES va de nueva a vieja).
+  const noteKey = (n: ReleaseNote) => `${n.version}|${n.date}|${n.title}`;
+  const seenIdx = lastSeen
+    ? visible.findIndex((n) => noteKey(n) === lastSeen)
+    : -1;
+  const unseenCount = seenIdx >= 0 ? seenIdx : visible.length;
 
   function markSeen() {
     if (!storageKey || visible.length === 0) return;
-    const latest = visible.reduce((m, n) => (n.date > m ? n.date : m), '');
-    localStorage.setItem(storageKey, latest);
-    setLastSeen(latest);
+    const top = noteKey(visible[0]);
+    localStorage.setItem(storageKey, top);
+    setLastSeen(top);
   }
 
   function toggle() {
@@ -73,9 +81,9 @@ export function WhatsNew() {
         className="relative rounded-lg px-2 py-1 text-neutral-300 transition hover:bg-neutral-800"
       >
         🔔
-        {unseen.length > 0 && (
+        {unseenCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-brand px-1 text-[9px] font-bold text-white">
-            {unseen.length}
+            {unseenCount}
           </span>
         )}
       </button>
