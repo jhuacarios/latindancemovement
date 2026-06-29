@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.4.1',
+    date: '2026-06-29',
+    module: 'music',
+    type: 'improvement',
+    title: 'Tus sub-estilos en Mis Canciones',
+    description:
+      'Al agregar una canción a Mis Canciones, hereda los sub-estilos del catálogo y pasan a ser tuyos: edítalos a tu gusto sin afectar el catálogo ni a otros DJs. El estilo (Bachata/Salsa) lo administra el equipo.',
+  },
+  {
+    version: '0.4.1',
+    date: '2026-06-29',
+    module: 'music.youtube.playlists',
+    type: 'improvement',
+    title: 'El generador usa tus canciones',
+    description:
+      'El generador automático arma las listas con tu biblioteca (Mis Canciones), respetando el patrón por bloque.',
+  },
+  {
     version: '0.4.0',
     date: '2026-06-29',
     module: 'general',
