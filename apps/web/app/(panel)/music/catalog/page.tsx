@@ -16,7 +16,7 @@ import { PlayButtons } from '@/components/play-buttons';
 import { SearchInput } from '@/components/search-input';
 import { StyleFilter } from '@/components/style-filter';
 import { TrackThumb } from '@/components/track-thumb';
-import { formatDuration } from '@/lib/format';
+import { formatDuration, formatViews } from '@/lib/format';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
@@ -266,6 +266,7 @@ export default function CatalogPage() {
                 <th className="px-4 py-3">Estilo</th>
                 <th className="px-4 py-3">Duración</th>
                 <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
+                <th className="px-4 py-3">Reproducciones</th>
                 <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
                 <th className="px-4 py-3"></th>
               </tr>
@@ -317,6 +318,9 @@ export default function CatalogPage() {
                     {formatDuration(t.durationSec)}
                   </td>
                   <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
+                  <td className="px-4 py-3 tabular-nums text-neutral-400">
+                    {formatViews(t.details?.viewCount)}
+                  </td>
                   <td className="px-4 py-3 text-neutral-400">
                     {new Date(t.createdAt).toLocaleDateString('es-CL')}
                   </td>
@@ -381,7 +385,7 @@ export default function CatalogPage() {
               {data.data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={(selectMode ? 8 : 7) + (showThumb ? 1 : 0)}
+                    colSpan={(selectMode ? 9 : 8) + (showThumb ? 1 : 0)}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
                     El catálogo está vacío.
