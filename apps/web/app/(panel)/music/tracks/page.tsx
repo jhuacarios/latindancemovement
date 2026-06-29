@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -154,6 +154,19 @@ export default function MyTracksPage() {
     setSelectMode(false);
     setSelected(new Set());
   }
+
+  // Pone al día los tags personales (hereda los del catálogo en las canciones
+  // sin tags) para que el filtro por sub-estilos funcione. Idempotente.
+  useEffect(() => {
+    api<{ seeded: number }>('/music/library/backfill-tags', { method: 'POST' })
+      .then((r) => {
+        if (r.seeded > 0) {
+          qc.invalidateQueries({ queryKey: ['library'] });
+          qc.invalidateQueries({ queryKey: ['tags-vocab'] });
+        }
+      })
+      .catch(() => {});
+  }, [qc]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['library', { search, style, substyle, page, sort }],

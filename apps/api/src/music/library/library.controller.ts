@@ -41,6 +41,12 @@ export class LibraryController {
     return this.library.myTrackIds(user.id);
   }
 
+  /** Siembra tags personales (heredados del catálogo) en mis canciones sin tags. */
+  @Post('backfill-tags')
+  backfillTags(@CurrentUser() user: AuthUser) {
+    return this.library.backfillMyTags(user.id);
+  }
+
   /** sourceIds de YouTube ya en mi biblioteca (para ignorar al cargar playlists). */
   @Get('youtube-source-ids')
   youtubeSourceIds(@CurrentUser() user: AuthUser) {

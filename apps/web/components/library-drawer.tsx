@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DanceStyle, Paginated, Tag, Track } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
@@ -33,6 +33,7 @@ export function LibraryDrawer({
   const [style, setStyle] = useState<DanceStyle | ''>('');
   const [substyles, setSubstyles] = useState<string[]>([]);
   const player = usePlayer();
+  const qc = useQueryClient();
   // Distingue click (reproducir) de doble click (agregar): el click espera un
   // pelín por si viene un segundo click.
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,6 +42,23 @@ export function LibraryDrawer({
     const t = setTimeout(() => setDebounced(search.trim()), 250);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Al abrir, pone al día los tags personales (hereda los del catálogo en las
+  // canciones que aún no tienen), para que el filtro por tags funcione. Idempotente.
+  useEffect(() => {
+    let cancelled = false;
+    api<{ seeded: number }>('/music/library/backfill-tags', { method: 'POST' })
+      .then((r) => {
+        if (!cancelled && r.seeded > 0) {
+          qc.invalidateQueries({ queryKey: ['library-drawer'] });
+          qc.invalidateQueries({ queryKey: ['tags-vocab'] });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [qc]);
 
   // Vocabulario de sub-estilos (para los tags activables del estilo elegido).
   const { data: vocab } = useQuery({

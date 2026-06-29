@@ -42,14 +42,25 @@ export class LibraryService {
         ],
       });
     }
-    if (q.substyles?.length) {
+    // El filtro de sub-estilos usa los TAGS PERSONALES del usuario (lo que ve y
+    // edita), no el sub-estilo del catálogo. Si no elige ninguno, no filtra
+    // (vienen todas las del estilo). Los nombres vienen de los chips (vocabulario).
+    const tagNames = q.substyles?.length
+      ? q.substyles
+      : q.substyle
+        ? [q.substyle]
+        : [];
+    if (tagNames.length) {
       and.push({
-        OR: q.substyles.map((s) => ({
-          substyle: { contains: s, mode: 'insensitive' as const },
-        })),
+        trackTags: {
+          some: {
+            userId,
+            OR: tagNames.map((n) => ({
+              tag: { name: { equals: n, mode: 'insensitive' as const } },
+            })),
+          },
+        },
       });
-    } else if (q.substyle) {
-      where.substyle = { contains: q.substyle, mode: 'insensitive' };
     }
     if (and.length) where.AND = and;
 
@@ -151,6 +162,27 @@ export class LibraryService {
       select: { trackId: true },
     });
     return rows.map((r) => r.trackId);
+  }
+
+  /**
+   * Siembra los tags personales a partir del sub-estilo del catálogo para TODAS
+   * mis canciones que aún no tienen tags propios. Idempotente: solo toca las que
+   * no tengo etiquetadas. Sirve para "ponerse al día" con canciones agregadas
+   * antes de que existiera la herencia de tags.
+   */
+  async backfillMyTags(userId: string): Promise<{ seeded: number }> {
+    const tracks = await this.prisma.track.findMany({
+      where: {
+        savedBy: { some: { userId } },
+        substyle: { not: null },
+        trackTags: { none: { userId } },
+      },
+      select: { id: true },
+    });
+    for (const t of tracks) {
+      await this.tags.seedUserTagsFromTrack(t.id, userId);
+    }
+    return { seeded: tracks.length };
   }
 
   /** Agrega una canción del catálogo a mi biblioteca. */
