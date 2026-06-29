@@ -34,11 +34,29 @@ function detectFlags(title: string): { label: string; avoid: boolean }[] {
 const avoidCount = (t: Track) =>
   detectFlags(t.title).filter((f) => f.avoid).length;
 
-/** Mejor candidata por defecto: menos "evitar", y que tenga duración. */
+/** Año de subida a YouTube (de publishedAt). */
+function uploadYear(t: Track): string {
+  const p = t.details?.publishedAt;
+  return p ? String(p).slice(0, 4) : '—';
+}
+
+const views = (t: Track) => Number(t.details?.viewCount ?? 0);
+
+/** Reproducciones compactas: 1.2M, 34K, 980. */
+function fmtViews(t: Track): string {
+  const n = views(t);
+  if (!n) return '—';
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+  return String(n);
+}
+
+/** Mejor candidata por defecto: menos "evitar", más vistas, con duración. */
 function bestDefault(g: DuplicateGroup): Track {
   return [...g.tracks].sort(
     (a, b) =>
       avoidCount(a) - avoidCount(b) ||
+      views(b) - views(a) ||
       (a.durationSec ? 0 : 1) - (b.durationSec ? 0 : 1),
   )[0];
 }
@@ -186,7 +204,8 @@ export function DuplicatesModal({ onClose }: { onClose: () => void }) {
                             {t.title}
                           </div>
                           <div className="flex flex-wrap items-center gap-1 text-[10px] text-neutral-500">
-                            {dur(t.durationSec)} · {t.year ?? '—'}
+                            {dur(t.durationSec)} · subido {uploadYear(t)} · ▶{' '}
+                            {fmtViews(t)}
                             {flags.map((f) => (
                               <span
                                 key={f.label}
