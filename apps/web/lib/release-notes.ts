@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.4.2',
+    date: '2026-06-29',
+    module: 'admin.roles',
+    type: 'fix',
+    title: 'Permisos por sección en música',
+    description:
+      'En la matriz de roles, los permisos de Editar/Eliminar de Mis Canciones y Catálogo ahora controlan de verdad su propia sección (antes mandaba el permiso del módulo). Las playlists son del usuario, así que se gestionan por dueñidad.',
+  },
+  {
     version: '0.4.1',
     date: '2026-06-29',
     module: 'music',
