@@ -436,6 +436,31 @@ function AdminImportExport() {
   const [error, setError] = useState<string | null>(null);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [showSpotify, setShowSpotify] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
+
+  async function onBackfill() {
+    setBackfillMsg(null);
+    setBackfilling(true);
+    try {
+      const res = await api<{ missing: number; updated: number }>(
+        '/music/tracks/backfill-durations',
+        { method: 'POST' },
+      );
+      setBackfillMsg(
+        res.missing === 0
+          ? 'Todas las canciones ya tenían duración.'
+          : `✓ Duraciones completadas: ${res.updated} de ${res.missing}.`,
+      );
+      void qc.invalidateQueries({ queryKey: ['catalog'] });
+    } catch (e) {
+      setBackfillMsg(
+        e instanceof ApiError ? e.message : 'No se pudieron completar.',
+      );
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   async function onFile(file: File) {
     setError(null);
@@ -488,6 +513,14 @@ function AdminImportExport() {
         >
           ⬇ Exportar
         </Button>
+        <Button
+          variant="ghost"
+          disabled={backfilling}
+          onClick={onBackfill}
+          title="Completa la duración faltante de las canciones del catálogo desde YouTube"
+        >
+          {backfilling ? 'Completando…' : '⏱ Completar duraciones'}
+        </Button>
         <Button onClick={() => setShowPlaylist(true)}>
           📺 Importar playlist YouTube
         </Button>
@@ -497,6 +530,9 @@ function AdminImportExport() {
       </div>
 
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+      {backfillMsg && (
+        <p className="mt-3 text-sm text-neutral-300">{backfillMsg}</p>
+      )}
       {result && (
         <p className="mt-3 text-sm text-neutral-300">
           Filas: {result.totalRows} · creadas {result.created} · actualizadas{' '}

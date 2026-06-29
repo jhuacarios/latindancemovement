@@ -385,6 +385,29 @@ export class TracksService {
     return rows.map((r) => r.sourceId);
   }
 
+  /** Canciones de catálogo (YouTube) que no tienen duración guardada. */
+  async catalogMissingDuration(): Promise<{ id: string; sourceId: string }[]> {
+    return this.prisma.track.findMany({
+      where: { scope: 'CATALOG', source: 'YOUTUBE', durationSec: null },
+      select: { id: true, sourceId: true },
+    });
+  }
+
+  /** Aplica duraciones (en segundos) por id de track. */
+  async setDurations(
+    updates: { id: string; durationSec: number }[],
+  ): Promise<number> {
+    let n = 0;
+    for (const u of updates) {
+      await this.prisma.track.update({
+        where: { id: u.id },
+        data: { durationSec: u.durationSec },
+      });
+      n++;
+    }
+    return n;
+  }
+
   async importPlaylistItems(
     items: ExtractedTrackMetadata[],
     defaultStyle: DanceStyle | undefined,

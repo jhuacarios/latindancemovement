@@ -75,6 +75,23 @@ export class TracksController {
     return this.tracks.catalogYoutubeSourceIds();
   }
 
+  /** Completa la duración faltante de las canciones del catálogo desde YouTube. */
+  @Post('backfill-durations')
+  @Roles('SUPER_ADMIN')
+  async backfillDurations() {
+    const missing = await this.tracks.catalogMissingDuration();
+    if (!missing.length) return { missing: 0, updated: 0 };
+    const metas = await this.youtube.fetchByIds(missing.map((m) => m.sourceId));
+    const bySource = new Map(metas.map((m) => [m.sourceId, m.durationSec]));
+    const updates = missing
+      .map((m) => ({ id: m.id, durationSec: bySource.get(m.sourceId) ?? null }))
+      .filter(
+        (u): u is { id: string; durationSec: number } => u.durationSec != null,
+      );
+    const updated = await this.tracks.setDurations(updates);
+    return { missing: missing.length, updated };
+  }
+
   /** Descarga una plantilla .xlsx para importar canciones. */
   @Get('template.xlsx')
   async template(@Res() reply: FastifyReply) {
