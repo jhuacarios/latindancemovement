@@ -133,6 +133,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [qc],
   );
 
+  // Reserva espacio al final del contenido cuando la barra de audio está visible,
+  // para que no tape las últimas filas (en cualquier sección de la app).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--player-bar-h', audio ? '5.5rem' : '0px');
+    return () => root.style.setProperty('--player-bar-h', '0px');
+  }, [audio]);
+
   const cur = audio ?? video;
   const playingKey = cur ? `${cur.source}:${cur.sourceId}` : null;
 

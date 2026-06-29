@@ -15,6 +15,7 @@ import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-mod
 import { LibraryDrawer } from '@/components/library-drawer';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
+import { formatDuration } from '@/lib/format';
 import { useLayoutUI } from '@/lib/layout-ui';
 
 type DropSide = { id: string; side: 'before' | 'after' } | null;
@@ -198,7 +199,15 @@ export default function PlaylistDetailPage() {
             <div>
               <h1 className="text-2xl font-bold">{data.name}</h1>
               <p className="text-sm text-neutral-400">
-                {items.length} canciones
+                {items.length} canciones ·{' '}
+                <span className="text-amber-300">
+                  {items.filter((i) => i.track?.style === 'BACHATA').length}{' '}
+                  bachatas
+                </span>{' '}
+                /{' '}
+                <span className="text-red-300">
+                  {items.filter((i) => i.track?.style === 'SALSA').length} salsas
+                </span>
                 {data.targetBachataPct != null &&
                   ` · mix objetivo ${data.targetBachataPct}% bachata`}
               </p>
@@ -271,6 +280,8 @@ export default function PlaylistDetailPage() {
                   <th className="px-4 py-3">Título</th>
                   <th className="px-4 py-3">Artista</th>
                   <th className="px-4 py-3">Estilo</th>
+                  <th className="px-4 py-3">Duración</th>
+                  <th className="px-4 py-3">Año</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -326,7 +337,33 @@ export default function PlaylistDetailPage() {
                       {item.track?.artist ?? '—'}
                     </td>
                     <td className="px-4 py-3">
-                      {item.track && <StyleBadge style={item.track.style} />}
+                      {item.track && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          <StyleBadge style={item.track.style} />
+                          {item.track.substyles?.map((s) => (
+                            <span
+                              key={s}
+                              className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                            >
+                              {s}
+                            </span>
+                          ))}
+                          {item.track.tags?.map((tag) => (
+                            <span
+                              key={tag.id}
+                              className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
+                            >
+                              {tag.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-neutral-400">
+                      {formatDuration(item.track?.durationSec)}
+                    </td>
+                    <td className="px-4 py-3 text-neutral-400">
+                      {item.track?.year ?? '—'}
                     </td>
                     <td
                       className="px-4 py-3 text-right"
@@ -351,7 +388,7 @@ export default function PlaylistDetailPage() {
                 {items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={8}
                       onDragOver={(e) => externalDragId && e.preventDefault()}
                       onDrop={(e) => {
                         if (!externalDragId) return;

@@ -183,7 +183,12 @@ export default function PanelLayout({
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-6">
+        <main
+          className="flex-1 overflow-auto p-6"
+          style={{
+            paddingBottom: 'calc(1.5rem + var(--player-bar-h, 0px))',
+          }}
+        >
           {blocked ? (
             <Card className="mx-auto mt-10 max-w-md text-center">
               <div className="mb-2 text-4xl">🚫</div>
