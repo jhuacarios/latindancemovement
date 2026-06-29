@@ -251,6 +251,13 @@ export interface ExcelImportResult {
   errors: { row: number; reason: string }[];
 }
 
+/** Un grupo de canciones del catálogo detectadas como posibles duplicadas. */
+export interface DuplicateGroup {
+  /** Clave normalizada (artista + título) que las agrupó. */
+  key: string;
+  tracks: Track[];
+}
+
 /** Datos resumidos de un track de Spotify (para el matching con YouTube). */
 export interface SpotifyTrackBrief {
   title: string;

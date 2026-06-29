@@ -8,6 +8,7 @@ import type { Prisma } from '@prisma/client';
 import { DANCE_STYLES } from '@baile-latino/types';
 import type {
   DanceStyle,
+  DuplicateGroup,
   ExtractedTrackMetadata,
   ImportResult,
   Paginated,
@@ -21,6 +22,23 @@ import { toPublicTrack } from '../mappers';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { QueryTracksDto } from './dto/query-tracks.dto';
+
+/** Adornos típicos a ignorar al detectar duplicados (incluye "en vivo", "demo"). */
+const DUP_NOISE =
+  /\b(official|oficial|video|videoclip|audio|lyric|lyrics|letra|hd|hq|4k|8k|mv|en\s*vivo|live|directo|concierto|remaster\w*|remasterizad\w*|version|cover|demo|visualizer|extended|radio\s*edit)\b/g;
+
+/** Normaliza título/artista para comparar duplicados (sin acentos, adornos, etc.). */
+function normForDup(s: string | null | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ') // (...) [...]
+    .replace(DUP_NOISE, ' ')
+    .replace(/\b(feat|ft|featuring)\b.*$/, ' ') // artistas invitados
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 
 @Injectable()
 export class TracksService {
@@ -406,6 +424,87 @@ export class TracksService {
       n++;
     }
     return n;
+  }
+
+  /**
+   * Agrupa canciones del catálogo que parecen la misma (mismo título+artista
+   * normalizado, ignorando adornos como "official video", "en vivo", "demo",
+   * etc.). Devuelve solo los grupos con 2+ candidatas, para que el admin elija
+   * cuál conservar.
+   */
+  async findDuplicateGroups(): Promise<DuplicateGroup[]> {
+    const rows = await this.prisma.track.findMany({
+      where: { scope: 'CATALOG' },
+      orderBy: { createdAt: 'asc' },
+    });
+    const groups = new Map<string, typeof rows>();
+    for (const t of rows) {
+      const titleKey = normForDup(t.title);
+      if (!titleKey) continue; // título sin contenido tras limpiar
+      const key = `${normForDup(t.artist)}|${titleKey}`;
+      const arr = groups.get(key);
+      if (arr) arr.push(t);
+      else groups.set(key, [t]);
+    }
+    return [...groups.entries()]
+      .filter(([, g]) => g.length > 1)
+      .map(([key, g]) => ({ key, tracks: g.map(toPublicTrack) }));
+  }
+
+  /**
+   * Conserva `keepId` y elimina `removeIds`, **reasignando** sus referencias
+   * (bibliotecas y playlists) a la que se queda, para no perder la canción de
+   * ningún lado. El resto (tags, solicitudes) se borra en cascada.
+   */
+  async mergeDuplicates(
+    keepId: string,
+    removeIds: string[],
+  ): Promise<{ kept: string; removed: number }> {
+    await this.ensureExists(keepId);
+    const ids = removeIds.filter((r) => r && r !== keepId);
+    for (const rid of ids) {
+      await this.prisma.$transaction(async (tx) => {
+        // Playlists: mover a keep, evitando duplicar en la misma playlist.
+        const items = await tx.playlistItem.findMany({
+          where: { trackId: rid },
+          select: { id: true, playlistId: true },
+        });
+        for (const it of items) {
+          const exists = await tx.playlistItem.findFirst({
+            where: { playlistId: it.playlistId, trackId: keepId },
+            select: { id: true },
+          });
+          if (exists) await tx.playlistItem.delete({ where: { id: it.id } });
+          else
+            await tx.playlistItem.update({
+              where: { id: it.id },
+              data: { trackId: keepId },
+            });
+        }
+        // Bibliotecas (Mis Canciones): igual.
+        const uts = await tx.userTrack.findMany({
+          where: { trackId: rid },
+          select: { userId: true },
+        });
+        for (const ut of uts) {
+          const exists = await tx.userTrack.findUnique({
+            where: { userId_trackId: { userId: ut.userId, trackId: keepId } },
+            select: { userId: true },
+          });
+          if (exists)
+            await tx.userTrack.deleteMany({
+              where: { userId: ut.userId, trackId: rid },
+            });
+          else
+            await tx.userTrack.updateMany({
+              where: { userId: ut.userId, trackId: rid },
+              data: { trackId: keepId },
+            });
+        }
+        await tx.track.delete({ where: { id: rid } });
+      });
+    }
+    return { kept: keepId, removed: ids.length };
   }
 
   async importPlaylistItems(

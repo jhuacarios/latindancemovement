@@ -28,6 +28,7 @@ import { QueryTracksDto } from './dto/query-tracks.dto';
 import { ImportTracksDto } from './dto/import-tracks.dto';
 import { ImportPlaylistDto, PlaylistPreviewDto } from './dto/playlist.dto';
 import { SpotifyImportDto, SpotifyPreviewDto } from './dto/spotify-import.dto';
+import { MergeTracksDto } from './dto/merge-tracks.dto';
 import { SpotifyMatchService } from './spotify-match.service';
 
 @Controller('music/tracks')
@@ -73,6 +74,20 @@ export class TracksController {
   @Roles('SUPER_ADMIN')
   catalogYoutubeIds() {
     return this.tracks.catalogYoutubeSourceIds();
+  }
+
+  /** Grupos de posibles canciones duplicadas en el catálogo. */
+  @Get('duplicates')
+  @Roles('SUPER_ADMIN')
+  duplicates() {
+    return this.tracks.findDuplicateGroups();
+  }
+
+  /** Conserva una y elimina las duplicadas (reasignando sus referencias). */
+  @Post('merge')
+  @Roles('SUPER_ADMIN')
+  merge(@Body() dto: MergeTracksDto) {
+    return this.tracks.mergeDuplicates(dto.keepId, dto.removeIds);
   }
 
   /** Completa la duración faltante de las canciones del catálogo desde YouTube. */

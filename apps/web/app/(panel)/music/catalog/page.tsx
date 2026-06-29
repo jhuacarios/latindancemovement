@@ -24,6 +24,7 @@ import { SubstyleFilterSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import { PlaylistImportModal } from '@/components/playlist-import-modal';
 import { SpotifyImportModal } from '@/components/spotify-import-modal';
+import { DuplicatesModal } from '@/components/duplicates-modal';
 import {
   ConfirmDialog,
   type ConfirmOptions,
@@ -436,6 +437,7 @@ function AdminImportExport() {
   const [error, setError] = useState<string | null>(null);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [showSpotify, setShowSpotify] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
@@ -521,6 +523,9 @@ function AdminImportExport() {
         >
           {backfilling ? 'Completando…' : '⏱ Completar duraciones'}
         </Button>
+        <Button variant="ghost" onClick={() => setShowDuplicates(true)}>
+          🔎 Buscar duplicados
+        </Button>
         <Button onClick={() => setShowPlaylist(true)}>
           📺 Importar playlist YouTube
         </Button>
@@ -545,6 +550,9 @@ function AdminImportExport() {
       )}
       {showSpotify && (
         <SpotifyImportModal onClose={() => setShowSpotify(false)} />
+      )}
+      {showDuplicates && (
+        <DuplicatesModal onClose={() => setShowDuplicates(false)} />
       )}
     </Card>
   );
