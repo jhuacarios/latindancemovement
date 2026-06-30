@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.4.6',
+    date: '2026-06-30',
+    module: 'music.youtube.playlists',
+    type: 'feature',
+    title: 'Cambiar la distribución de una playlist',
+    description:
+      'Nuevo botón "Cambiar distribución" para ajustar cuántas bachatas y salsas por bloque. Reordena las canciones al nuevo patrón manteniendo el orden actual de cada estilo (sin barajar).',
+  },
+  {
     version: '0.4.5',
     date: '2026-06-29',
     module: 'music.youtube.playlists',
