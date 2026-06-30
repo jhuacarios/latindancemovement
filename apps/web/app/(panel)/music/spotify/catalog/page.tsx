@@ -1,5 +1,7 @@
-import { SpotifyPlaceholder } from '@/components/spotify-placeholder';
+'use client';
+
+import { MusicCatalogView } from '@/components/music-catalog-view';
 
 export default function SpotifyCatalogPage() {
-  return <SpotifyPlaceholder section="Catálogo" />;
+  return <MusicCatalogView source="SPOTIFY" />;
 }
