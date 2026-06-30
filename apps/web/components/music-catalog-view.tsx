@@ -24,6 +24,7 @@ import { SubstyleFilterSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import { PlaylistImportModal } from '@/components/playlist-import-modal';
 import { SpotifyImportModal } from '@/components/spotify-import-modal';
+import { SpotifyCatalogImportModal } from '@/components/spotify-catalog-import-modal';
 import { DuplicatesModal } from '@/components/duplicates-modal';
 import {
   ConfirmDialog,
@@ -66,6 +67,7 @@ export function MusicCatalogView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showThumb, toggleThumb] = useThumbs();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const [showSpotifyImport, setShowSpotifyImport] = useState(false);
 
   const onSort = (col: string, primary: 'asc' | 'desc') => {
     setSort((s) => nextSort(s, col, primary));
@@ -232,13 +234,18 @@ export function MusicCatalogView({
 
       {isAdmin &&
         (isSpotify ? (
-          <Card className="text-sm text-neutral-400">
-            <span className="font-semibold text-neutral-200">
-              Gestión del catálogo de Spotify:
-            </span>{' '}
-            agrega canciones con “+ Nueva canción al catálogo” pegando su link de
-            Spotify. La importación masiva de playlists de Spotify a este catálogo
-            llegará pronto.
+          <Card>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="mr-2 text-sm font-semibold">
+                Gestión del catálogo de Spotify:
+              </span>
+              <Button onClick={() => setShowSpotifyImport(true)}>
+                🟢 Importar playlist Spotify
+              </Button>
+              <span className="text-xs text-neutral-500">
+                o agrega una por “+ Nueva canción al catálogo” con su link.
+              </span>
+            </div>
           </Card>
         ) : (
           <AdminImportExport />
@@ -474,6 +481,10 @@ export function MusicCatalogView({
             void qc.invalidateQueries({ queryKey: ['library'] });
           }}
         />
+      )}
+
+      {showSpotifyImport && (
+        <SpotifyCatalogImportModal onClose={() => setShowSpotifyImport(false)} />
       )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />

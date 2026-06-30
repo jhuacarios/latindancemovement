@@ -29,6 +29,7 @@ import { ImportTracksDto } from './dto/import-tracks.dto';
 import { ImportPlaylistDto, PlaylistPreviewDto } from './dto/playlist.dto';
 import { SpotifyImportDto, SpotifyPreviewDto } from './dto/spotify-import.dto';
 import { MergeTracksDto } from './dto/merge-tracks.dto';
+import { SpotifyCatalogImportDto } from './dto/spotify-catalog-import.dto';
 import { SpotifyMatchService } from './spotify-match.service';
 import { SpotifyService } from './spotify.service';
 
@@ -193,6 +194,34 @@ export class TracksController {
       dto.selections.map((s) => [s.sourceId, s.style]),
     );
     return this.tracks.importPlaylistItems(items, undefined, user.id, overrides);
+  }
+
+  /** sourceIds de Spotify ya en el catálogo (para ignorar al importar). */
+  @Get('catalog-spotify-ids')
+  @Roles('SUPER_ADMIN')
+  catalogSpotifyIds() {
+    return this.tracks.catalogSpotifySourceIds();
+  }
+
+  /** Resuelve una playlist de Spotify a tracks reales de Spotify (no guarda). */
+  @Post('spotify-catalog-preview')
+  @Roles('SUPER_ADMIN')
+  spotifyCatalogPreview(@Body() dto: PlaylistPreviewDto) {
+    return this.spotify.getPlaylistResolved(dto.link);
+  }
+
+  /** Importa al catálogo (como tracks Spotify) las canciones elegidas. */
+  @Post('spotify-catalog-import')
+  @Roles('SUPER_ADMIN')
+  spotifyCatalogImport(
+    @Body() dto: SpotifyCatalogImportDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tracks.importSpotifyToCatalog(
+      dto.items,
+      dto.overrides,
+      user.id,
+    );
   }
 
   @Get(':id')

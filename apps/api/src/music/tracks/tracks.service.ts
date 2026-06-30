@@ -431,6 +431,70 @@ export class TracksService {
     return rows.map((r) => r.sourceId);
   }
 
+  /** sourceIds de Spotify ya en el catálogo (para ignorar al importar). */
+  async catalogSpotifySourceIds(): Promise<string[]> {
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'SPOTIFY', scope: 'CATALOG' },
+      select: { sourceId: true },
+    });
+    return rows.map((r) => r.sourceId);
+  }
+
+  /**
+   * Importa al catálogo (como tracks SPOTIFY) las canciones ya resueltas de una
+   * playlist de Spotify. El estilo sale de lo detectado o del override elegido;
+   * las que queden sin estilo se omiten. No pisa la curación de las existentes.
+   */
+  async importSpotifyToCatalog(
+    items: {
+      sourceId: string;
+      title: string;
+      artist?: string | null;
+      durationSec?: number | null;
+      year?: number | null;
+      coverUrl?: string | null;
+      detectedStyle?: DanceStyle | null;
+    }[],
+    overrides: Record<string, DanceStyle> | undefined,
+    userId: string,
+  ): Promise<PlaylistImportResult> {
+    let created = 0;
+    let updated = 0;
+    const errors: string[] = [];
+    for (const it of items) {
+      try {
+        const override = overrides?.[it.sourceId];
+        const style: DanceStyle | undefined =
+          override && DANCE_STYLES.includes(override)
+            ? override
+            : (it.detectedStyle ?? undefined);
+        if (!style) {
+          errors.push(`${it.title}: sin estilo, no importada`);
+          continue;
+        }
+        const res = await this.upsertCatalog(
+          {
+            title: it.title,
+            artist: it.artist ?? 'Desconocido',
+            style,
+            source: 'SPOTIFY',
+            sourceId: it.sourceId,
+            year: it.year ?? undefined,
+            coverUrl: it.coverUrl ?? undefined,
+            durationSec: it.durationSec ?? undefined,
+          },
+          userId,
+          { fillEmptyOnly: true },
+        );
+        if (res.created) created++;
+        else updated++;
+      } catch (e) {
+        errors.push(`${it.title}: ${e instanceof Error ? e.message : 'error'}`);
+      }
+    }
+    return { total: items.length, created, updated, errors };
+  }
+
   /** Canciones de catálogo (YouTube) que no tienen duración guardada. */
   async catalogMissingDuration(): Promise<{ id: string; sourceId: string }[]> {
     return this.prisma.track.findMany({

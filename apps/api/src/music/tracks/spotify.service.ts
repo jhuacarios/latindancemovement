@@ -15,6 +15,20 @@ export interface SpotifyTrackInfo {
   isrc: string | null;
 }
 
+/** Track resuelto de una playlist de Spotify (para importar al catálogo Spotify). */
+export interface SpotifyResolvedTrack {
+  source: 'SPOTIFY';
+  sourceId: string;
+  url: string;
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+  coverUrl: string | null;
+  detectedStyle: DanceStyle | null;
+  detectedSubstyle: DanceSubstyle | null;
+}
+
 /** Metadata de un track de Spotify para autocompletar al agregarlo. */
 export interface SpotifyTrackMeta {
   source: 'SPOTIFY';
@@ -142,6 +156,65 @@ export class SpotifyService {
       detectedStyle: guess.style,
       detectedSubstyle: guess.substyle,
     };
+  }
+
+  /**
+   * Lee una playlist pública de Spotify y resuelve cada canción a su track real
+   * de Spotify (id, carátula, año, estilo). El embed da título/artista pero no
+   * los IDs, así que cada canción se busca en la Web API (mejor coincidencia).
+   * Deduplica por sourceId. Para importar una playlist al catálogo de Spotify.
+   */
+  async getPlaylistResolved(link: string): Promise<SpotifyResolvedTrack[]> {
+    if (!this.enabled) {
+      throw new BadRequestException('Spotify no está configurado en el servidor.');
+    }
+    const embed = await this.getPlaylistTracks(link);
+    const token = await this.getToken();
+    const out: SpotifyResolvedTrack[] = [];
+    const seen = new Set<string>();
+    for (const e of embed) {
+      try {
+        const q = encodeURIComponent(
+          [e.title, e.artist].filter(Boolean).join(' '),
+        );
+        const res = await fetch(
+          `https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) {
+          if (res.status === 401) this.token = null;
+          continue;
+        }
+        const t = ((await res.json()) as any).tracks?.items?.[0];
+        if (!t?.id || seen.has(t.id)) continue;
+        seen.add(t.id);
+        let guess: StyleGuess = { style: null, substyle: null };
+        const artistId: string | undefined = t.artists?.[0]?.id;
+        if (artistId) {
+          const genres = await this.genresForArtist(artistId, token);
+          if (genres.length) guess = mapGenresToStyle(genres);
+        }
+        out.push({
+          source: 'SPOTIFY',
+          sourceId: t.id,
+          url: `https://open.spotify.com/track/${t.id}`,
+          title: t.name ?? e.title,
+          artist:
+            (t.artists ?? []).map((a: any) => a.name).filter(Boolean).join(', ') ||
+            e.artist,
+          durationSec: t.duration_ms
+            ? Math.round(t.duration_ms / 1000)
+            : e.durationSec,
+          year: parseYear(t.album?.release_date) ?? e.year,
+          coverUrl: t.album?.images?.[0]?.url ?? null,
+          detectedStyle: guess.style,
+          detectedSubstyle: guess.substyle,
+        });
+      } catch {
+        /* salta esta canción */
+      }
+    }
+    return out;
   }
 
   /**
