@@ -55,6 +55,12 @@ export class QueryTracksDto {
   @IsBoolean()
   isRelease?: boolean;
 
+  /** Excluye del catálogo las canciones que ya están en Mi biblioteca. */
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  excludeMine?: boolean;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

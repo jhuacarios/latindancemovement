@@ -146,6 +146,8 @@ export class TracksService {
     if (q.substyle)
       where.substyle = { contains: q.substyle, mode: 'insensitive' };
     if (q.source) where.source = q.source;
+    // Excluye lo que ya tengo en Mi biblioteca (para el modo "Catálogo").
+    if (q.excludeMine && userId) where.savedBy = { none: { userId } };
     if (q.approvalStatus) where.approvalStatus = q.approvalStatus;
     if (q.isRelease !== undefined) where.isRelease = q.isRelease;
     if (q.search) {

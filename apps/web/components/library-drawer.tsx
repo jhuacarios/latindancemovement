@@ -98,20 +98,19 @@ export function LibraryDrawer({
         if (substyles.length) p.set('substyles', substyles.join(','));
         return api<Paginated<Track>>(`/music/library?${p.toString()}`);
       }
-      // Catálogo global: filtra por sub-estilo del catálogo (uno).
+      // Catálogo global: filtra por sub-estilo del catálogo (uno) y excluye en
+      // el servidor lo que ya está en Mi biblioteca (paginación correcta).
       if (substyles.length) p.set('substyle', substyles[0]);
+      p.set('excludeMine', 'true');
       return api<Paginated<Track>>(`/music/tracks?${p.toString()}`);
     },
   });
 
-  // Excluye las que ya están en la playlist y, en modo catálogo, también las que
-  // ya están en Mis Canciones (esas se ven desde la pestaña Mis Canciones).
+  // Excluye las que ya están en la playlist. (En modo catálogo, las que ya están
+  // en Mi biblioteca las excluye el servidor con excludeMine.)
   const items = useMemo(
-    () =>
-      (data?.data ?? []).filter(
-        (t) => !excludeTrackIds.has(t.id) && !(fromCatalog && t.inLibrary),
-      ),
-    [data, excludeTrackIds, fromCatalog],
+    () => (data?.data ?? []).filter((t) => !excludeTrackIds.has(t.id)),
+    [data, excludeTrackIds],
   );
 
   return (
@@ -222,7 +221,9 @@ export function LibraryDrawer({
           <p className="px-1 py-4 text-center text-xs text-neutral-500">
             {debounced
               ? 'Sin resultados.'
-              : 'No hay canciones disponibles para agregar.'}
+              : fromCatalog
+                ? 'Ya tienes en Mis Canciones todo el catálogo con estos filtros.'
+                : 'No hay canciones disponibles para agregar.'}
           </p>
         )}
         <div className="flex flex-col gap-1">
