@@ -56,7 +56,8 @@ export const MODULES: AppModule[] = [
         children: [
           { label: 'Mis Canciones', key: 'music.spotify.tracks', href: '/music/spotify/tracks' },
           { label: 'Catálogo', key: 'music.spotify.catalog', href: '/music/spotify/catalog' },
-          { label: 'Playlists', key: 'music.spotify.playlists', href: '/music/spotify/playlists' },
+          { label: 'Playlists Internas', key: 'music.spotify.internalplaylists', href: '/music/playlists' },
+          { label: 'Playlists Spotify', key: 'music.spotify.playlists', href: '/music/spotify/playlists' },
         ],
       },
       { label: 'Reportes', key: 'music.reportes', href: '/music/reports' },
