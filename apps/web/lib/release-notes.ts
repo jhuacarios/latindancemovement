@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.4.7',
+    date: '2026-06-30',
+    module: 'music.youtube.playlists',
+    type: 'feature',
+    title: 'Agregar al armar la playlist desde el catálogo',
+    description:
+      'El panel de "Agregar canciones" ahora tiene un selector Mis Canciones / Catálogo. En Catálogo ves solo lo que aún no tienes (lo demás se filtra solo), y al agregar una también queda en Mis Canciones.',
+  },
+  {
+    version: '0.4.7',
+    date: '2026-06-30',
+    module: 'music.youtube.playlists',
+    type: 'improvement',
+    title: 'Reproducciones en el detalle de la playlist',
+    description:
+      'La tabla de una playlist ahora muestra la columna Reproducciones de cada canción.',
+  },
+  {
     version: '0.4.6',
     date: '2026-06-30',
     module: 'music.youtube.playlists',
