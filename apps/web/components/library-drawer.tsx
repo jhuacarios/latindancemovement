@@ -104,9 +104,14 @@ export function LibraryDrawer({
     },
   });
 
+  // Excluye las que ya están en la playlist y, en modo catálogo, también las que
+  // ya están en Mis Canciones (esas se ven desde la pestaña Mis Canciones).
   const items = useMemo(
-    () => (data?.data ?? []).filter((t) => !excludeTrackIds.has(t.id)),
-    [data, excludeTrackIds],
+    () =>
+      (data?.data ?? []).filter(
+        (t) => !excludeTrackIds.has(t.id) && !(fromCatalog && t.inLibrary),
+      ),
+    [data, excludeTrackIds, fromCatalog],
   );
 
   return (
@@ -131,6 +136,11 @@ export function LibraryDrawer({
               key={s}
               type="button"
               onClick={() => setSource(s)}
+              title={
+                s === 'mine'
+                  ? 'Las canciones de tu biblioteca (Mis Canciones).'
+                  : 'Canciones del catálogo que aún no tienes en Mis Canciones. Al agregar una, también se suma a Mis Canciones.'
+              }
               className={clsx(
                 'rounded-md py-1 text-xs font-medium transition',
                 source === s
@@ -259,14 +269,6 @@ export function LibraryDrawer({
                     {t.artist}
                   </div>
                 </div>
-                {fromCatalog && t.inLibrary && (
-                  <span
-                    title="Ya está en Mis Canciones"
-                    className="shrink-0 text-[11px] text-brand"
-                  >
-                    ✓
-                  </span>
-                )}
                 <StyleBadge style={t.style} />
               </div>
             );
