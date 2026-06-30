@@ -1,5 +1,5 @@
 import { SpotifyPlaceholder } from '@/components/spotify-placeholder';
 
 export default function SpotifyPlaylistsPage() {
-  return <SpotifyPlaceholder section="Playlists" />;
+  return <SpotifyPlaceholder section="Playlists Spotify" />;
 }
