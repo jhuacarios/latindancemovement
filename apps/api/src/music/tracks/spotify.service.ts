@@ -15,6 +15,20 @@ export interface SpotifyTrackInfo {
   isrc: string | null;
 }
 
+/** Metadata de un track de Spotify para autocompletar al agregarlo. */
+export interface SpotifyTrackMeta {
+  source: 'SPOTIFY';
+  sourceId: string;
+  url: string;
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+  coverUrl: string | null;
+  detectedStyle: DanceStyle | null;
+  detectedSubstyle: DanceSubstyle | null;
+}
+
 /** Resultado de buscar un track en Spotify: estilo inferido + año real del álbum. */
 export interface SpotifyMatch {
   style: DanceStyle | null;
@@ -80,6 +94,54 @@ export class SpotifyService {
       );
       return null;
     }
+  }
+
+  /**
+   * Lee la metadata de un track de Spotify por su link (para autocompletar al
+   * agregar a Mis Canciones / Catálogo). `GET /v1/tracks/{id}` SÍ funciona con
+   * token client-credentials (a diferencia de las playlists). Incluye estilo
+   * inferido por los géneros del artista.
+   */
+  async getTrackByLink(link: string): Promise<SpotifyTrackMeta> {
+    if (!this.enabled) {
+      throw new BadRequestException('Spotify no está configurado en el servidor.');
+    }
+    const id = parseTrackId(link);
+    if (!id) {
+      throw new BadRequestException(
+        'No se reconoció un track de Spotify en el link.',
+      );
+    }
+    const token = await this.getToken();
+    const res = await fetch(`https://api.spotify.com/v1/tracks/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      if (res.status === 401) this.token = null;
+      throw new BadRequestException('No se pudo leer el track de Spotify.');
+    }
+    const t = (await res.json()) as any;
+    const artist: string | null =
+      (t.artists ?? []).map((a: any) => a.name).filter(Boolean).join(', ') ||
+      null;
+    let guess: StyleGuess = { style: null, substyle: null };
+    const artistId: string | undefined = t.artists?.[0]?.id;
+    if (artistId) {
+      const genres = await this.genresForArtist(artistId, token);
+      if (genres.length) guess = mapGenresToStyle(genres);
+    }
+    return {
+      source: 'SPOTIFY',
+      sourceId: id,
+      url: `https://open.spotify.com/track/${id}`,
+      title: t.name ?? '',
+      artist,
+      durationSec: t.duration_ms ? Math.round(t.duration_ms / 1000) : null,
+      year: parseYear(t.album?.release_date),
+      coverUrl: t.album?.images?.[0]?.url ?? null,
+      detectedStyle: guess.style,
+      detectedSubstyle: guess.substyle,
+    };
   }
 
   /**
@@ -183,6 +245,12 @@ export class SpotifyService {
 /** Extrae el id de una playlist de Spotify (link web o URI). */
 function parsePlaylistId(link: string): string | null {
   const m = link.match(/playlist[/:]([a-zA-Z0-9]+)/);
+  return m ? m[1] : null;
+}
+
+/** Extrae el id de un track de Spotify (link web o URI). */
+function parseTrackId(link: string): string | null {
+  const m = link.match(/track[/:]([A-Za-z0-9]+)/);
   return m ? m[1] : null;
 }
 

@@ -96,9 +96,13 @@ export class LibraryService {
     return { data, total, page, pageSize };
   }
 
-  /** Cuenta toda mi biblioteca por estilo (ignora filtros de la lista). */
-  async summary(userId: string): Promise<LibrarySummary> {
-    const base = { savedBy: { some: { userId } } } as const;
+  /** Cuenta mi biblioteca por estilo (opcionalmente filtrada por fuente). */
+  async summary(
+    userId: string,
+    source?: 'YOUTUBE' | 'SPOTIFY',
+  ): Promise<LibrarySummary> {
+    const base: Prisma.TrackWhereInput = { savedBy: { some: { userId } } };
+    if (source) base.source = source;
     const [bachata, salsa] = await this.prisma.$transaction([
       this.prisma.track.count({ where: { ...base, style: 'BACHATA' } }),
       this.prisma.track.count({ where: { ...base, style: 'SALSA' } }),

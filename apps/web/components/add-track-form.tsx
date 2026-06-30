@@ -22,6 +22,16 @@ export interface NewTrackBody {
   ytMetadata?: string;
 }
 
+/** Respuesta de /music/tracks/spotify-metadata (autocompletar desde Spotify). */
+interface SpotifyMetaResp {
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+  coverUrl: string | null;
+  detectedStyle: DanceStyle | null;
+}
+
 /**
  * Formulario para agregar una canción pegando un link (con autocompletar
  * desde YouTube). El padre decide qué hacer con el body (catálogo o personal).
@@ -29,14 +39,23 @@ export interface NewTrackBody {
 export function AddTrackForm({
   title,
   submitLabel,
+  source = 'YOUTUBE',
   onCreate,
   onDone,
 }: {
   title: string;
   submitLabel: string;
+  /** Fuente del formulario: solo acepta links de esa plataforma. */
+  source?: 'YOUTUBE' | 'SPOTIFY';
   onCreate: (body: NewTrackBody) => Promise<unknown>;
   onDone: () => void;
 }) {
+  const isSpotify = source === 'SPOTIFY';
+  const platformName = isSpotify ? 'Spotify' : 'YouTube';
+  const matchesSource = (l: string) =>
+    isSpotify
+      ? /open\.spotify\.com|spotify:track/.test(l)
+      : /youtu\.?be|youtube\.com/.test(l);
   const [form, setForm] = useState({
     title: '',
     artist: '',
@@ -53,16 +72,41 @@ export function AddTrackForm({
   const [saving, setSaving] = useState(false);
 
   async function autofill() {
-    if (!form.link.trim()) {
-      setErr('Pega primero un link de YouTube.');
+    const link = form.link.trim();
+    if (!link) {
+      setErr(`Pega primero un link de ${platformName}.`);
+      return;
+    }
+    if (!matchesSource(link)) {
+      setErr(`Este formulario es de ${platformName}: pega un link de ${platformName}.`);
       return;
     }
     setErr(null);
     setInfo(null);
     setFetching(true);
     try {
+      if (isSpotify) {
+        // Metadata vía la Web API de Spotify (sin ytMetadata).
+        const m = await api<SpotifyMetaResp>(
+          `/music/tracks/spotify-metadata?link=${encodeURIComponent(link)}`,
+        );
+        setForm((f) => ({
+          ...f,
+          title: m.title || f.title,
+          artist: m.artist ?? f.artist,
+          style: m.detectedStyle ?? f.style,
+          year: m.year ? String(m.year) : f.year,
+          coverUrl: m.coverUrl ?? f.coverUrl,
+        }));
+        setYtDetails(null);
+        const parts: string[] = ['Spotify'];
+        if (m.detectedStyle) parts.push(`estilo: ${m.detectedStyle}`);
+        if (m.durationSec) parts.push(`${Math.round(m.durationSec / 60)} min`);
+        setInfo(`✓ Autocompletado (${parts.join(' · ')}). Revisa y guarda.`);
+        return;
+      }
       const m = await api<ExtractedTrackMetadata>(
-        `/music/tracks/metadata?link=${encodeURIComponent(form.link)}`,
+        `/music/tracks/metadata?link=${encodeURIComponent(link)}`,
       );
       setForm((f) => ({
         ...f,
@@ -90,6 +134,10 @@ export function AddTrackForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    if (!matchesSource(form.link.trim())) {
+      setErr(`Pega un link de ${platformName}.`);
+      return;
+    }
     if (!form.style) {
       setErr('Elige un estilo.');
       return;
@@ -120,11 +168,15 @@ export function AddTrackForm({
       <form className="grid grid-cols-1 gap-3 md:grid-cols-2" onSubmit={submit}>
         <div className="md:col-span-2">
           <label className="mb-1 block text-xs text-neutral-400">
-            Pega un link de YouTube y autocompleta los datos
+            Pega un link de {platformName} y autocompleta los datos
           </label>
           <div className="flex gap-2">
             <Input
-              placeholder="https://youtu.be/… *"
+              placeholder={
+                isSpotify
+                  ? 'https://open.spotify.com/track/… *'
+                  : 'https://youtu.be/… *'
+              }
               required
               value={form.link}
               onChange={(e) => setForm({ ...form, link: e.target.value })}

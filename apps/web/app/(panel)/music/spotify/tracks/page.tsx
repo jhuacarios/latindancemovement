@@ -1,5 +1,7 @@
-import { SpotifyPlaceholder } from '@/components/spotify-placeholder';
+'use client';
+
+import { MusicLibraryView } from '@/components/music-library-view';
 
 export default function SpotifyTracksPage() {
-  return <SpotifyPlaceholder section="Canciones" />;
+  return <MusicLibraryView source="SPOTIFY" />;
 }

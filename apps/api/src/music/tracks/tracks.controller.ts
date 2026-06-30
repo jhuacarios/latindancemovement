@@ -30,6 +30,7 @@ import { ImportPlaylistDto, PlaylistPreviewDto } from './dto/playlist.dto';
 import { SpotifyImportDto, SpotifyPreviewDto } from './dto/spotify-import.dto';
 import { MergeTracksDto } from './dto/merge-tracks.dto';
 import { SpotifyMatchService } from './spotify-match.service';
+import { SpotifyService } from './spotify.service';
 
 @Controller('music/tracks')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -40,6 +41,7 @@ export class TracksController {
     private readonly excelImporter: TracksImportExcelService,
     private readonly youtube: YoutubeMetadataService,
     private readonly spotifyMatch: SpotifyMatchService,
+    private readonly spotify: SpotifyService,
   ) {}
 
   /** Lista el catálogo global (anota inLibrary para el usuario actual). */
@@ -67,6 +69,14 @@ export class TracksController {
   metadata(@Query('link') link: string) {
     if (!link) throw new BadRequestException('Falta el parámetro "link".');
     return this.youtube.extract(link);
+  }
+
+  /** Extrae metadata de un link de Spotify para autocompletar (no guarda). */
+  @Get('spotify-metadata')
+  @Roles('DJ', 'ORGANIZADOR', 'ARTISTA')
+  spotifyMetadata(@Query('link') link: string) {
+    if (!link) throw new BadRequestException('Falta el parámetro "link".');
+    return this.spotify.getTrackByLink(link);
   }
 
   /** sourceIds de YouTube ya en el catálogo (para ignorar al cargar playlists). */

@@ -53,10 +53,13 @@ export class LibraryController {
     return this.library.myYoutubeSourceIds(user.id);
   }
 
-  /** Conteo de mis canciones por estilo (bachatas vs salsas). */
+  /** Conteo de mis canciones por estilo (bachatas vs salsas), por fuente opcional. */
   @Get('summary')
-  summary(@CurrentUser() user: AuthUser) {
-    return this.library.summary(user.id);
+  summary(
+    @CurrentUser() user: AuthUser,
+    @Query('source') source?: 'YOUTUBE' | 'SPOTIFY',
+  ) {
+    return this.library.summary(user.id, source);
   }
 
   /** Agregar una canción del catálogo a mis canciones. */
