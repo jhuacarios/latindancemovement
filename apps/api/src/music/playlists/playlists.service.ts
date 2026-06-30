@@ -71,6 +71,8 @@ export class PlaylistsService {
         status: dto.status,
         visibility: dto.visibility,
         targetBachataPct: dto.targetBachataPct,
+        bachatasPerBlock: dto.bachatasPerBlock,
+        salsasPerBlock: dto.salsasPerBlock,
       },
       include: ITEMS_INCLUDE,
     });

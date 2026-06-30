@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Playlist, PlaylistItem } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
+import { Button, Card, Input, Spinner, StyleBadge } from '@/components/ui';
 import { PlayButtons } from '@/components/play-buttons';
 import { TrackThumb } from '@/components/track-thumb';
 import { SourceLink } from '@/components/source-link';
@@ -51,6 +51,8 @@ export default function PlaylistDetailPage() {
   // Canción arrastrada desde el panel de Mis Canciones (para agregar).
   const [externalDragId, setExternalDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropSide>(null);
+  // Editor de distribución (N bachatas / M salsas por bloque). null = cerrado.
+  const [distForm, setDistForm] = useState<{ n: number; m: number } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['playlist', id],
@@ -123,10 +125,11 @@ export default function PlaylistDetailPage() {
 
   // Reordena la playlist según el patrón configurado (N bachatas → M salsas,
   // repetido). Lo que sobra (no alcanza para un bloque completo) va al final.
-  // Si `shuffle`, baraja cada estilo antes de armar los bloques.
-  function applyBlockOrder(shuffle = false) {
-    const n = data?.bachatasPerBlock ?? 0;
-    const m = data?.salsasPerBlock ?? 0;
+  // Si `shuffle`, baraja cada estilo antes de armar los bloques. Acepta n/m
+  // explícitos para reordenar con una distribución recién cambiada.
+  function applyBlockOrder(shuffle = false, nOverride?: number, mOverride?: number) {
+    const n = nOverride ?? data?.bachatasPerBlock ?? 0;
+    const m = mOverride ?? data?.salsasPerBlock ?? 0;
     if (n + m === 0) return;
     const bachatas = items.filter((i) => i.track?.style === 'BACHATA');
     const salsas = items.filter((i) => i.track?.style !== 'BACHATA');
@@ -146,6 +149,24 @@ export default function PlaylistDetailPage() {
     setLocalItems(result); // optimista
     reorder.mutate(result.map((i) => i.id));
   }
+
+  // Guarda la nueva distribución y reordena las canciones a ese patrón,
+  // manteniendo el orden actual de cada estilo (sin barajar).
+  const changeDistribution = useMutation({
+    mutationFn: ({ n, m }: { n: number; m: number }) =>
+      api(`/music/playlists/${id}`, {
+        method: 'PATCH',
+        body: { bachatasPerBlock: n, salsasPerBlock: m },
+      }),
+    onSuccess: (_d, { n, m }) => {
+      setDistForm(null);
+      applyBlockOrder(false, n, m);
+    },
+    onError: (e) =>
+      setErr(
+        e instanceof ApiError ? e.message : 'No se pudo cambiar la distribución.',
+      ),
+  });
 
   function handleDrop() {
     const target = dropTarget;
@@ -291,6 +312,20 @@ export default function PlaylistDetailPage() {
                     </Button>
                   </>
                 )}
+              {items.length > 1 && (
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    setDistForm({
+                      n: data.bachatasPerBlock ?? 5,
+                      m: data.salsasPerBlock ?? 3,
+                    })
+                  }
+                  title="Cambiar cuántas bachatas y salsas por bloque, y reordenar las canciones a ese patrón manteniendo el orden actual"
+                >
+                  ⚙️ Cambiar distribución
+                </Button>
+              )}
               <Button
                 variant={drawerOpen ? 'primary' : 'ghost'}
                 onClick={() => setDrawerOpen((o) => !o)}
@@ -493,6 +528,93 @@ export default function PlaylistDetailPage() {
           itemCount={ytCount}
           onClose={() => setYtOpen(false)}
         />
+      )}
+
+      {distForm && data && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => !changeDistribution.isPending && setDistForm(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold">⚙️ Cambiar distribución</h2>
+              <button
+                onClick={() => setDistForm(null)}
+                className="rounded-lg bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-4 text-xs text-neutral-400">
+              Define el patrón por bloque. Las canciones se reordenan a esta
+              distribución manteniendo el orden actual de cada estilo (no se
+              barajan). Los sobrantes van al final.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-neutral-400">
+                  Bachatas por bloque
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={distForm.n}
+                  onChange={(e) =>
+                    setDistForm({
+                      ...distForm,
+                      n: Math.max(0, Math.min(50, Number(e.target.value) || 0)),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-neutral-400">
+                  Salsas por bloque
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  value={distForm.m}
+                  onChange={(e) =>
+                    setDistForm({
+                      ...distForm,
+                      m: Math.max(0, Math.min(50, Number(e.target.value) || 0)),
+                    })
+                  }
+                />
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-neutral-500">
+              {distForm.n + distForm.m > 0
+                ? `Bloques de ${distForm.n} bachata${distForm.n === 1 ? '' : 's'} → ${distForm.m} salsa${distForm.m === 1 ? '' : 's'}.`
+                : 'Indica al menos una canción por bloque.'}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                disabled={changeDistribution.isPending}
+                onClick={() => setDistForm(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                disabled={
+                  changeDistribution.isPending || distForm.n + distForm.m === 0
+                }
+                onClick={() =>
+                  changeDistribution.mutate({ n: distForm.n, m: distForm.m })
+                }
+              >
+                {changeDistribution.isPending ? 'Aplicando…' : 'Aplicar y reordenar'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
