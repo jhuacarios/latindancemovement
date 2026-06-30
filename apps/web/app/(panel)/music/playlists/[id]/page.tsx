@@ -15,7 +15,7 @@ import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-mod
 import { LibraryDrawer } from '@/components/library-drawer';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
-import { formatDuration } from '@/lib/format';
+import { formatDuration, formatViews } from '@/lib/format';
 import { useLayoutUI } from '@/lib/layout-ui';
 
 type DropSide = { id: string; side: 'before' | 'after' } | null;
@@ -372,6 +372,7 @@ export default function PlaylistDetailPage() {
                   <th className="px-4 py-3">Estilo</th>
                   <th className="px-4 py-3">Duración</th>
                   <th className="px-4 py-3">Año</th>
+                  <th className="px-4 py-3">Reproducciones</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -455,6 +456,9 @@ export default function PlaylistDetailPage() {
                     <td className="px-4 py-3 text-neutral-400">
                       {item.track?.year ?? '—'}
                     </td>
+                    <td className="px-4 py-3 tabular-nums text-neutral-400">
+                      {formatViews(item.track?.details?.viewCount)}
+                    </td>
                     <td
                       className="px-4 py-3 text-right"
                       onClick={() => setActiveRowId(item.id)}
@@ -478,7 +482,7 @@ export default function PlaylistDetailPage() {
                 {items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       onDragOver={(e) => externalDragId && e.preventDefault()}
                       onDrop={(e) => {
                         if (!externalDragId) return;
