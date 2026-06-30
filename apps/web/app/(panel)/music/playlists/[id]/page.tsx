@@ -50,6 +50,8 @@ export default function PlaylistDetailPage() {
   const [dragId, setDragId] = useState<string | null>(null);
   // Canción arrastrada desde el panel de Mis Canciones (para agregar).
   const [externalDragId, setExternalDragId] = useState<string | null>(null);
+  // Si la arrastrada/agregada viene del catálogo (para sumarla a Mis Canciones).
+  const [externalFromCatalog, setExternalFromCatalog] = useState(false);
   const [dropTarget, setDropTarget] = useState<DropSide>(null);
   // Editor de distribución (N bachatas / M salsas por bloque). null = cerrado.
   const [distForm, setDistForm] = useState<{ n: number; m: number } | null>(null);
@@ -96,7 +98,22 @@ export default function PlaylistDetailPage() {
   // Agrega una canción (desde Mis Canciones) en la posición indicada: la agrega
   // al final y, si hay destino, la reordena ahí.
   const addTrack = useMutation({
-    mutationFn: async (args: { trackId: string; target: DropSide }) => {
+    mutationFn: async (args: {
+      trackId: string;
+      target: DropSide;
+      fromCatalog?: boolean;
+    }) => {
+      // Si viene del catálogo, primero la sumo a Mis Canciones (idempotente).
+      if (args.fromCatalog) {
+        try {
+          await api('/music/library', {
+            method: 'POST',
+            body: { trackId: args.trackId },
+          });
+        } catch {
+          /* ya estaba en mi biblioteca u otro error no bloqueante */
+        }
+      }
       const updated = await api<Playlist>(`/music/playlists/${id}/items`, {
         method: 'POST',
         body: { trackId: args.trackId },
@@ -118,6 +135,8 @@ export default function PlaylistDetailPage() {
     onSuccess: () => {
       setErr(null);
       void qc.invalidateQueries({ queryKey: ['playlist', id] });
+      void qc.invalidateQueries({ queryKey: ['library-drawer'] });
+      void qc.invalidateQueries({ queryKey: ['library'] });
     },
     onError: (e) =>
       setErr(e instanceof ApiError ? e.message : 'No se pudo agregar la canción.'),
@@ -172,11 +191,13 @@ export default function PlaylistDetailPage() {
     const target = dropTarget;
     setDropTarget(null);
 
-    // Soltada desde el panel de Mis Canciones: agregar.
+    // Soltada desde el panel de Mis Canciones / Catálogo: agregar.
     if (externalDragId) {
       const tid = externalDragId;
+      const fromCat = externalFromCatalog;
       setExternalDragId(null);
-      addTrack.mutate({ trackId: tid, target });
+      setExternalFromCatalog(false);
+      addTrack.mutate({ trackId: tid, target, fromCatalog: fromCat });
       return;
     }
 
@@ -488,8 +509,14 @@ export default function PlaylistDetailPage() {
                         if (!externalDragId) return;
                         e.preventDefault();
                         const tid = externalDragId;
+                        const fromCat = externalFromCatalog;
                         setExternalDragId(null);
-                        addTrack.mutate({ trackId: tid, target: null });
+                        setExternalFromCatalog(false);
+                        addTrack.mutate({
+                          trackId: tid,
+                          target: null,
+                          fromCatalog: fromCat,
+                        });
                       }}
                       className={clsx(
                         'px-4 py-8 text-center text-neutral-500',
@@ -512,13 +539,17 @@ export default function PlaylistDetailPage() {
             <LibraryDrawer
               excludeTrackIds={inPlaylistIds}
               onClose={() => setDrawerOpen(false)}
-              onItemDragStart={setExternalDragId}
+              onItemDragStart={(tid, fromCat) => {
+                setExternalDragId(tid);
+                setExternalFromCatalog(fromCat);
+              }}
               onItemDragEnd={() => {
                 setExternalDragId(null);
+                setExternalFromCatalog(false);
                 setDropTarget(null);
               }}
-              onAddTrack={(tid) =>
-                addTrack.mutate({ trackId: tid, target: null })
+              onAddTrack={(tid, fromCat) =>
+                addTrack.mutate({ trackId: tid, target: null, fromCatalog: fromCat })
               }
             />
           )}

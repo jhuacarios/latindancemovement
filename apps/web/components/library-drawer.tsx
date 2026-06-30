@@ -23,15 +23,18 @@ export function LibraryDrawer({
   /** Canciones ya en la playlist (se excluyen de la lista). */
   excludeTrackIds: Set<string>;
   onClose: () => void;
-  onItemDragStart: (trackId: string) => void;
+  onItemDragStart: (trackId: string, fromCatalog: boolean) => void;
   onItemDragEnd: () => void;
   /** Doble click en una canción: agregar al final de la playlist. */
-  onAddTrack?: (trackId: string) => void;
+  onAddTrack?: (trackId: string, fromCatalog: boolean) => void;
 }) {
+  // Fuente: mi biblioteca o el catálogo global.
+  const [source, setSource] = useState<'mine' | 'catalog'>('mine');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [style, setStyle] = useState<DanceStyle | ''>('');
   const [substyles, setSubstyles] = useState<string[]>([]);
+  const fromCatalog = source === 'catalog';
   const player = usePlayer();
   const qc = useQueryClient();
   // Distingue click (reproducir) de doble click (agregar): el click espera un
@@ -85,13 +88,19 @@ export function LibraryDrawer({
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['library-drawer', debounced, style, substyles],
+    queryKey: ['library-drawer', source, debounced, style, substyles],
     queryFn: () => {
       const p = new URLSearchParams({ pageSize: '50', sort: 'recent' });
       if (debounced) p.set('search', debounced);
       if (style) p.set('style', style);
-      if (substyles.length) p.set('substyles', substyles.join(','));
-      return api<Paginated<Track>>(`/music/library?${p.toString()}`);
+      if (source === 'mine') {
+        // Mi biblioteca: filtra por mis tags personales (multi).
+        if (substyles.length) p.set('substyles', substyles.join(','));
+        return api<Paginated<Track>>(`/music/library?${p.toString()}`);
+      }
+      // Catálogo global: filtra por sub-estilo del catálogo (uno).
+      if (substyles.length) p.set('substyle', substyles[0]);
+      return api<Paginated<Track>>(`/music/tracks?${p.toString()}`);
     },
   });
 
@@ -114,8 +123,30 @@ export function LibraryDrawer({
       </div>
 
       <div className="border-b border-neutral-800 p-2">
+        {/* Fuente: mi biblioteca o el catálogo. Al agregar del catálogo, la
+            canción también queda en Mis Canciones. */}
+        <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+          {(['mine', 'catalog'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setSource(s)}
+              className={clsx(
+                'rounded-md py-1 text-xs font-medium transition',
+                source === s
+                  ? 'bg-brand text-white'
+                  : 'text-neutral-300 hover:bg-neutral-700/60',
+              )}
+            >
+              {s === 'mine' ? 'Mis Canciones' : 'Catálogo'}
+            </button>
+          ))}
+        </div>
+
         <Input
-          placeholder="Buscar en mis canciones…"
+          placeholder={
+            fromCatalog ? 'Buscar en el catálogo…' : 'Buscar en mis canciones…'
+          }
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -171,6 +202,7 @@ export function LibraryDrawer({
         <p className="mt-2 px-1 text-[11px] text-neutral-500">
           Click reproduce · doble click agrega al final · o arrastra a la
           playlist.
+          {fromCatalog && ' Al agregar del catálogo, también va a Mis Canciones.'}
         </p>
       </div>
 
@@ -191,7 +223,7 @@ export function LibraryDrawer({
               <div
                 key={t.id}
                 draggable
-                onDragStart={() => onItemDragStart(t.id)}
+                onDragStart={() => onItemDragStart(t.id, fromCatalog)}
                 onDragEnd={onItemDragEnd}
                 onClick={() => {
                   // Click: reproducir abajo (esperando por si es doble click).
@@ -206,7 +238,7 @@ export function LibraryDrawer({
                     clearTimeout(clickTimer.current);
                     clickTimer.current = null;
                   }
-                  onAddTrack?.(t.id);
+                  onAddTrack?.(t.id, fromCatalog);
                 }}
                 title={
                   onAddTrack
@@ -227,6 +259,14 @@ export function LibraryDrawer({
                     {t.artist}
                   </div>
                 </div>
+                {fromCatalog && t.inLibrary && (
+                  <span
+                    title="Ya está en Mis Canciones"
+                    className="shrink-0 text-[11px] text-brand"
+                  >
+                    ✓
+                  </span>
+                )}
                 <StyleBadge style={t.style} />
               </div>
             );
