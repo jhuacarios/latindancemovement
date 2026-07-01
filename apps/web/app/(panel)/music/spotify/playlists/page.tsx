@@ -8,13 +8,22 @@ import type {
   SpotifyPlaylistDetail,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 import { formatDuration } from '@/lib/format';
+import {
+  AddVideoToLibraryModal,
+  type VideoToAdd,
+} from '@/components/add-video-to-library-modal';
 
 export default function SpotifyPlaylistsPage() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [addTrack, setAddTrack] = useState<VideoToAdd | null>(null);
+  const [addInCatalog, setAddInCatalog] = useState(false);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['spotify-status'],
@@ -42,6 +51,20 @@ export default function SpotifyPlaylistsPage() {
       void qc.invalidateQueries({ queryKey: ['spotify-status'] });
       void qc.invalidateQueries({ queryKey: ['spotify-playlists'] });
     },
+  });
+
+  function invalidateAfterChange() {
+    void qc.invalidateQueries({ queryKey: ['spotify-playlist', selectedId] });
+    void qc.invalidateQueries({ queryKey: ['library'] });
+    void qc.invalidateQueries({ queryKey: ['library-summary'] });
+    void qc.invalidateQueries({ queryKey: ['catalog'] });
+  }
+
+  // Agrega a Mis Canciones una canción que YA existe en el catálogo (por id).
+  const addToLibrary = useMutation({
+    mutationFn: (trackId: string) =>
+      api('/music/library', { method: 'POST', body: { trackId } }),
+    onSuccess: invalidateAfterChange,
   });
 
   async function connect() {
@@ -232,15 +255,60 @@ export default function SpotifyPlaylistsPage() {
                           )}
                         </td>
                         <td className="px-4 py-2 text-right">
-                          <a
-                            href={it.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Abrir en Spotify"
-                            className="inline-flex items-center rounded-md bg-neutral-800 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700"
-                          >
-                            Abrir ↗
-                          </a>
+                          <div className="flex items-center justify-end gap-1">
+                            {!it.match?.inLibrary && (
+                              <button
+                                type="button"
+                                title="Agregar a Mis Canciones"
+                                disabled={addToLibrary.isPending}
+                                onClick={() => {
+                                  if (it.match) {
+                                    addToLibrary.mutate(it.match.trackId);
+                                  } else {
+                                    setAddInCatalog(false);
+                                    setAddTrack({
+                                      videoId: it.sourceId,
+                                      title: it.title,
+                                      channelTitle: it.artist ?? '',
+                                      thumbnailUrl: it.imageUrl,
+                                      year: it.year,
+                                    });
+                                  }
+                                }}
+                                className="rounded-md border border-neutral-700 bg-neutral-800/60 px-2 py-1 text-xs text-neutral-300 transition hover:border-brand hover:text-brand disabled:opacity-50"
+                              >
+                                + Mis Canciones
+                              </button>
+                            )}
+                            {!it.match && isSuperAdmin && (
+                              <button
+                                type="button"
+                                title="Agregar al Catálogo (global)"
+                                onClick={() => {
+                                  setAddInCatalog(true);
+                                  setAddTrack({
+                                    videoId: it.sourceId,
+                                    title: it.title,
+                                    channelTitle: it.artist ?? '',
+                                    thumbnailUrl: it.imageUrl,
+                                    year: it.year,
+                                  });
+                                }}
+                                className="rounded-md border border-sky-700/60 bg-sky-500/10 px-2 py-1 text-xs text-sky-300 transition hover:border-sky-500 hover:text-sky-200"
+                              >
+                                + Catálogo
+                              </button>
+                            )}
+                            <a
+                              href={it.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Abrir en Spotify"
+                              className="inline-flex items-center rounded-md bg-neutral-800 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700"
+                            >
+                              ↗
+                            </a>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -250,6 +318,16 @@ export default function SpotifyPlaylistsPage() {
             </>
           )}
         </div>
+      )}
+
+      {addTrack && (
+        <AddVideoToLibraryModal
+          video={addTrack}
+          source="SPOTIFY"
+          startInCatalog={addInCatalog}
+          onClose={() => setAddTrack(null)}
+          onAdded={invalidateAfterChange}
+        />
       )}
     </div>
   );

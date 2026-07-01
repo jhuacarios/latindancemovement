@@ -182,11 +182,17 @@ export class SpotifyOAuthService {
   }
 
   private mapPlaylist(it: any): SpotifyOwnPlaylist {
+    // El conteo viene en `tracks.total`; algunas respuestas de /me/playlists lo
+    // traen en `items.total` (o `items` como arreglo). Contemplar ambos.
+    const itemCount =
+      it.tracks?.total ??
+      it.items?.total ??
+      (Array.isArray(it.items) ? it.items.length : 0);
     return {
       id: it.id,
       name: it.name ?? '(sin título)',
       description: it.description ?? '',
-      itemCount: it.tracks?.total ?? 0,
+      itemCount,
       imageUrl: it.images?.[0]?.url ?? null,
       owner: it.owner?.display_name ?? it.owner?.id ?? '',
       url: it.external_urls?.spotify ?? `https://open.spotify.com/playlist/${it.id}`,

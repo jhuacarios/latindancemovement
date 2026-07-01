@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DANCE_STYLES, type DanceStyle } from '@baile-latino/types';
+import {
+  DANCE_STYLES,
+  type DanceStyle,
+  type TrackSource,
+} from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Button, Input, Select } from './ui';
@@ -15,6 +19,8 @@ export interface VideoToAdd {
   title: string;
   channelTitle: string;
   thumbnailUrl: string | null;
+  /** Año (opcional, se guarda si viene — p.ej. desde Spotify). */
+  year?: number | null;
 }
 
 /**
@@ -24,11 +30,14 @@ export interface VideoToAdd {
  */
 export function AddVideoToLibraryModal({
   video,
+  source = 'YOUTUBE',
   startInCatalog = false,
   onClose,
   onAdded,
 }: {
   video: VideoToAdd;
+  /** Fuente de la canción (YOUTUBE por defecto). */
+  source?: TrackSource;
   /** Abre el modal con el destino "Catálogo" preseleccionado (solo super admin). */
   startInCatalog?: boolean;
   onClose: () => void;
@@ -75,9 +84,10 @@ export function AddVideoToLibraryModal({
           artist: artist.trim(),
           style,
           substyles,
-          source: 'YOUTUBE',
+          source,
           sourceId: video.videoId,
           coverUrl: video.thumbnailUrl ?? undefined,
+          year: video.year ?? undefined,
         },
       });
       onAdded(dest);
