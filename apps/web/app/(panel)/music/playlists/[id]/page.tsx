@@ -82,6 +82,7 @@ export default function PlaylistDetailPage() {
   }, [drawerOpen, setCollapsed]);
 
   const items = localItems ?? data?.items ?? [];
+  const isSpotify = data?.source === 'SPOTIFY';
   const ytCount = items.filter((i) => i.track?.source === 'YOUTUBE').length;
   const inPlaylistIds = useMemo(
     () => new Set(items.map((i) => i.trackId)),
@@ -403,7 +404,7 @@ export default function PlaylistDetailPage() {
                   <th className="px-4 py-3">Estilo</th>
                   <th className="px-4 py-3">Duración</th>
                   <th className="px-4 py-3">Año</th>
-                  <th className="px-4 py-3">Reproducciones</th>
+                  {!isSpotify && <th className="px-4 py-3">Reproducciones</th>}
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -487,9 +488,11 @@ export default function PlaylistDetailPage() {
                     <td className="px-4 py-3 text-neutral-400">
                       {item.track?.year ?? '—'}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-neutral-400">
-                      {formatViews(item.track?.details?.viewCount)}
-                    </td>
+                    {!isSpotify && (
+                      <td className="px-4 py-3 tabular-nums text-neutral-400">
+                        {formatViews(item.track?.details?.viewCount)}
+                      </td>
+                    )}
                     <td
                       className="px-4 py-3 text-right"
                       onClick={() => setActiveRowId(item.id)}
@@ -547,7 +550,7 @@ export default function PlaylistDetailPage() {
                 {items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={isSpotify ? 8 : 9}
                       onDragOver={(e) => externalDragId && e.preventDefault()}
                       onDrop={(e) => {
                         if (!externalDragId) return;
@@ -604,6 +607,7 @@ export default function PlaylistDetailPage() {
                   imageUrl: t.coverUrl,
                 })
               }
+              playingSpotifyId={spotifyPlaying?.sourceId ?? null}
             />
           )}
         </div>

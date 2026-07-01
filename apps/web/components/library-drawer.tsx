@@ -21,6 +21,7 @@ export function LibraryDrawer({
   onAddTrack,
   platform = 'YOUTUBE',
   onPlaySpotify,
+  playingSpotifyId,
 }: {
   /** Canciones ya en la playlist (se excluyen de la lista). */
   excludeTrackIds: Set<string>;
@@ -33,6 +34,8 @@ export function LibraryDrawer({
   onAddTrack?: (trackId: string, fromCatalog: boolean) => void;
   /** Click en una canción de Spotify: gatilla el reproductor de Spotify. */
   onPlaySpotify?: (track: Track) => void;
+  /** sourceId de la canción de Spotify que suena (para resaltarla). */
+  playingSpotifyId?: string | null;
 }) {
   // Fuente: mi biblioteca o el catálogo global.
   const [source, setSource] = useState<'mine' | 'catalog'>('mine');
@@ -239,7 +242,8 @@ export function LibraryDrawer({
         <div className="flex flex-col gap-1">
           {items.map((t) => {
             const isPlaying =
-              player.playingKey === `${t.source}:${t.sourceId}`;
+              player.playingKey === `${t.source}:${t.sourceId}` ||
+              (t.source === 'SPOTIFY' && t.sourceId === playingSpotifyId);
             return (
               <div
                 key={t.id}
