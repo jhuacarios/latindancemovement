@@ -120,7 +120,10 @@ export function LibraryDrawer({
   return (
     <aside className="sticky top-0 flex max-h-[calc(100vh-7rem)] w-80 shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60">
       <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-        <h3 className="text-sm font-semibold">🎵 Mis Canciones</h3>
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+          <span>{platform === 'SPOTIFY' ? '🟢' : '📺'}</span>
+          Agregar de {platform === 'SPOTIFY' ? 'Spotify' : 'YouTube'}
+        </h3>
         <button
           onClick={onClose}
           title="Cerrar"
