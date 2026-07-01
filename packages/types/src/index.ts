@@ -309,6 +309,54 @@ export interface YoutubeConnectionStatus {
   connected: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Spotify — cuenta del usuario (OAuth) y sus playlists
+// ---------------------------------------------------------------------------
+
+/** Estado de conexión OAuth con Spotify del usuario actual. */
+export interface SpotifyConnectionStatus {
+  connected: boolean;
+}
+
+/** Una playlist de la cuenta de Spotify del usuario. */
+export interface SpotifyOwnPlaylist {
+  id: string;
+  name: string;
+  description: string;
+  itemCount: number;
+  imageUrl: string | null;
+  owner: string;
+  url: string;
+}
+
+/** Match de una canción de la playlist contra nuestro catálogo/biblioteca. */
+export interface SpotifyPlaylistMatch {
+  trackId: string;
+  style: DanceStyle;
+  substyles: string[];
+  durationSec: number | null;
+  year: number | null;
+  inCatalog: boolean;
+  inLibrary: boolean;
+}
+
+/** Una canción dentro de una playlist de Spotify (con su match). */
+export interface SpotifyPlaylistTrackItem {
+  sourceId: string;
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+  imageUrl: string | null;
+  url: string;
+  match: SpotifyPlaylistMatch | null;
+}
+
+/** Detalle de una playlist de Spotify: metadatos + sus canciones. */
+export interface SpotifyPlaylistDetail extends SpotifyOwnPlaylist {
+  items: SpotifyPlaylistTrackItem[];
+}
+
 /** Qué estilo abre cada bloque del patrón. */
 export type YoutubePlaylistOrder = 'bachata' | 'salsa';
 

@@ -225,6 +225,42 @@ export class TracksService {
     return map;
   }
 
+  /** Igual que findByYoutubeIds pero para tracks de Spotify (por sourceId). */
+  async findBySpotifyIds(
+    spotifyIds: string[],
+    userId?: string,
+  ): Promise<Map<string, Track>> {
+    const ids = [...new Set(spotifyIds.filter(Boolean))];
+    if (!ids.length) return new Map();
+
+    const scopeFilter: Prisma.TrackWhereInput[] = [{ scope: 'CATALOG' }];
+    if (userId) scopeFilter.push({ scope: 'PERSONAL', ownerId: userId });
+
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'SPOTIFY', sourceId: { in: ids }, OR: scopeFilter },
+    });
+    const tracks = rows.map(toPublicTrack);
+
+    if (userId && tracks.length) {
+      const saved = await this.prisma.userTrack.findMany({
+        where: { userId, trackId: { in: tracks.map((t) => t.id) } },
+        select: { trackId: true },
+      });
+      const set = new Set(saved.map((s) => s.trackId));
+      for (const t of tracks) {
+        t.inLibrary =
+          t.scope === 'PERSONAL' ? t.ownerId === userId : set.has(t.id);
+      }
+    }
+
+    const map = new Map<string, Track>();
+    for (const t of tracks) {
+      const prev = map.get(t.sourceId);
+      if (!prev || t.scope === 'PERSONAL') map.set(t.sourceId, t);
+    }
+    return map;
+  }
+
   /**
    * Crea una canción del catálogo si no existe. Si ya existe (por fuente),
    * NO pisa lo que ya tiene valor: solo rellena los campos vacíos. Así una

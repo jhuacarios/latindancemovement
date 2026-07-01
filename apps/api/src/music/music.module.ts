@@ -18,6 +18,8 @@ import { TagsController } from './tags/tags.controller';
 import { TagsService } from './tags/tags.service';
 import { YoutubeController } from './youtube/youtube.controller';
 import { YoutubeOAuthService } from './youtube/youtube-oauth.service';
+import { SpotifyController } from './spotify/spotify.controller';
+import { SpotifyOAuthService } from './spotify/spotify-oauth.service';
 
 @Module({
   controllers: [
@@ -27,6 +29,7 @@ import { YoutubeOAuthService } from './youtube/youtube-oauth.service';
     LibraryController,
     TagsController,
     YoutubeController,
+    SpotifyController,
   ],
   providers: [
     TracksService,
@@ -42,6 +45,7 @@ import { YoutubeOAuthService } from './youtube/youtube-oauth.service';
     LibraryService,
     TagsService,
     YoutubeOAuthService,
+    SpotifyOAuthService,
   ],
 })
 export class MusicModule {}

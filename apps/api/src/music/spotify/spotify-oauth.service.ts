@@ -1,0 +1,278 @@
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import type {
+  SpotifyOwnPlaylist,
+  SpotifyPlaylistDetail,
+  SpotifyPlaylistTrackItem,
+} from '@baile-latino/types';
+import { PrismaService } from '../../prisma/prisma.service';
+import { TracksService } from '../tracks/tracks.service';
+
+/** Scopes para leer las playlists del usuario (privadas y colaborativas). */
+const SCOPE = 'playlist-read-private playlist-read-collaborative';
+
+const refreshKey = (userId: string) => `sp_refresh:${userId}`;
+const stateKey = (state: string) => `sp_state:${state}`;
+
+/**
+ * OAuth de Spotify (Authorization Code) para leer las playlists de la cuenta del
+ * usuario. Con token de usuario SÍ se pueden leer las canciones de las playlists
+ * (a diferencia del token client-credentials, que Spotify bloqueó).
+ */
+@Injectable()
+export class SpotifyOAuthService {
+  private readonly logger = new Logger(SpotifyOAuthService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tracks: TracksService,
+  ) {}
+
+  get configured(): boolean {
+    return Boolean(
+      process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET,
+    );
+  }
+
+  private get clientId(): string {
+    return process.env.SPOTIFY_CLIENT_ID as string;
+  }
+  private get clientSecret(): string {
+    return process.env.SPOTIFY_CLIENT_SECRET as string;
+  }
+  private redirectUri(): string {
+    return (
+      process.env.SPOTIFY_OAUTH_REDIRECT_URI ??
+      'http://localhost:3000/api/v1/music/spotify/callback'
+    );
+  }
+  private basicAuth(): string {
+    return Buffer.from(`${this.clientId}:${this.clientSecret}`).toString(
+      'base64',
+    );
+  }
+
+  // --- OAuth ----------------------------------------------------------------
+  async buildAuthUrl(userId: string): Promise<string> {
+    if (!this.configured) {
+      throw new BadRequestException(
+        'Falta configurar SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET.',
+      );
+    }
+    const state = randomBytes(16).toString('hex');
+    await this.prisma.setting.upsert({
+      where: { key: stateKey(state) },
+      create: { key: stateKey(state), value: userId },
+      update: { value: userId },
+    });
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: this.clientId,
+      scope: SCOPE,
+      redirect_uri: this.redirectUri(),
+      state,
+    });
+    return `https://accounts.spotify.com/authorize?${params.toString()}`;
+  }
+
+  async handleCallback(code: string, state: string): Promise<void> {
+    const row = await this.prisma.setting.findUnique({
+      where: { key: stateKey(state) },
+    });
+    if (!row) throw new BadRequestException('State inválido o expirado.');
+    const userId = row.value;
+    await this.prisma.setting
+      .delete({ where: { key: stateKey(state) } })
+      .catch(() => undefined);
+
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${this.basicAuth()}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: this.redirectUri(),
+      }).toString(),
+    });
+    if (!res.ok) {
+      throw new BadRequestException(
+        `Spotify rechazó el intercambio: ${await res.text()}`,
+      );
+    }
+    const json = (await res.json()) as { refresh_token?: string };
+    if (!json.refresh_token) {
+      throw new BadRequestException('Spotify no devolvió refresh_token.');
+    }
+    await this.prisma.setting.upsert({
+      where: { key: refreshKey(userId) },
+      create: { key: refreshKey(userId), value: json.refresh_token },
+      update: { value: json.refresh_token },
+    });
+  }
+
+  async isConnected(userId: string): Promise<boolean> {
+    const row = await this.prisma.setting.findUnique({
+      where: { key: refreshKey(userId) },
+    });
+    return Boolean(row?.value);
+  }
+
+  async disconnect(userId: string): Promise<void> {
+    await this.prisma.setting
+      .delete({ where: { key: refreshKey(userId) } })
+      .catch(() => undefined);
+  }
+
+  private async accessToken(userId: string): Promise<string> {
+    const row = await this.prisma.setting.findUnique({
+      where: { key: refreshKey(userId) },
+    });
+    if (!row?.value) {
+      throw new BadRequestException('Conecta tu cuenta de Spotify primero.');
+    }
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${this.basicAuth()}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: row.value,
+      }).toString(),
+    });
+    if (!res.ok) {
+      await this.disconnect(userId);
+      throw new BadRequestException(
+        'La conexión con Spotify expiró. Vuelve a conectar tu cuenta.',
+      );
+    }
+    const json = (await res.json()) as { access_token: string };
+    return json.access_token;
+  }
+
+  // --- Playlists ------------------------------------------------------------
+  async listMyPlaylists(userId: string): Promise<SpotifyOwnPlaylist[]> {
+    const token = await this.accessToken(userId);
+    const out: SpotifyOwnPlaylist[] = [];
+    let url: string | null =
+      'https://api.spotify.com/v1/me/playlists?limit=50';
+    while (url) {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new BadRequestException(
+          `No se pudieron traer tus playlists de Spotify: ${await res.text()}`,
+        );
+      }
+      const json = (await res.json()) as {
+        items?: any[];
+        next?: string | null;
+      };
+      for (const it of json.items ?? []) {
+        if (it?.id) out.push(this.mapPlaylist(it));
+      }
+      url = json.next ?? null;
+    }
+    return out;
+  }
+
+  private mapPlaylist(it: any): SpotifyOwnPlaylist {
+    return {
+      id: it.id,
+      name: it.name ?? '(sin título)',
+      description: it.description ?? '',
+      itemCount: it.tracks?.total ?? 0,
+      imageUrl: it.images?.[0]?.url ?? null,
+      owner: it.owner?.display_name ?? it.owner?.id ?? '',
+      url: it.external_urls?.spotify ?? `https://open.spotify.com/playlist/${it.id}`,
+    };
+  }
+
+  async getPlaylistDetail(
+    userId: string,
+    playlistId: string,
+  ): Promise<SpotifyPlaylistDetail> {
+    const token = await this.accessToken(userId);
+
+    // Metadatos.
+    const metaRes = await fetch(
+      `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}?fields=id,name,description,images,owner(display_name,id),external_urls,tracks(total)`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!metaRes.ok) {
+      throw new BadRequestException(
+        `No se pudo traer la playlist: ${await metaRes.text()}`,
+      );
+    }
+    const meta = this.mapPlaylist(await metaRes.json());
+
+    // Canciones (paginando).
+    const items: SpotifyPlaylistTrackItem[] = [];
+    let url: string | null = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?limit=100`;
+    while (url) {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new BadRequestException(
+          `No se pudieron traer las canciones: ${await res.text()}`,
+        );
+      }
+      const json = (await res.json()) as {
+        items?: any[];
+        next?: string | null;
+      };
+      for (const row of json.items ?? []) {
+        const t = row?.track;
+        if (!t?.id) continue; // episodios/locales sin id
+        items.push({
+          sourceId: t.id,
+          title: t.name ?? '(sin título)',
+          artist:
+            (t.artists ?? []).map((a: any) => a.name).filter(Boolean).join(', ') ||
+            null,
+          durationSec: t.duration_ms ? Math.round(t.duration_ms / 1000) : null,
+          year: parseYear(t.album?.release_date),
+          imageUrl: t.album?.images?.[0]?.url ?? null,
+          url: t.external_urls?.spotify ?? `https://open.spotify.com/track/${t.id}`,
+          match: null,
+        });
+      }
+      url = json.next ?? null;
+    }
+
+    // Enriquecer con nuestro catálogo/biblioteca (match por sourceId de Spotify).
+    const bySpotifyId = await this.tracks.findBySpotifyIds(
+      items.map((v) => v.sourceId),
+      userId,
+    );
+    for (const v of items) {
+      const t = bySpotifyId.get(v.sourceId);
+      v.match = t
+        ? {
+            trackId: t.id,
+            style: t.style,
+            substyles: t.substyles,
+            durationSec: t.durationSec,
+            year: t.year,
+            inCatalog: t.scope === 'CATALOG',
+            inLibrary: t.inLibrary ?? false,
+          }
+        : null;
+    }
+
+    return { ...meta, items };
+  }
+}
+
+/** "2021-05-10" | "2021" -> 2021 (o null). */
+function parseYear(releaseDate?: string): number | null {
+  if (!releaseDate) return null;
+  const y = Number(String(releaseDate).slice(0, 4));
+  return Number.isFinite(y) && y > 1900 ? y : null;
+}
