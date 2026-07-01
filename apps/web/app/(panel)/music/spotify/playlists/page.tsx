@@ -369,8 +369,8 @@ export default function SpotifyPlaylistsPage() {
       {playingId && (
         <>
           <div className="h-24" />
-          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-900/95 p-2 backdrop-blur">
-            <div className="mx-auto max-w-3xl">
+          <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 px-3">
+            <div className="pointer-events-auto mx-auto max-w-md drop-shadow-2xl">
               <SpotifyPlayerBar
                 trackId={playingId}
                 onClose={() => setPlayingId(null)}

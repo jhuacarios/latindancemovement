@@ -86,12 +86,12 @@ export function SpotifyPlayerBar({
 
   return (
     <div className="flex items-center gap-2">
-      <div ref={hostRef} className="w-full" />
+      <div ref={hostRef} className="w-full overflow-hidden rounded-xl" />
       <button
         type="button"
         title="Cerrar reproductor"
         onClick={onClose}
-        className="shrink-0 rounded-md bg-neutral-800 px-2 py-1 text-sm text-neutral-300 hover:bg-neutral-700"
+        className="shrink-0 rounded-full bg-neutral-800/80 px-2 py-1 text-sm text-neutral-300 backdrop-blur hover:bg-neutral-700"
       >
         ✕
       </button>
