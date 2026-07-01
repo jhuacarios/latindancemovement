@@ -106,6 +106,7 @@ export class PlaylistGenerationService {
       style,
       savedBy: { some: { userId } },
     };
+    if (dto.source) where.source = dto.source;
     if (onlyApproved) where.approvalStatus = 'APROBADA';
 
     const subs = (dto.substyles ?? []).filter(
@@ -186,6 +187,7 @@ export class PlaylistGenerationService {
     const playlist = await this.prisma.playlist.create({
       data: {
         name: dto.name!,
+        source: dto.source ?? 'YOUTUBE',
         eventId: dto.eventId ?? null,
         status: 'BORRADOR',
         targetBachataPct: bachataPct,

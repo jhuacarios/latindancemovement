@@ -74,6 +74,7 @@ export function toPublicPlaylist(p: PrismaPlaylistWithItems): Playlist {
   return {
     id: p.id,
     name: p.name,
+    source: p.source as TrackSource,
     eventId: p.eventId,
     status: p.status as PlaylistStatus,
     visibility: p.visibility as PlaylistVisibility,

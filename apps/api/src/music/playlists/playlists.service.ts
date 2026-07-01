@@ -24,6 +24,7 @@ export class PlaylistsService {
     const created = await this.prisma.playlist.create({
       data: {
         name: dto.name,
+        source: dto.source ?? 'YOUTUBE',
         eventId: dto.eventId ?? null,
         status: dto.status ?? 'BORRADOR',
         visibility: dto.visibility ?? 'SOLO_ENTRADA',
@@ -37,9 +38,13 @@ export class PlaylistsService {
     return toPublicPlaylist(created);
   }
 
-  async findAllForUser(user: AuthUser): Promise<Playlist[]> {
-    const where =
+  async findAllForUser(
+    user: AuthUser,
+    source?: 'YOUTUBE' | 'SPOTIFY',
+  ): Promise<Playlist[]> {
+    const where: { ownerId?: string; source?: string } =
       user.role === 'SUPER_ADMIN' ? {} : { ownerId: user.id };
+    if (source) where.source = source;
     const rows = await this.prisma.playlist.findMany({
       where,
       orderBy: { updatedAt: 'desc' },

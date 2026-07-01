@@ -188,8 +188,8 @@ export function MusicLibraryView({
   });
 
   const { data: playlists } = useQuery({
-    queryKey: ['playlists'],
-    queryFn: () => api<Playlist[]>('/music/playlists'),
+    queryKey: ['playlists', source],
+    queryFn: () => api<Playlist[]>(`/music/playlists?source=${source}`),
   });
   const openPlaylistTrackIds = useMemo(() => {
     if (!panelSelectedId) return new Set<string>();
@@ -611,6 +611,7 @@ export function MusicLibraryView({
             onSelectedChange={setPanelSelectedId}
             draggedTrackId={draggedTrackId}
             onAddTrack={addToOpenPlaylist}
+            source={source}
           />
         )}
       </div>

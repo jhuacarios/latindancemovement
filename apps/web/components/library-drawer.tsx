@@ -19,9 +19,12 @@ export function LibraryDrawer({
   onItemDragStart,
   onItemDragEnd,
   onAddTrack,
+  platform = 'YOUTUBE',
 }: {
   /** Canciones ya en la playlist (se excluyen de la lista). */
   excludeTrackIds: Set<string>;
+  /** Plataforma de la playlist: solo ofrece canciones de esa fuente. */
+  platform?: 'YOUTUBE' | 'SPOTIFY';
   onClose: () => void;
   onItemDragStart: (trackId: string, fromCatalog: boolean) => void;
   onItemDragEnd: () => void;
@@ -88,9 +91,10 @@ export function LibraryDrawer({
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['library-drawer', source, debounced, style, substyles],
+    queryKey: ['library-drawer', platform, source, debounced, style, substyles],
     queryFn: () => {
       const p = new URLSearchParams({ pageSize: '50', sort: 'recent' });
+      p.set('source', platform);
       if (debounced) p.set('search', debounced);
       if (style) p.set('style', style);
       if (source === 'mine') {

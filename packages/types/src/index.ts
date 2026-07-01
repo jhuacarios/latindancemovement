@@ -141,6 +141,8 @@ export interface PlaylistItem {
 export interface Playlist {
   id: string;
   name: string;
+  /** Plataforma de la playlist interna: YOUTUBE | SPOTIFY. */
+  source: TrackSource;
   eventId: string | null;
   status: PlaylistStatus;
   visibility: PlaylistVisibility;

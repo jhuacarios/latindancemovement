@@ -26,12 +26,15 @@ export function PlaylistsPanel({
   onSelectedChange,
   draggedTrackId,
   onAddTrack,
+  source = 'YOUTUBE',
 }: {
   onClose: () => void;
   selectedId: string | null;
   onSelectedChange: (id: string | null) => void;
   draggedTrackId: string | null;
   onAddTrack: (trackId: string, atIndex: number) => void;
+  /** Plataforma: solo muestra las playlists internas de esa fuente. */
+  source?: 'YOUTUBE' | 'SPOTIFY';
 }) {
   const [search, setSearch] = useState('');
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -44,8 +47,8 @@ export function PlaylistsPanel({
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['playlists'],
-    queryFn: () => api<Playlist[]>('/music/playlists'),
+    queryKey: ['playlists', source],
+    queryFn: () => api<Playlist[]>(`/music/playlists?source=${source}`),
   });
 
   const reorderMut = useMutation({

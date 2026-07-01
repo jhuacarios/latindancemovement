@@ -354,21 +354,23 @@ export default function PlaylistDetailPage() {
               >
                 ＋ Agregar canciones
               </Button>
-              <Button
-                variant="ghost"
-                disabled={ytCount === 0}
-                title={
-                  ytCount === 0
-                    ? 'No hay canciones de YouTube en esta playlist'
-                    : 'Crear una playlist en YouTube con estas canciones (snapshot)'
-                }
-                onClick={() => setYtOpen(true)}
-              >
-                <span className="flex items-center gap-2">
-                  <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
-                  Crear playlist en YouTube
-                </span>
-              </Button>
+              {data.source !== 'SPOTIFY' && (
+                <Button
+                  variant="ghost"
+                  disabled={ytCount === 0}
+                  title={
+                    ytCount === 0
+                      ? 'No hay canciones de YouTube en esta playlist'
+                      : 'Crear una playlist en YouTube con estas canciones (snapshot)'
+                  }
+                  onClick={() => setYtOpen(true)}
+                >
+                  <span className="flex items-center gap-2">
+                    <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
+                    Crear playlist en YouTube
+                  </span>
+                </Button>
+              )}
             </div>
           </div>
 
@@ -538,6 +540,7 @@ export default function PlaylistDetailPage() {
           {drawerOpen && (
             <LibraryDrawer
               excludeTrackIds={inPlaylistIds}
+              platform={data.source}
               onClose={() => setDrawerOpen(false)}
               onItemDragStart={(tid, fromCat) => {
                 setExternalDragId(tid);

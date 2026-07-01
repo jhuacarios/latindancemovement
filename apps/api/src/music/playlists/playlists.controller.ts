@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -30,8 +31,11 @@ export class PlaylistsController {
   ) {}
 
   @Get()
-  findAll(@CurrentUser() user: AuthUser) {
-    return this.playlists.findAllForUser(user);
+  findAll(
+    @CurrentUser() user: AuthUser,
+    @Query('source') source?: 'YOUTUBE' | 'SPOTIFY',
+  ) {
+    return this.playlists.findAllForUser(user, source);
   }
 
   @Get(':id')

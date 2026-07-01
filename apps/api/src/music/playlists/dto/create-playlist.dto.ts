@@ -11,8 +11,10 @@ import {
 import {
   PLAYLIST_STATUSES,
   PLAYLIST_VISIBILITIES,
+  TRACK_SOURCES,
   type PlaylistStatus,
   type PlaylistVisibility,
+  type TrackSource,
 } from '@baile-latino/types';
 
 export class CreatePlaylistDto {
@@ -20,6 +22,11 @@ export class CreatePlaylistDto {
   @MinLength(1)
   @MaxLength(120)
   name!: string;
+
+  /** Plataforma de la playlist interna (YOUTUBE por defecto). */
+  @IsOptional()
+  @IsIn(TRACK_SOURCES)
+  source?: TrackSource;
 
   @IsOptional()
   @IsString()

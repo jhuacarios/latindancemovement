@@ -142,6 +142,7 @@ model UserTrack {
 model Playlist {
   id               String   @id @default(cuid())
   name             String
+  source           String   @default("YOUTUBE") // plataforma: YOUTUBE | SPOTIFY
   eventId          String? // FK lógica al futuro EventsModule (sin constraint aún)
   status           String   @default("BORRADOR") // PlaylistStatus
   visibility       String   @default("SOLO_ENTRADA") // PlaylistVisibility

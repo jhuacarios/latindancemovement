@@ -10,9 +10,19 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { DANCE_SUBSTYLES, type DanceSubstyle } from '@baile-latino/types';
+import {
+  DANCE_SUBSTYLES,
+  TRACK_SOURCES,
+  type DanceSubstyle,
+  type TrackSource,
+} from '@baile-latino/types';
 
 export class GeneratePlaylistDto {
+  /** Plataforma: filtra la biblioteca y marca la playlist creada. */
+  @IsOptional()
+  @IsIn(TRACK_SOURCES)
+  source?: TrackSource;
+
   /** % de bachata objetivo (0-100); el resto se llena con salsa. Default 50. */
   @IsOptional()
   @IsInt()

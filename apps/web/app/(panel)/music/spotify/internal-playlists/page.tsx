@@ -1,5 +1,7 @@
-import { SpotifyPlaceholder } from '@/components/spotify-placeholder';
+'use client';
+
+import { InternalPlaylistsView } from '@/components/internal-playlists-view';
 
 export default function SpotifyInternalPlaylistsPage() {
-  return <SpotifyPlaceholder section="Playlists Internas" />;
+  return <InternalPlaylistsView source="SPOTIFY" />;
 }
