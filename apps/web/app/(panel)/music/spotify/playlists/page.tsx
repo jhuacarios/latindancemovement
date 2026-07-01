@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 import { formatDuration } from '@/lib/format';
 import { LoadingBar } from '@/components/loading-bar';
+import { SpotifyPlayerBar } from '@/components/spotify-player-bar';
 import {
   AddVideoToLibraryModal,
   type VideoToAdd,
@@ -369,26 +370,11 @@ export default function SpotifyPlaylistsPage() {
         <>
           <div className="h-24" />
           <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-900/95 p-2 backdrop-blur">
-            <div className="mx-auto flex max-w-3xl items-center gap-2">
-              <iframe
-                title="Reproductor de Spotify"
-                key={playingId}
-                src={`https://open.spotify.com/embed/track/${playingId}?utm_source=nectason`}
-                width="100%"
-                height="80"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-lg"
+            <div className="mx-auto max-w-3xl">
+              <SpotifyPlayerBar
+                trackId={playingId}
+                onClose={() => setPlayingId(null)}
               />
-              <button
-                type="button"
-                title="Cerrar reproductor"
-                onClick={() => setPlayingId(null)}
-                className="shrink-0 rounded-md bg-neutral-800 px-2 py-1 text-sm text-neutral-300 hover:bg-neutral-700"
-              >
-                ✕
-              </button>
             </div>
           </div>
         </>
