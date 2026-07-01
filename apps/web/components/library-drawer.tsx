@@ -20,6 +20,7 @@ export function LibraryDrawer({
   onItemDragEnd,
   onAddTrack,
   platform = 'YOUTUBE',
+  onPlaySpotify,
 }: {
   /** Canciones ya en la playlist (se excluyen de la lista). */
   excludeTrackIds: Set<string>;
@@ -30,6 +31,8 @@ export function LibraryDrawer({
   onItemDragEnd: () => void;
   /** Doble click en una canción: agregar al final de la playlist. */
   onAddTrack?: (trackId: string, fromCatalog: boolean) => void;
+  /** Click en una canción de Spotify: gatilla el reproductor de Spotify. */
+  onPlaySpotify?: (track: Track) => void;
 }) {
   // Fuente: mi biblioteca o el catálogo global.
   const [source, setSource] = useState<'mine' | 'catalog'>('mine');
@@ -248,7 +251,8 @@ export function LibraryDrawer({
                   if (clickTimer.current) clearTimeout(clickTimer.current);
                   clickTimer.current = setTimeout(() => {
                     clickTimer.current = null;
-                    if (player.canPlay(t)) player.playAudio(t);
+                    if (t.source === 'SPOTIFY') onPlaySpotify?.(t);
+                    else if (player.canPlay(t)) player.playAudio(t);
                   }, 220);
                 }}
                 onDoubleClick={() => {

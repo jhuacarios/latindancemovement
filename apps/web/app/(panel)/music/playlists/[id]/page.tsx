@@ -10,6 +10,10 @@ import { Button, Card, Input, Spinner, StyleBadge } from '@/components/ui';
 import { PlayButtons } from '@/components/play-buttons';
 import { TrackThumb } from '@/components/track-thumb';
 import { SourceLink } from '@/components/source-link';
+import {
+  SpotifyPlayerBar,
+  type SpotifyPlayable,
+} from '@/components/spotify-player-bar';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-modal';
 import { LibraryDrawer } from '@/components/library-drawer';
@@ -55,6 +59,10 @@ export default function PlaylistDetailPage() {
   const [dropTarget, setDropTarget] = useState<DropSide>(null);
   // Editor de distribución (N bachatas / M salsas por bloque). null = cerrado.
   const [distForm, setDistForm] = useState<{ n: number; m: number } | null>(null);
+  // Reproductor de Spotify (barra inferior) para canciones de Spotify.
+  const [spotifyPlaying, setSpotifyPlaying] = useState<SpotifyPlayable | null>(
+    null,
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['playlist', id],
@@ -488,6 +496,40 @@ export default function PlaylistDetailPage() {
                     >
                       <div className="flex items-center justify-end gap-2">
                         {item.track && <PlayButtons track={item.track} />}
+                        {item.track?.source === 'SPOTIFY' && (
+                          <button
+                            type="button"
+                            title={
+                              spotifyPlaying?.sourceId === item.track.sourceId
+                                ? 'Detener'
+                                : 'Reproducir (Spotify)'
+                            }
+                            aria-label="Reproducir"
+                            onClick={() => {
+                              const t = item.track!;
+                              setSpotifyPlaying(
+                                spotifyPlaying?.sourceId === t.sourceId
+                                  ? null
+                                  : {
+                                      sourceId: t.sourceId,
+                                      title: t.title,
+                                      artist: t.artist,
+                                      imageUrl: t.coverUrl,
+                                    },
+                              );
+                            }}
+                            className={
+                              'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
+                              (spotifyPlaying?.sourceId === item.track.sourceId
+                                ? 'bg-brand text-white'
+                                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
+                            }
+                          >
+                            {spotifyPlaying?.sourceId === item.track.sourceId
+                              ? '⏸'
+                              : '▶'}
+                          </button>
+                        )}
                         {item.track && <SourceLink track={item.track} />}
                         <button
                           className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 transition hover:bg-red-600/20 hover:text-red-300 disabled:opacity-50"
@@ -553,6 +595,14 @@ export default function PlaylistDetailPage() {
               }}
               onAddTrack={(tid, fromCat) =>
                 addTrack.mutate({ trackId: tid, target: null, fromCatalog: fromCat })
+              }
+              onPlaySpotify={(t) =>
+                setSpotifyPlaying({
+                  sourceId: t.sourceId,
+                  title: t.title,
+                  artist: t.artist,
+                  imageUrl: t.coverUrl,
+                })
               }
             />
           )}
@@ -653,6 +703,20 @@ export default function PlaylistDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {spotifyPlaying && (
+        <>
+          <div className="h-24" />
+          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-900/95 p-3 backdrop-blur">
+            <div className="mx-auto max-w-3xl">
+              <SpotifyPlayerBar
+                track={spotifyPlaying}
+                onClose={() => setSpotifyPlaying(null)}
+              />
+            </div>
+          </div>
+        </>
       )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
