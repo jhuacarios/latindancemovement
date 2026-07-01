@@ -6,7 +6,7 @@ import type { DanceStyle, PlaylistImportResult } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Input } from './ui';
 import { LoadingBar } from './loading-bar';
-import { SpotifyPlayerBar } from './spotify-player-bar';
+import { SpotifyPlayerBar, type SpotifyPlayable } from './spotify-player-bar';
 import { clsx } from './clsx';
 
 /** Una canción resuelta de una playlist de Spotify (del preview). */
@@ -37,8 +37,8 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
   const [result, setResult] = useState<PlaylistImportResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [skipped, setSkipped] = useState(0);
-  // Canción sonando en el reproductor embebido de Spotify (dentro del modal).
-  const [playingId, setPlayingId] = useState<string | null>(null);
+  // Canción sonando en el reproductor de Spotify (dentro del modal).
+  const [playing, setPlaying] = useState<SpotifyPlayable | null>(null);
 
   function setRowStyle(sourceId: string, style: DanceStyle) {
     setRowStyles((prev) => ({ ...prev, [sourceId]: style }));
@@ -189,11 +189,11 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
             </div>
 
             {/* Reproductor embebido de Spotify (preview 30s; completa con Premium). */}
-            {playingId && (
+            {playing && (
               <div className="mt-3">
                 <SpotifyPlayerBar
-                  trackId={playingId}
-                  onClose={() => setPlayingId(null)}
+                  track={playing}
+                  onClose={() => setPlaying(null)}
                 />
               </div>
             )}
@@ -222,28 +222,35 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                           <button
                             type="button"
                             title={
-                              playingId === it.sourceId
+                              playing?.sourceId === it.sourceId
                                 ? 'Detener'
                                 : 'Reproducir (Spotify)'
                             }
                             aria-label={
-                              playingId === it.sourceId
+                              playing?.sourceId === it.sourceId
                                 ? 'Detener'
                                 : 'Reproducir'
                             }
                             onClick={() =>
-                              setPlayingId(
-                                playingId === it.sourceId ? null : it.sourceId,
+                              setPlaying(
+                                playing?.sourceId === it.sourceId
+                                  ? null
+                                  : {
+                                      sourceId: it.sourceId,
+                                      title: it.title,
+                                      artist: it.artist,
+                                      imageUrl: it.coverUrl,
+                                    },
                               )
                             }
                             className={clsx(
                               'flex h-8 w-8 items-center justify-center rounded-full text-sm transition',
-                              playingId === it.sourceId
+                              playing?.sourceId === it.sourceId
                                 ? 'bg-brand text-white'
                                 : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700',
                             )}
                           >
-                            {playingId === it.sourceId ? '⏸' : '▶'}
+                            {playing?.sourceId === it.sourceId ? '⏸' : '▶'}
                           </button>
                         </td>
                         <td className="px-2 py-2">

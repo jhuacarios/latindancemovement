@@ -12,7 +12,10 @@ import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 import { formatDuration } from '@/lib/format';
 import { LoadingBar } from '@/components/loading-bar';
-import { SpotifyPlayerBar } from '@/components/spotify-player-bar';
+import {
+  SpotifyPlayerBar,
+  type SpotifyPlayable,
+} from '@/components/spotify-player-bar';
 import {
   AddVideoToLibraryModal,
   type VideoToAdd,
@@ -26,8 +29,8 @@ export default function SpotifyPlaylistsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [addTrack, setAddTrack] = useState<VideoToAdd | null>(null);
   const [addInCatalog, setAddInCatalog] = useState(false);
-  // Canción sonando en el reproductor embebido de Spotify (barra inferior).
-  const [playingId, setPlayingId] = useState<string | null>(null);
+  // Canción sonando en el reproductor de Spotify (barra inferior).
+  const [playing, setPlaying] = useState<SpotifyPlayable | null>(null);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['spotify-status'],
@@ -272,23 +275,30 @@ export default function SpotifyPlaylistsPage() {
                             <button
                               type="button"
                               title={
-                                playingId === it.sourceId
+                                playing?.sourceId === it.sourceId
                                   ? 'Detener'
                                   : 'Reproducir (Spotify)'
                               }
                               onClick={() =>
-                                setPlayingId(
-                                  playingId === it.sourceId ? null : it.sourceId,
+                                setPlaying(
+                                  playing?.sourceId === it.sourceId
+                                    ? null
+                                    : {
+                                        sourceId: it.sourceId,
+                                        title: it.title,
+                                        artist: it.artist,
+                                        imageUrl: it.imageUrl,
+                                      },
                                 )
                               }
                               className={
                                 'rounded-md px-2 py-1 text-xs transition ' +
-                                (playingId === it.sourceId
+                                (playing?.sourceId === it.sourceId
                                   ? 'bg-brand/20 text-brand'
                                   : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700')
                               }
                             >
-                              {playingId === it.sourceId ? '⏸' : '▶'}
+                              {playing?.sourceId === it.sourceId ? '⏸' : '▶'}
                             </button>
                             {!it.match?.inLibrary && (
                               <button
@@ -366,14 +376,14 @@ export default function SpotifyPlaylistsPage() {
 
       {/* Reproductor embebido de Spotify (preview 30s; pista completa si tienes
           sesión Premium en el navegador). */}
-      {playingId && (
+      {playing && (
         <>
           <div className="h-24" />
-          <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 px-3">
-            <div className="pointer-events-auto mx-auto max-w-md drop-shadow-2xl">
+          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-900/95 p-3 backdrop-blur">
+            <div className="mx-auto max-w-3xl">
               <SpotifyPlayerBar
-                trackId={playingId}
-                onClose={() => setPlayingId(null)}
+                track={playing}
+                onClose={() => setPlaying(null)}
               />
             </div>
           </div>

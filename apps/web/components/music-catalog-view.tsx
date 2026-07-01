@@ -25,7 +25,10 @@ import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import { PlaylistImportModal } from '@/components/playlist-import-modal';
 import { SpotifyImportModal } from '@/components/spotify-import-modal';
 import { SpotifyCatalogImportModal } from '@/components/spotify-catalog-import-modal';
-import { SpotifyPlayerBar } from '@/components/spotify-player-bar';
+import {
+  SpotifyPlayerBar,
+  type SpotifyPlayable,
+} from '@/components/spotify-player-bar';
 import { DuplicatesModal } from '@/components/duplicates-modal';
 import {
   ConfirmDialog,
@@ -69,8 +72,10 @@ export function MusicCatalogView({
   const [showThumb, toggleThumb] = useThumbs();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [showSpotifyImport, setShowSpotifyImport] = useState(false);
-  // Reproducción de Spotify (sourceId) en la barra inferior de la página.
-  const [spotifyPlaying, setSpotifyPlaying] = useState<string | null>(null);
+  // Reproducción de Spotify en la barra inferior de la página.
+  const [spotifyPlaying, setSpotifyPlaying] = useState<SpotifyPlayable | null>(
+    null,
+  );
 
   const onSort = (col: string, primary: 'asc' | 'desc') => {
     setSort((s) => nextSort(s, col, primary));
@@ -391,24 +396,31 @@ export function MusicCatalogView({
                         <button
                           type="button"
                           title={
-                            spotifyPlaying === t.sourceId
+                            spotifyPlaying?.sourceId === t.sourceId
                               ? 'Detener'
                               : 'Reproducir (Spotify)'
                           }
                           aria-label="Reproducir"
                           onClick={() =>
                             setSpotifyPlaying(
-                              spotifyPlaying === t.sourceId ? null : t.sourceId,
+                              spotifyPlaying?.sourceId === t.sourceId
+                                ? null
+                                : {
+                                    sourceId: t.sourceId,
+                                    title: t.title,
+                                    artist: t.artist,
+                                    imageUrl: t.coverUrl,
+                                  },
                             )
                           }
                           className={
                             'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
-                            (spotifyPlaying === t.sourceId
+                            (spotifyPlaying?.sourceId === t.sourceId
                               ? 'bg-brand text-white'
                               : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
                           }
                         >
-                          {spotifyPlaying === t.sourceId ? '⏸' : '▶'}
+                          {spotifyPlaying?.sourceId === t.sourceId ? '⏸' : '▶'}
                         </button>
                       )}
                       <SourceLink track={t} />
@@ -517,10 +529,10 @@ export function MusicCatalogView({
       {spotifyPlaying && (
         <>
           <div className="h-24" />
-          <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 px-3">
-            <div className="pointer-events-auto mx-auto max-w-md drop-shadow-2xl">
+          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-900/95 p-3 backdrop-blur">
+            <div className="mx-auto max-w-3xl">
               <SpotifyPlayerBar
-                trackId={spotifyPlaying}
+                track={spotifyPlaying}
                 onClose={() => setSpotifyPlaying(null)}
               />
             </div>
