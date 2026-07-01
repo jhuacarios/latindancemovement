@@ -131,9 +131,10 @@ export class LibraryService {
   }
 
   /**
-   * Anota cada item con el estilo del CATÁLOGO si la canción ya existe ahí
-   * (match por source+sourceId). Si no está en el catálogo, queda sin estilo
-   * (null). Reemplaza la detección por palabras: el estilo lo manda el catálogo.
+   * Anota cada item con el estilo del CATÁLOGO. Primero por source+sourceId (el
+   * mismo video ya en catálogo); a las que queden sin estilo, las cruza por
+   * artista+título con todo el catálogo (así hereda el estilo aunque sea otra
+   * versión/fuente de la misma canción). El estilo lo manda el catálogo.
    */
   async applyCatalogStyles(
     items: ExtractedTrackMetadata[],
@@ -145,10 +146,13 @@ export class LibraryService {
       select: { sourceId: true, style: true },
     });
     const byId = new Map(rows.map((r) => [r.sourceId, r.style as DanceStyle]));
-    return items.map((it) => ({
+    const result = items.map((it) => ({
       ...it,
       detectedStyle: byId.get(it.sourceId) ?? null,
     }));
+    // Cruce adicional por artista+título contra todo el catálogo.
+    await this.tracks.fillStylesFromCatalog(result);
+    return result;
   }
 
   /** sourceIds de YouTube ya en mi biblioteca (para ignorar duplicados al cargar). */

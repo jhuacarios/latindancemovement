@@ -152,8 +152,11 @@ export class TracksController {
   /** Previsualiza las canciones de una playlist de YouTube (no guarda). */
   @Post('playlist-preview')
   @Roles('SUPER_ADMIN')
-  playlistPreview(@Body() dto: PlaylistPreviewDto) {
-    return this.youtube.extractPlaylist(dto.link);
+  async playlistPreview(@Body() dto: PlaylistPreviewDto) {
+    const items = await this.youtube.extractPlaylist(dto.link);
+    // Cruce con el catálogo por artista+título para las que no detectó estilo.
+    await this.tracks.fillStylesFromCatalog(items);
+    return items;
   }
 
   /** Importa al catálogo todas las canciones de una playlist de YouTube. */
@@ -164,6 +167,7 @@ export class TracksController {
     @CurrentUser() user: AuthUser,
   ) {
     const items = await this.youtube.extractPlaylist(dto.link);
+    await this.tracks.fillStylesFromCatalog(items);
     // Sin estilo por defecto: el estilo sale de lo detectado o de la elección
     // del usuario (overrides). Las que queden sin estilo se omiten.
     return this.tracks.importPlaylistItems(
