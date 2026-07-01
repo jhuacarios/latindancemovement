@@ -36,6 +36,8 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
   const [result, setResult] = useState<PlaylistImportResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [skipped, setSkipped] = useState(0);
+  // Canción sonando en el reproductor embebido de Spotify (dentro del modal).
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
   function setRowStyle(sourceId: string, style: DanceStyle) {
     setRowStyles((prev) => ({ ...prev, [sourceId]: style }));
@@ -185,6 +187,31 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
               </span>
             </div>
 
+            {/* Reproductor embebido de Spotify (preview 30s; completa con Premium). */}
+            {playingId && (
+              <div className="mt-3 flex items-center gap-2">
+                <iframe
+                  title="Reproductor de Spotify"
+                  key={playingId}
+                  src={`https://open.spotify.com/embed/track/${playingId}?utm_source=nectason`}
+                  width="100%"
+                  height="80"
+                  frameBorder="0"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  loading="lazy"
+                  className="rounded-lg"
+                />
+                <button
+                  type="button"
+                  title="Cerrar reproductor"
+                  onClick={() => setPlayingId(null)}
+                  className="shrink-0 rounded-md bg-neutral-800 px-2 py-1 text-sm text-neutral-300 hover:bg-neutral-700"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <div className="mt-3 flex-1 overflow-auto rounded-lg border border-neutral-800">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 border-b border-neutral-800 bg-neutral-900 text-left text-neutral-400">
@@ -205,17 +232,40 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                         className="border-b border-neutral-800/60 last:border-0"
                       >
                         <td className="px-2 py-2">
-                          {it.coverUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={it.coverUrl}
-                              alt=""
-                              loading="lazy"
-                              className="h-12 w-12 rounded bg-neutral-800 object-cover"
-                            />
-                          ) : (
-                            <div className="h-12 w-12 rounded bg-neutral-800" />
-                          )}
+                          <button
+                            type="button"
+                            title={
+                              playingId === it.sourceId
+                                ? 'Detener'
+                                : 'Reproducir (Spotify)'
+                            }
+                            onClick={() =>
+                              setPlayingId(
+                                playingId === it.sourceId ? null : it.sourceId,
+                              )
+                            }
+                            className="group relative block h-12 w-12 overflow-hidden rounded bg-neutral-800"
+                          >
+                            {it.coverUrl && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={it.coverUrl}
+                                alt=""
+                                loading="lazy"
+                                className="h-12 w-12 object-cover"
+                              />
+                            )}
+                            <span
+                              className={clsx(
+                                'absolute inset-0 flex items-center justify-center text-lg text-white transition',
+                                playingId === it.sourceId
+                                  ? 'bg-black/50'
+                                  : 'bg-black/40 opacity-0 group-hover:opacity-100',
+                              )}
+                            >
+                              {playingId === it.sourceId ? '⏸' : '▶'}
+                            </span>
+                          </button>
                         </td>
                         <td className="px-3 py-2 font-medium">{it.title}</td>
                         <td className="px-3 py-2 text-neutral-300">
