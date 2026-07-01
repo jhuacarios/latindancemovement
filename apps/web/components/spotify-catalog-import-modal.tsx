@@ -320,9 +320,9 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                             title="Quitar de la lista (no se importa)"
                             aria-label="Quitar"
                             onClick={() => removeItem(it.sourceId)}
-                            className="rounded-md px-2 py-1 text-neutral-500 transition hover:bg-red-600/20 hover:text-red-300"
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold text-red-500 transition hover:bg-red-600/20 hover:text-red-400"
                           >
-                            🗑
+                            ✕
                           </button>
                         </td>
                       </tr>
