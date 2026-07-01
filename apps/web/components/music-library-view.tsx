@@ -21,6 +21,7 @@ import { TrackThumb } from '@/components/track-thumb';
 import { formatDuration } from '@/lib/format';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
+import { SpotifyPlayerBar } from '@/components/spotify-player-bar';
 import { TagEditor } from '@/components/tag-editor';
 import { SubstyleFilterSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
@@ -85,6 +86,8 @@ export function MusicLibraryView({
   const [showYtPlaylist, setShowYtPlaylist] = useState(false);
   const [showImportPlaylist, setShowImportPlaylist] = useState(false);
   const [showThumb, toggleThumb] = useThumbs();
+  // Reproducción de Spotify (sourceId) en la barra inferior de la página.
+  const [spotifyPlaying, setSpotifyPlaying] = useState<string | null>(null);
 
   const addTrack = useMutation({
     mutationFn: async (args: {
@@ -525,6 +528,32 @@ export function MusicLibraryView({
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <PlayButtons track={t} />
+                          {isSpotify && (
+                            <button
+                              type="button"
+                              title={
+                                spotifyPlaying === t.sourceId
+                                  ? 'Detener'
+                                  : 'Reproducir (Spotify)'
+                              }
+                              aria-label="Reproducir"
+                              onClick={() =>
+                                setSpotifyPlaying(
+                                  spotifyPlaying === t.sourceId
+                                    ? null
+                                    : t.sourceId,
+                                )
+                              }
+                              className={
+                                'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
+                                (spotifyPlaying === t.sourceId
+                                  ? 'bg-brand text-white'
+                                  : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
+                              }
+                            >
+                              {spotifyPlaying === t.sourceId ? '⏸' : '▶'}
+                            </button>
+                          )}
                           {canEdit && (
                             <button
                               className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
@@ -615,6 +644,20 @@ export function MusicLibraryView({
           />
         )}
       </div>
+
+      {spotifyPlaying && (
+        <>
+          <div className="h-24" />
+          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-900/95 p-2 backdrop-blur">
+            <div className="mx-auto max-w-3xl">
+              <SpotifyPlayerBar
+                trackId={spotifyPlaying}
+                onClose={() => setSpotifyPlaying(null)}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
 
