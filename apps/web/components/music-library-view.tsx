@@ -651,6 +651,15 @@ export function MusicLibraryView({
             draggedTrackId={draggedTrackId}
             onAddTrack={addToOpenPlaylist}
             source={source}
+            onPlaySpotify={(t) =>
+              t &&
+              setSpotifyPlaying({
+                sourceId: t.sourceId,
+                title: t.title,
+                artist: t.artist,
+                imageUrl: t.coverUrl,
+              })
+            }
           />
         )}
       </div>

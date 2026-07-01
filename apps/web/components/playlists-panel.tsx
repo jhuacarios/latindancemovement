@@ -27,6 +27,7 @@ export function PlaylistsPanel({
   draggedTrackId,
   onAddTrack,
   source = 'YOUTUBE',
+  onPlaySpotify,
 }: {
   onClose: () => void;
   selectedId: string | null;
@@ -35,6 +36,8 @@ export function PlaylistsPanel({
   onAddTrack: (trackId: string, atIndex: number) => void;
   /** Plataforma: solo muestra las playlists internas de esa fuente. */
   source?: 'YOUTUBE' | 'SPOTIFY';
+  /** Click en una canción de Spotify: gatilla el reproductor de Spotify. */
+  onPlaySpotify?: (track: PlaylistItem['track']) => void;
 }) {
   const [search, setSearch] = useState('');
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -397,6 +400,8 @@ export function PlaylistsPanel({
                 const showBottom =
                   anyDnd && dropIndex === songs.length && i === arr.length - 1;
                 const playable = !!t && player.canPlay(t);
+                const isSpotify = !!t && t.source === 'SPOTIFY';
+                const clickable = playable || (isSpotify && !!onPlaySpotify);
                 const isPlaying =
                   !!t && player.playingKey === `${t.source}:${t.sourceId}`;
                 const isDragged = dragId === it.id;
@@ -406,9 +411,11 @@ export function PlaylistsPanel({
                   <div
                     key={it.id}
                     data-song-row
-                    title={playable ? 'Reproducir' : undefined}
+                    title={clickable ? 'Reproducir' : undefined}
                     onClick={() => {
-                      if (t && playable) player.playAudio(t);
+                      if (!t) return;
+                      if (isSpotify) onPlaySpotify?.(t);
+                      else if (playable) player.playAudio(t);
                     }}
                     onDragOver={(e) => {
                       // Solo para el arrastre nativo (agregar desde la tabla).
@@ -422,7 +429,7 @@ export function PlaylistsPanel({
                     }}
                     className={clsx(
                       'flex select-none items-center gap-2 rounded-lg p-1 hover:bg-neutral-800/40',
-                      playable && 'cursor-pointer',
+                      clickable && 'cursor-pointer',
                       isPlaying && 'bg-brand/15',
                       isDragged && 'opacity-40',
                       showTop &&
