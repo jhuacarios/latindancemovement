@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DanceStyle, PlaylistImportResult } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Input, Spinner } from './ui';
+import { Button, Input } from './ui';
+import { LoadingBar } from './loading-bar';
 import { clsx } from './clsx';
 
 /** Una canción resuelta de una playlist de Spotify (del preview). */
@@ -149,7 +150,10 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
 
         {loading && (
           <div className="mt-4">
-            <Spinner label="Leyendo y resolviendo la playlist en Spotify…" />
+            <LoadingBar
+              label="Leyendo y resolviendo la playlist en Spotify… (puede tardar en playlists grandes)"
+              estMs={30000}
+            />
           </div>
         )}
 

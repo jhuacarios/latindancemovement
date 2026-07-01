@@ -11,6 +11,7 @@ import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 import { formatDuration } from '@/lib/format';
+import { LoadingBar } from '@/components/loading-bar';
 import {
   AddVideoToLibraryModal,
   type VideoToAdd,
@@ -24,6 +25,8 @@ export default function SpotifyPlaylistsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [addTrack, setAddTrack] = useState<VideoToAdd | null>(null);
   const [addInCatalog, setAddInCatalog] = useState(false);
+  // Canción sonando en el reproductor embebido de Spotify (barra inferior).
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['spotify-status'],
@@ -170,7 +173,16 @@ export default function SpotifyPlaylistsPage() {
             ← Volver a mis playlists
           </button>
 
-          {detailLoading && <Spinner label="Leyendo la playlist…" />}
+          {detailLoading && (
+            <LoadingBar
+              label="Leyendo la playlist…"
+              estMs={Math.max(
+                3000,
+                (playlists?.find((p) => p.id === selectedId)?.itemCount ?? 40) *
+                  25,
+              )}
+            />
+          )}
 
           {detail && (
             <>
@@ -256,6 +268,27 @@ export default function SpotifyPlaylistsPage() {
                         </td>
                         <td className="px-4 py-2 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              title={
+                                playingId === it.sourceId
+                                  ? 'Detener'
+                                  : 'Reproducir (Spotify)'
+                              }
+                              onClick={() =>
+                                setPlayingId(
+                                  playingId === it.sourceId ? null : it.sourceId,
+                                )
+                              }
+                              className={
+                                'rounded-md px-2 py-1 text-xs transition ' +
+                                (playingId === it.sourceId
+                                  ? 'bg-brand/20 text-brand'
+                                  : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700')
+                              }
+                            >
+                              {playingId === it.sourceId ? '⏸' : '▶'}
+                            </button>
                             {!it.match?.inLibrary && (
                               <button
                                 type="button"
@@ -328,6 +361,37 @@ export default function SpotifyPlaylistsPage() {
           onClose={() => setAddTrack(null)}
           onAdded={invalidateAfterChange}
         />
+      )}
+
+      {/* Reproductor embebido de Spotify (preview 30s; pista completa si tienes
+          sesión Premium en el navegador). */}
+      {playingId && (
+        <>
+          <div className="h-24" />
+          <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-neutral-800 bg-neutral-900/95 p-2 backdrop-blur">
+            <div className="mx-auto flex max-w-3xl items-center gap-2">
+              <iframe
+                title="Reproductor de Spotify"
+                key={playingId}
+                src={`https://open.spotify.com/embed/track/${playingId}?utm_source=nectason`}
+                width="100%"
+                height="80"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                loading="lazy"
+                className="rounded-lg"
+              />
+              <button
+                type="button"
+                title="Cerrar reproductor"
+                onClick={() => setPlayingId(null)}
+                className="shrink-0 rounded-md bg-neutral-800 px-2 py-1 text-sm text-neutral-300 hover:bg-neutral-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
