@@ -53,6 +53,7 @@ model Track {
   sourceId       String
   coverUrl       String?
   durationSec    Int?
+  searchText     String? // título+artista normalizado (sin acentos, minúsculas) para buscar; lo mantiene un trigger
   viewCount      BigInt? // reproducciones (de ytMetadata.viewCount), para ordenar
   isRelease      Boolean  @default(false)
   approvalStatus String   @default("APROBADA") // TrackApprovalStatus

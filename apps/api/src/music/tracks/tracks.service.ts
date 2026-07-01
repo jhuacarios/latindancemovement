@@ -18,6 +18,7 @@ import type {
 } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseTrackLink } from '../track-url.util';
+import { normalizeSearch } from '../search.util';
 import { toPublicTrack } from '../mappers';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
@@ -154,6 +155,8 @@ export class TracksService {
       where.OR = [
         { title: { contains: q.search, mode: 'insensitive' } },
         { artist: { contains: q.search, mode: 'insensitive' } },
+        // Match sin acentos (columna normalizada por trigger).
+        { searchText: { contains: normalizeSearch(q.search) } },
       ];
     }
 

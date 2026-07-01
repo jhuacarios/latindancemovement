@@ -3,6 +3,7 @@ import { Workbook } from 'exceljs';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildTrackUrl } from '../track-url.util';
+import { normalizeSearch } from '../search.util';
 import type { TrackSource } from '@baile-latino/types';
 import { QueryTracksDto } from './dto/query-tracks.dto';
 
@@ -23,6 +24,7 @@ export class TracksExportService {
       where.OR = [
         { title: { contains: q.search, mode: 'insensitive' } },
         { artist: { contains: q.search, mode: 'insensitive' } },
+        { searchText: { contains: normalizeSearch(q.search) } },
       ];
     }
 

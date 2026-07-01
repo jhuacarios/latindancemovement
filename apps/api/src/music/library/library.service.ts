@@ -10,6 +10,7 @@ import type {
   Track,
 } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { normalizeSearch } from '../search.util';
 import { toPublicTrack } from '../mappers';
 import { TracksService } from '../tracks/tracks.service';
 import { TagsService } from '../tags/tags.service';
@@ -39,6 +40,8 @@ export class LibraryService {
         OR: [
           { title: { contains: q.search, mode: 'insensitive' } },
           { artist: { contains: q.search, mode: 'insensitive' } },
+          // Match sin acentos (columna normalizada por trigger).
+          { searchText: { contains: normalizeSearch(q.search) } },
         ],
       });
     }
