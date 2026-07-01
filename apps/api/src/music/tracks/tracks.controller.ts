@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { DanceStyle } from '@baile-latino/types';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -206,8 +207,22 @@ export class TracksController {
   /** Resuelve una playlist de Spotify a tracks reales de Spotify (no guarda). */
   @Post('spotify-catalog-preview')
   @Roles('SUPER_ADMIN')
-  spotifyCatalogPreview(@Body() dto: PlaylistPreviewDto) {
-    return this.spotify.getPlaylistResolved(dto.link);
+  async spotifyCatalogPreview(@Body() dto: PlaylistPreviewDto) {
+    const items = await this.spotify.getPlaylistResolved(dto.link);
+    // 1) Hereda el estilo del catálogo por artista+título (curación fiable).
+    await this.tracks.fillStylesFromCatalog(items);
+    // 2) Fallback: si el nombre de la playlist dice bachata/salsa, aplícalo a
+    //    las que aún no tienen estilo (playlists suelen ser mono-estilo).
+    const text = (await this.spotify.getPlaylistName(dto.link))?.toLowerCase() ?? '';
+    const nameStyle: DanceStyle | null = /bachata/.test(text)
+      ? 'BACHATA'
+      : /salsa/.test(text)
+        ? 'SALSA'
+        : null;
+    if (nameStyle) {
+      for (const it of items) if (!it.detectedStyle) it.detectedStyle = nameStyle;
+    }
+    return items;
   }
 
   /** Importa al catálogo (como tracks Spotify) las canciones elegidas. */

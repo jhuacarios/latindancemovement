@@ -467,6 +467,57 @@ export class TracksService {
     return rows.map((r) => r.sourceId);
   }
 
+  /**
+   * Rellena el estilo (detectedStyle) de canciones que no lo tienen, cruzándolas
+   * con el CATÁLOGO por artista+título normalizado (tu curación es la fuente más
+   * fiable, mejor que los géneros de Spotify que suelen venir vacíos). Muta los
+   * items y devuelve cuántos rellenó.
+   */
+  async fillStylesFromCatalog(
+    items: {
+      title: string;
+      artist?: string | null;
+      detectedStyle?: DanceStyle | null;
+    }[],
+  ): Promise<number> {
+    if (!items.some((i) => !i.detectedStyle)) return 0;
+    const firstArtist = (a: string | null | undefined) =>
+      (a ?? '').split(/[,&]|\bfeat\b|\bft\b/i)[0];
+    const rows = await this.prisma.track.findMany({
+      where: { scope: 'CATALOG' },
+      select: { title: true, artist: true, style: true },
+    });
+    const byArtistTitle = new Map<string, DanceStyle>();
+    const byTitle = new Map<string, Set<DanceStyle>>();
+    for (const r of rows) {
+      const t = normForDup(r.title);
+      if (!t) continue;
+      const ak = `${normForDup(firstArtist(r.artist))}|${t}`;
+      if (!byArtistTitle.has(ak)) byArtistTitle.set(ak, r.style as DanceStyle);
+      const set = byTitle.get(t) ?? new Set<DanceStyle>();
+      set.add(r.style as DanceStyle);
+      byTitle.set(t, set);
+    }
+    let filled = 0;
+    for (const it of items) {
+      if (it.detectedStyle) continue;
+      const t = normForDup(it.title);
+      if (!t) continue;
+      const ak = `${normForDup(firstArtist(it.artist))}|${t}`;
+      let s = byArtistTitle.get(ak);
+      // Fallback por título solo si en el catálogo ese título es de un único estilo.
+      if (!s) {
+        const set = byTitle.get(t);
+        if (set && set.size === 1) s = [...set][0];
+      }
+      if (s) {
+        it.detectedStyle = s;
+        filled++;
+      }
+    }
+    return filled;
+  }
+
   /** sourceIds de Spotify ya en el catálogo (para ignorar al importar). */
   async catalogSpotifySourceIds(): Promise<string[]> {
     const rows = await this.prisma.track.findMany({

@@ -159,6 +159,32 @@ export class SpotifyService {
   }
 
   /**
+   * Nombre + descripción de una playlist (para inferir estilo por su nombre,
+   * ej: "Bachata casual"). Vía Web API con token client-credentials (la metadata
+   * sí se puede leer, a diferencia de las canciones). null si falla.
+   */
+  async getPlaylistName(link: string): Promise<string | null> {
+    if (!this.enabled) return null;
+    const id = parsePlaylistId(link);
+    if (!id) return null;
+    try {
+      const token = await this.getToken();
+      const res = await fetch(
+        `https://api.spotify.com/v1/playlists/${id}?fields=name,description`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        if (res.status === 401) this.token = null;
+        return null;
+      }
+      const j = (await res.json()) as { name?: string; description?: string };
+      return [j.name, j.description].filter(Boolean).join(' ') || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Lee una playlist pública de Spotify y resuelve cada canción a su track real
    * de Spotify (id, carátula, año, estilo). El embed da título/artista pero no
    * los IDs, así que cada canción se busca en la Web API (mejor coincidencia).
