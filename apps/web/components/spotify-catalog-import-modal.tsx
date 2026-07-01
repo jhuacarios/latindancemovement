@@ -45,6 +45,17 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
     setTouched((prev) => new Set(prev).add(sourceId));
   }
 
+  /** Quita una canción de la lista del modal (no se importará). */
+  function removeItem(sourceId: string) {
+    setItems((prev) => (prev ? prev.filter((i) => i.sourceId !== sourceId) : prev));
+    setRowStyles((prev) => {
+      const next = { ...prev };
+      delete next[sourceId];
+      return next;
+    });
+    setPlaying((p) => (p?.sourceId === sourceId ? null : p));
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -208,6 +219,7 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                     <th className="px-3 py-2">Artista</th>
                     <th className="px-3 py-2">Estilo</th>
                     <th className="w-16 px-3 py-2">Año</th>
+                    <th className="w-10 px-2 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -301,6 +313,17 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                         </td>
                         <td className="px-3 py-2 text-neutral-400">
                           {it.year ?? '—'}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <button
+                            type="button"
+                            title="Quitar de la lista (no se importa)"
+                            aria-label="Quitar"
+                            onClick={() => removeItem(it.sourceId)}
+                            className="rounded-md px-2 py-1 text-neutral-500 transition hover:bg-red-600/20 hover:text-red-300"
+                          >
+                            🗑
+                          </button>
                         </td>
                       </tr>
                     );
