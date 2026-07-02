@@ -24,6 +24,60 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.5.0',
+    date: '2026-07-02',
+    module: 'general',
+    type: 'feature',
+    title: 'Sección de Spotify (funcional)',
+    description:
+      'Spotify ya no es placeholder: Mis Canciones, Catálogo, Playlists Internas y Playlists Spotify, todo separado de YouTube. Cada plataforma con lo suyo.',
+  },
+  {
+    version: '0.5.0',
+    date: '2026-07-02',
+    module: 'music.spotify.playlists',
+    type: 'feature',
+    title: 'Conecta tu Spotify y revisa tus playlists',
+    description:
+      'Conecta tu cuenta de Spotify y ve tus playlists con match al catálogo (bachatas/salsas/externas), reproducción, y agrega canciones a Mis Canciones o al catálogo.',
+  },
+  {
+    version: '0.5.0',
+    date: '2026-07-02',
+    module: 'music.spotify.catalog',
+    type: 'feature',
+    title: 'Importar playlist de Spotify al catálogo',
+    description:
+      'Pega una playlist de Spotify y la importa como canciones de Spotify, detectando el estilo por tu catálogo curado y por el nombre de la playlist.',
+  },
+  {
+    version: '0.5.0',
+    date: '2026-07-02',
+    module: 'general',
+    type: 'feature',
+    title: 'Reproducir canciones de Spotify',
+    description:
+      'Botón de play para escuchar canciones de Spotify (preview 30s; pista completa con Premium) en Playlists, Catálogo, Mis Canciones e importador.',
+  },
+  {
+    version: '0.5.0',
+    date: '2026-07-02',
+    module: 'music.youtube.playlists',
+    type: 'improvement',
+    title: 'Playlists internas por plataforma',
+    description:
+      'Cada playlist interna es de YouTube o de Spotify: se reordena, agrega y exporta con las canciones de su plataforma, sin mezclar.',
+  },
+  {
+    version: '0.5.0',
+    date: '2026-07-02',
+    module: 'general',
+    type: 'fix',
+    title: 'Búsqueda sin acentos',
+    description:
+      'Buscar "mientele" ahora encuentra "Miéntele": las búsquedas ignoran acentos y mayúsculas en catálogo y Mis Canciones.',
+  },
+  {
     version: '0.4.7',
     date: '2026-06-30',
     module: 'music.youtube.playlists',
