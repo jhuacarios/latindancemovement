@@ -260,8 +260,13 @@ export default function PlaylistDetailPage() {
 
   return (
     <div className="space-y-5">
-      <Link href="/music/playlists" className="text-sm text-brand hover:underline">
-        ← Volver a playlists
+      <Link
+        href={
+          isSpotify ? '/music/spotify/internal-playlists' : '/music/playlists'
+        }
+        className="text-sm text-brand hover:underline"
+      >
+        ← Volver a Playlists Internas ({isSpotify ? 'Spotify' : 'YouTube'})
       </Link>
 
       {isLoading && <Spinner />}
@@ -272,7 +277,15 @@ export default function PlaylistDetailPage() {
           <div className="min-w-0 flex-1 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-bold">{data.name}</h1>
+              <h1 className="flex items-center gap-2 text-2xl font-bold">
+                <span title={isSpotify ? 'Playlist de Spotify' : 'Playlist de YouTube'}>
+                  {isSpotify ? '🟢' : '📺'}
+                </span>
+                {data.name}
+                <span className="text-sm font-normal text-neutral-500">
+                  ({isSpotify ? 'Spotify' : 'YouTube'})
+                </span>
+              </h1>
               <p className="text-sm text-neutral-400">
                 {items.length} canciones ·{' '}
                 <span className="text-amber-300">
