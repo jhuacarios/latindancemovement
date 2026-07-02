@@ -8,6 +8,7 @@ import { randomBytes } from 'crypto';
 import type {
   SpotifyOwnPlaylist,
   SpotifyPlaylistDetail,
+  SpotifyPlaylistStats,
   SpotifyPlaylistTrackItem,
 } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -415,6 +416,40 @@ export class SpotifyOAuthService {
     }
 
     return { ...meta, items };
+  }
+
+  /** Resumen de una playlist (para las tarjetas): match al catálogo + duración. */
+  async getPlaylistStats(
+    userId: string,
+    playlistId: string,
+  ): Promise<SpotifyPlaylistStats> {
+    const d = await this.getPlaylistDetail(userId, playlistId);
+    return {
+      itemCount: d.items.length,
+      inLibrary: d.items.filter((v) => v.match?.inLibrary).length,
+      inCatalog: d.items.filter((v) => v.match?.inCatalog).length,
+      external: d.items.filter((v) => !v.match).length,
+      bachata: d.items.filter((v) => v.match?.style === 'BACHATA').length,
+      salsa: d.items.filter((v) => v.match?.style === 'SALSA').length,
+      totalSec: d.items.reduce((a, v) => a + (v.durationSec ?? 0), 0),
+    };
+  }
+
+  /**
+   * "Elimina" una playlist de tu cuenta: en Spotify es dejar de seguirla
+   * (DELETE /playlists/{id}/followers). Requiere scope de modificación.
+   */
+  async deletePlaylist(userId: string, playlistId: string): Promise<void> {
+    const token = await this.accessToken(userId);
+    const res = await fetch(
+      `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/followers`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!res.ok && res.status !== 404) {
+      throw new BadRequestException(
+        `No se pudo eliminar la playlist en Spotify: ${await res.text()}`,
+      );
+    }
   }
 }
 

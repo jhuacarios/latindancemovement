@@ -81,12 +81,29 @@ export class SpotifyController {
     return this.sp.listMyPlaylists(user.id);
   }
 
+  /** Resumen de una playlist (para las tarjetas de la lista). */
+  @Get('playlists/:id/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  playlistStats(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.sp.getPlaylistStats(user.id, id);
+  }
+
   /** Detalle de una playlist de Spotify (con match al catálogo/biblioteca). */
   @Get('playlists/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
   playlistDetail(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.sp.getPlaylistDetail(user.id, id);
+  }
+
+  /** "Elimina" (deja de seguir) una playlist de tu cuenta de Spotify. */
+  @Delete('playlists/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  async deletePlaylist(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    await this.sp.deletePlaylist(user.id, id);
+    return { deleted: true };
   }
 
   /** Crea una playlist en Spotify con las canciones de una playlist interna. */

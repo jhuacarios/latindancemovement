@@ -6,11 +6,14 @@ import type {
   SpotifyConnectionStatus,
   SpotifyOwnPlaylist,
   SpotifyPlaylistDetail,
+  SpotifyPlaylistStats,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
-import { formatDuration } from '@/lib/format';
+import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
+import { clsx } from '@/components/clsx';
+import { formatDuration, formatTotalDuration } from '@/lib/format';
 import { LoadingBar } from '@/components/loading-bar';
 import { SpotifyIcon } from '@/components/spotify-icon';
 import {
@@ -32,6 +35,10 @@ export default function SpotifyPlaylistsPage() {
   const [addInCatalog, setAddInCatalog] = useState(false);
   // Canción sonando en el reproductor de Spotify (barra inferior).
   const [playing, setPlaying] = useState<SpotifyPlayable | null>(null);
+  // Selección múltiple + confirmación de borrado.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['spotify-status'],
@@ -68,6 +75,60 @@ export default function SpotifyPlaylistsPage() {
     void qc.invalidateQueries({ queryKey: ['catalog'] });
   }
 
+  const del = useMutation({
+    mutationFn: async (ids: string[]) => {
+      let failed = 0;
+      for (const id of ids) {
+        try {
+          await api(`/music/spotify/playlists/${id}`, { method: 'DELETE' });
+        } catch {
+          failed++;
+        }
+      }
+      return failed;
+    },
+    onSuccess: async (failed) => {
+      setSelected(new Set());
+      setSelectMode(false);
+      await qc.invalidateQueries({ queryKey: ['spotify-playlists'] });
+      setErr(failed ? `${failed} playlist(s) no se pudieron eliminar.` : null);
+    },
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo eliminar.'),
+  });
+  const busy = del.isPending;
+
+  function deleteOne(p: SpotifyOwnPlaylist) {
+    setConfirm({
+      title: 'Quitar playlist',
+      danger: true,
+      confirmLabel: 'Quitar',
+      message: (
+        <>
+          ¿Quitar <b className="text-neutral-100">{p.name}</b> de tu cuenta de
+          Spotify? (dejas de seguirla). Requiere permiso de modificación.
+        </>
+      ),
+      onConfirm: () => {
+        setErr(null);
+        del.mutate([p.id]);
+      },
+    });
+  }
+
+  function toggleSel(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
   // Agrega a Mis Canciones una canción que YA existe en el catálogo (por id).
   const addToLibrary = useMutation({
     mutationFn: (trackId: string) =>
@@ -100,13 +161,55 @@ export default function SpotifyPlaylistsPage() {
           </p>
         </div>
         {connected && (
-          <Button
-            variant="ghost"
-            disabled={disconnect.isPending}
-            onClick={() => disconnect.mutate()}
-          >
-            Desconectar Spotify
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {!selectedId &&
+              (playlists?.length ?? 0) > 0 &&
+              (!selectMode ? (
+                <Button variant="ghost" onClick={() => setSelectMode(true)}>
+                  ☑️ Seleccionar
+                </Button>
+              ) : (
+                <>
+                  <span className="text-sm text-neutral-400">
+                    {selected.size} seleccionada{selected.size === 1 ? '' : 's'}
+                  </span>
+                  <Button
+                    variant="danger"
+                    disabled={selected.size === 0 || busy}
+                    onClick={() =>
+                      setConfirm({
+                        title: 'Quitar playlists',
+                        danger: true,
+                        confirmLabel: `Quitar ${selected.size}`,
+                        message: (
+                          <>
+                            ¿Quitar {selected.size} playlist
+                            {selected.size === 1 ? '' : 's'} de tu cuenta de
+                            Spotify? (dejas de seguirlas).
+                          </>
+                        ),
+                        onConfirm: () => {
+                          setErr(null);
+                          del.mutate([...selected]);
+                        },
+                      })
+                    }
+                  >
+                    {busy ? 'Quitando…' : `🗑 Quitar (${selected.size})`}
+                  </Button>
+                  <Button variant="ghost" disabled={busy} onClick={exitSelect}>
+                    Cancelar
+                  </Button>
+                </>
+              ))}
+            <Button
+              variant="ghost"
+              disabled={disconnect.isPending}
+              onClick={() => disconnect.mutate()}
+            >
+              Desconectar Spotify
+            </Button>
+          </div>
         )}
       </div>
 
@@ -137,33 +240,90 @@ export default function SpotifyPlaylistsPage() {
             </p>
           )}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {(playlists ?? []).map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setSelectedId(p.id)}
-                className="text-left"
-              >
-                <Card className="flex h-full items-center gap-3 transition hover:border-brand/60">
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.imageUrl}
-                      alt=""
-                      className="h-14 w-14 shrink-0 rounded bg-neutral-800 object-cover"
-                    />
-                  ) : (
-                    <div className="h-14 w-14 shrink-0 rounded bg-neutral-800" />
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold">{p.name}</div>
-                    <div className="text-xs text-neutral-500">
-                      {p.itemCount} canciones · {p.owner}
+            {(playlists ?? []).map((p) => {
+              const isSelected = selected.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() =>
+                    selectMode ? toggleSel(p.id) : setSelectedId(p.id)
+                  }
+                  className="text-left"
+                >
+                  <Card
+                    className={clsx(
+                      'relative flex h-full gap-3 transition',
+                      selectMode
+                        ? isSelected
+                          ? 'border-brand ring-1 ring-brand'
+                          : 'hover:border-neutral-600'
+                        : 'hover:border-brand/60',
+                    )}
+                  >
+                    {selectMode && (
+                      <span
+                        className={clsx(
+                          'absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border text-xs',
+                          isSelected
+                            ? 'border-brand bg-brand text-white'
+                            : 'border-neutral-600 bg-neutral-900/80 text-transparent',
+                        )}
+                      >
+                        ✓
+                      </span>
+                    )}
+                    {p.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.imageUrl}
+                        alt=""
+                        className="h-16 w-16 shrink-0 rounded bg-neutral-800 object-cover"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 shrink-0 rounded bg-neutral-800" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate pr-14 font-semibold">{p.name}</div>
+                      <div className="text-xs text-neutral-500">
+                        {p.itemCount} canciones · {p.owner}
+                      </div>
+                      {!selectMode && <PlaylistStats id={p.id} />}
                     </div>
-                  </div>
-                </Card>
-              </button>
-            ))}
+
+                    {!selectMode && (
+                      <div className="absolute right-2 top-2 flex gap-1">
+                        <button
+                          type="button"
+                          title="Ver en Spotify"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.open(p.url, '_blank', 'noopener,noreferrer');
+                          }}
+                          className="flex items-center rounded-md bg-neutral-800/80 px-1.5 py-1 text-neutral-400 transition hover:bg-brand/20"
+                        >
+                          <SpotifyIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Quitar de tu cuenta (dejar de seguir)"
+                          disabled={busy}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            deleteOne(p);
+                          }}
+                          className="rounded-md bg-neutral-800/80 px-1.5 py-0.5 text-sm text-neutral-400 transition hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    )}
+                  </Card>
+                </button>
+              );
+            })}
           </div>
         </>
       )}
@@ -389,6 +549,61 @@ export default function SpotifyPlaylistsPage() {
             </div>
           </div>
         </>
+      )}
+
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+    </div>
+  );
+}
+
+/**
+ * Resumen de una playlist (bachatas/salsas/catálogo/externas + duración),
+ * cargado de forma lazy y cacheado. Cada uno lee la playlist de Spotify, por eso
+ * se calcula bajo demanda.
+ */
+function PlaylistStats({ id }: { id: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['spotify-playlist-stats', id],
+    queryFn: () =>
+      api<SpotifyPlaylistStats>(`/music/spotify/playlists/${id}/stats`),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (isLoading) {
+    return <div className="mt-2 text-[11px] text-neutral-600">calculando…</div>;
+  }
+  if (!data) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1">
+      <span
+        title="Bachatas (por match al catálogo)"
+        className="rounded-full bg-pink-500/15 px-1.5 py-0.5 text-[10px] text-pink-300"
+      >
+        Bachata {data.bachata}
+      </span>
+      <span
+        title="Salsas (por match al catálogo)"
+        className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300"
+      >
+        Salsa {data.salsa}
+      </span>
+      <span
+        title="En el catálogo global"
+        className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300"
+      >
+        Catálogo {data.inCatalog}
+      </span>
+      <span
+        title="No están en el catálogo"
+        className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300"
+      >
+        Externas {data.external}
+      </span>
+      {data.totalSec > 0 && (
+        <span title="Duración total" className="text-[11px] text-neutral-500">
+          · {formatTotalDuration(data.totalSec)}
+        </span>
       )}
     </div>
   );

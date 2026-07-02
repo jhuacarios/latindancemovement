@@ -357,6 +357,17 @@ export interface SpotifyPlaylistDetail extends SpotifyOwnPlaylist {
   items: SpotifyPlaylistTrackItem[];
 }
 
+/** Resumen de una playlist de Spotify (para las tarjetas de la lista). */
+export interface SpotifyPlaylistStats {
+  itemCount: number;
+  inLibrary: number;
+  inCatalog: number;
+  external: number;
+  bachata: number;
+  salsa: number;
+  totalSec: number;
+}
+
 /** Qué estilo abre cada bloque del patrón. */
 export type YoutubePlaylistOrder = 'bachata' | 'salsa';
 
