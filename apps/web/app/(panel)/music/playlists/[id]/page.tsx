@@ -14,6 +14,7 @@ import {
   SpotifyPlayerBar,
   type SpotifyPlayable,
 } from '@/components/spotify-player-bar';
+import { PlatformIcon } from '@/components/platform-icon';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-modal';
 import { LibraryDrawer } from '@/components/library-drawer';
@@ -278,9 +279,10 @@ export default function PlaylistDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="flex items-center gap-2 text-2xl font-bold">
-                <span title={isSpotify ? 'Playlist de Spotify' : 'Playlist de YouTube'}>
-                  {isSpotify ? '🟢' : '📺'}
-                </span>
+                <PlatformIcon
+                  source={data.source}
+                  className="h-6 w-6 shrink-0"
+                />
                 {data.name}
                 <span className="text-sm font-normal text-neutral-500">
                   ({isSpotify ? 'Spotify' : 'YouTube'})

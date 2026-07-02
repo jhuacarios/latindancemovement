@@ -21,6 +21,7 @@ import { TrackThumb } from '@/components/track-thumb';
 import { formatDuration } from '@/lib/format';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
+import { PlatformIcon } from '@/components/platform-icon';
 import {
   SpotifyPlayerBar,
   type SpotifyPlayable,
@@ -253,7 +254,8 @@ export function MusicLibraryView({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <span>{isSpotify ? '🟢' : '📺'}</span> Mis Canciones
+            <PlatformIcon source={source} className="h-6 w-6 shrink-0" /> Mis
+            Canciones
             <span className="text-sm font-normal text-neutral-500">
               ({isSpotify ? 'Spotify' : 'YouTube'})
             </span>

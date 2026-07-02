@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DanceStyle, Paginated, Tag, Track } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
+import { PlatformIcon } from './platform-icon';
 import { TrackThumb } from './track-thumb';
 import { usePlayer } from './player';
 import { clsx } from './clsx';
@@ -127,7 +128,7 @@ export function LibraryDrawer({
     <aside className="sticky top-0 flex max-h-[calc(100vh-7rem)] w-80 shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60">
       <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-          <span>{platform === 'SPOTIFY' ? '🟢' : '📺'}</span>
+          <PlatformIcon source={platform} className="h-4 w-4 shrink-0" />
           Agregar de {platform === 'SPOTIFY' ? 'Spotify' : 'YouTube'}
         </h3>
         <button

@@ -10,6 +10,7 @@ import type {
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Spinner, StyleBadge } from '@/components/ui';
+import { PlatformIcon } from '@/components/platform-icon';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
 
@@ -118,7 +119,8 @@ export function InternalPlaylistsView({
     <div className="space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <span>{isSpotify ? '🟢' : '📺'}</span> Playlists Internas
+          <PlatformIcon source={source} className="h-6 w-6 shrink-0" /> Playlists
+          Internas
           <span className="text-sm font-normal text-neutral-500">
             ({isSpotify ? 'Spotify' : 'YouTube'})
           </span>

@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 import { formatDuration } from '@/lib/format';
 import { LoadingBar } from '@/components/loading-bar';
+import { SpotifyIcon } from '@/components/spotify-icon';
 import {
   SpotifyPlayerBar,
   type SpotifyPlayable,
@@ -91,7 +92,7 @@ export default function SpotifyPlaylistsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            🟢 Playlists de Spotify
+            <SpotifyIcon className="h-6 w-6 shrink-0" /> Playlists de Spotify
           </h1>
           <p className="text-sm text-neutral-400">
             Conecta tu cuenta de Spotify y revisa tus playlists (con match al

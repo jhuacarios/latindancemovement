@@ -29,6 +29,7 @@ import {
   SpotifyPlayerBar,
   type SpotifyPlayable,
 } from '@/components/spotify-player-bar';
+import { PlatformIcon } from '@/components/platform-icon';
 import { DuplicatesModal } from '@/components/duplicates-modal';
 import {
   ConfirmDialog,
@@ -178,7 +179,7 @@ export function MusicCatalogView({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <span>{isSpotify ? '🟢' : '📚'}</span> Catálogo
+            <PlatformIcon source={source} className="h-6 w-6 shrink-0" /> Catálogo
             <span className="text-sm font-normal text-neutral-500">
               ({isSpotify ? 'Spotify' : 'YouTube'})
             </span>
