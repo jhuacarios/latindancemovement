@@ -63,6 +63,24 @@ export default function PlaylistDetailPage() {
   const [spotifyPlaying, setSpotifyPlaying] = useState<SpotifyPlayable | null>(
     null,
   );
+  // De dónde se disparó: 'playlist' (la tabla) o 'drawer' (el buscador).
+  const [playingFrom, setPlayingFrom] = useState<'playlist' | 'drawer' | null>(
+    null,
+  );
+  function playSpotify(t: NonNullable<PlaylistItem['track']>, from: 'playlist' | 'drawer') {
+    if (spotifyPlaying?.sourceId === t.sourceId && playingFrom === from) {
+      setSpotifyPlaying(null);
+      setPlayingFrom(null);
+      return;
+    }
+    setSpotifyPlaying({
+      sourceId: t.sourceId,
+      title: t.title,
+      artist: t.artist,
+      imageUrl: t.coverUrl,
+    });
+    setPlayingFrom(from);
+  }
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['playlist', id],
@@ -441,7 +459,12 @@ export default function PlaylistDetailPage() {
                         (dropTarget.side === 'before'
                           ? 'shadow-[inset_0_3px_0_0_var(--color-brand),inset_0_14px_16px_-12px_var(--color-brand)]'
                           : 'shadow-[inset_0_-3px_0_0_var(--color-brand),inset_0_-14px_16px_-12px_var(--color-brand)]'),
-                      activeRowId === item.id ? 'bg-brand/10' : 'hover:bg-brand/5',
+                      playingFrom === 'playlist' &&
+                        spotifyPlaying?.sourceId === item.track?.sourceId
+                        ? 'bg-brand/20'
+                        : activeRowId === item.id
+                          ? 'bg-brand/10'
+                          : 'hover:bg-brand/5',
                     )}
                   >
                     <td className="px-4 py-3 text-neutral-500">{idx + 1}</td>
@@ -508,27 +531,17 @@ export default function PlaylistDetailPage() {
                                 : 'Reproducir (Spotify)'
                             }
                             aria-label="Reproducir"
-                            onClick={() => {
-                              const t = item.track!;
-                              setSpotifyPlaying(
-                                spotifyPlaying?.sourceId === t.sourceId
-                                  ? null
-                                  : {
-                                      sourceId: t.sourceId,
-                                      title: t.title,
-                                      artist: t.artist,
-                                      imageUrl: t.coverUrl,
-                                    },
-                              );
-                            }}
+                            onClick={() => playSpotify(item.track!, 'playlist')}
                             className={
                               'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
-                              (spotifyPlaying?.sourceId === item.track.sourceId
+                              (playingFrom === 'playlist' &&
+                              spotifyPlaying?.sourceId === item.track.sourceId
                                 ? 'bg-brand text-white'
                                 : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
                             }
                           >
-                            {spotifyPlaying?.sourceId === item.track.sourceId
+                            {playingFrom === 'playlist' &&
+                            spotifyPlaying?.sourceId === item.track.sourceId
                               ? '⏸'
                               : '▶'}
                           </button>
@@ -599,15 +612,10 @@ export default function PlaylistDetailPage() {
               onAddTrack={(tid, fromCat) =>
                 addTrack.mutate({ trackId: tid, target: null, fromCatalog: fromCat })
               }
-              onPlaySpotify={(t) =>
-                setSpotifyPlaying({
-                  sourceId: t.sourceId,
-                  title: t.title,
-                  artist: t.artist,
-                  imageUrl: t.coverUrl,
-                })
+              onPlaySpotify={(t) => playSpotify(t, 'drawer')}
+              playingSpotifyId={
+                playingFrom === 'drawer' ? (spotifyPlaying?.sourceId ?? null) : null
               }
-              playingSpotifyId={spotifyPlaying?.sourceId ?? null}
             />
           )}
         </div>
@@ -716,7 +724,10 @@ export default function PlaylistDetailPage() {
             <div className="mx-auto max-w-3xl">
               <SpotifyPlayerBar
                 track={spotifyPlaying}
-                onClose={() => setSpotifyPlaying(null)}
+                onClose={() => {
+                  setSpotifyPlaying(null);
+                  setPlayingFrom(null);
+                }}
               />
             </div>
           </div>
