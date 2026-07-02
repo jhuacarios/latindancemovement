@@ -30,6 +30,14 @@ export class SpotifyController {
     return { connected: await this.sp.isConnected(user.id) };
   }
 
+  /** Cuenta de Spotify conectada (id, nombre, email, plan). */
+  @Get('me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  me(@CurrentUser() user: AuthUser) {
+    return this.sp.getMe(user.id);
+  }
+
   /** URL de consentimiento de Spotify para conectar la cuenta. */
   @Get('auth-url')
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -37,13 +37,29 @@ export function SpotifyFromInternalModal({
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<FromInternalResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [me, setMe] = useState<{
+    displayName: string | null;
+    email: string | null;
+    product: string | null;
+  } | null>(null);
 
   const needsReconnect =
     !!err && /conect|token|expir|scope|403|permiso|autoriz/i.test(err);
 
   useEffect(() => {
     api<SpotifyConnectionStatus>('/music/spotify/status')
-      .then((s) => setStatus(s.connected ? 'connected' : 'disconnected'))
+      .then((s) => {
+        setStatus(s.connected ? 'connected' : 'disconnected');
+        if (s.connected) {
+          api<{
+            displayName: string | null;
+            email: string | null;
+            product: string | null;
+          }>('/music/spotify/me')
+            .then(setMe)
+            .catch(() => {});
+        }
+      })
       .catch(() => setStatus('disconnected'));
   }, []);
 
@@ -122,6 +138,26 @@ export function SpotifyFromInternalModal({
 
         {status === 'connected' && !result && (
           <div className="space-y-3">
+            {me && (
+              <div className="rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2 text-xs text-neutral-300">
+                Conectado como <b>{me.displayName ?? 'tu cuenta'}</b>
+                {me.email && (
+                  <>
+                    {' '}
+                    (<span className="text-neutral-100">{me.email}</span>)
+                  </>
+                )}
+                {me.product && me.product !== 'premium' && (
+                  <span className="ml-1 text-amber-300/90">· cuenta {me.product}</span>
+                )}
+                {me.email && (
+                  <p className="mt-1 text-[11px] text-neutral-500">
+                    Si da 403 al crear: agrega <b>este email</b> en el dashboard
+                    de Spotify → tu app → User Management.
+                  </p>
+                )}
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-xs text-neutral-400">
                 Nombre de la playlist

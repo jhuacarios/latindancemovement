@@ -19,7 +19,7 @@ import { PlaylistsService } from '../playlists/playlists.service';
  * interna a Spotify). Si amplías scopes, el usuario debe reconectar su cuenta.
  */
 const SCOPE =
-  'playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private';
+  'playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-read-email user-read-private';
 
 const refreshKey = (userId: string) => `sp_refresh:${userId}`;
 const stateKey = (state: string) => `sp_state:${state}`;
@@ -228,6 +228,31 @@ export class SpotifyOAuthService {
       create: { key: refreshKey(userId), value: json.refresh_token },
       update: { value: json.refresh_token },
     });
+  }
+
+  /** Datos de la cuenta de Spotify conectada (para saber qué email habilitar). */
+  async getMe(
+    userId: string,
+  ): Promise<{ id: string; displayName: string | null; email: string | null; product: string | null }> {
+    const token = await this.accessToken(userId);
+    const res = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new BadRequestException('No se pudo leer tu cuenta de Spotify.');
+    }
+    const me = (await res.json()) as {
+      id: string;
+      display_name?: string;
+      email?: string;
+      product?: string;
+    };
+    return {
+      id: me.id,
+      displayName: me.display_name ?? null,
+      email: me.email ?? null,
+      product: me.product ?? null,
+    };
   }
 
   async isConnected(userId: string): Promise<boolean> {
