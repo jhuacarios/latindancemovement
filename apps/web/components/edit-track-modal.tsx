@@ -12,6 +12,16 @@ import { api, ApiError } from '@/lib/api';
 import { Button, Input, Select } from './ui';
 import { SubstyleMultiSelect } from './substyle-select';
 
+/** Respuesta de /music/tracks/spotify-metadata (autocompletar desde Spotify). */
+interface SpotifyMetaResp {
+  title: string;
+  artist: string | null;
+  durationSec: number | null;
+  year: number | null;
+  coverUrl: string | null;
+  detectedStyle: DanceStyle | null;
+}
+
 export function EditTrackModal({
   track,
   onClose,
@@ -39,7 +49,8 @@ export function EditTrackModal({
   const [info, setInfo] = useState<string | null>(null);
 
   async function autofill() {
-    if (!form.link.trim()) {
+    const link = form.link.trim();
+    if (!link) {
       setErr('Pega primero un link.');
       return;
     }
@@ -47,8 +58,27 @@ export function EditTrackModal({
     setInfo(null);
     setFetching(true);
     try {
+      if (/open\.spotify\.com|spotify:track/.test(link)) {
+        const m = await api<SpotifyMetaResp>(
+          `/music/tracks/spotify-metadata?link=${encodeURIComponent(link)}`,
+        );
+        setForm((f) => ({
+          ...f,
+          title: m.title || f.title,
+          artist: m.artist ?? f.artist,
+          style: m.detectedStyle ?? f.style,
+          year: m.year ? String(m.year) : f.year,
+          coverUrl: m.coverUrl ?? f.coverUrl,
+        }));
+        setYtDetails(null);
+        const parts: string[] = ['Spotify'];
+        if (m.detectedStyle) parts.push(`estilo: ${m.detectedStyle}`);
+        if (m.durationSec) parts.push(`${Math.round(m.durationSec / 60)} min`);
+        setInfo(`✓ Datos del link (${parts.join(' · ')}). Revisa y guarda.`);
+        return;
+      }
       const m = await api<ExtractedTrackMetadata>(
-        `/music/tracks/metadata?link=${encodeURIComponent(form.link)}`,
+        `/music/tracks/metadata?link=${encodeURIComponent(link)}`,
       );
       setForm((f) => ({
         ...f,
@@ -130,7 +160,7 @@ export function EditTrackModal({
             </label>
             <div className="flex gap-2">
               <Input
-                placeholder="https://youtu.be/…"
+                placeholder="https://youtu.be/… o https://open.spotify.com/track/…"
                 value={form.link}
                 onChange={(e) => setForm({ ...form, link: e.target.value })}
               />
