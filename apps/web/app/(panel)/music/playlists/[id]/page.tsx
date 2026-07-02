@@ -46,7 +46,6 @@ export default function PlaylistDetailPage() {
   const { setCollapsed } = useLayoutUI();
   const [ytOpen, setYtOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Orden local (para arrastrar-soltar con respuesta inmediata).
@@ -462,9 +461,7 @@ export default function PlaylistDetailPage() {
                       playingFrom === 'playlist' &&
                         spotifyPlaying?.sourceId === item.track?.sourceId
                         ? 'bg-brand/20'
-                        : activeRowId === item.id
-                          ? 'bg-brand/10'
-                          : 'hover:bg-brand/5',
+                        : 'hover:bg-brand/5',
                     )}
                   >
                     <td className="px-4 py-3 text-neutral-500">{idx + 1}</td>
@@ -516,10 +513,7 @@ export default function PlaylistDetailPage() {
                         {formatViews(item.track?.details?.viewCount)}
                       </td>
                     )}
-                    <td
-                      className="px-4 py-3 text-right"
-                      onClick={() => setActiveRowId(item.id)}
-                    >
+                    <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {item.track && <PlayButtons track={item.track} />}
                         {item.track?.source === 'SPOTIFY' && (
