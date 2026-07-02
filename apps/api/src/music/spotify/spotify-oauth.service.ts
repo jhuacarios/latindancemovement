@@ -174,6 +174,10 @@ export class SpotifyOAuthService {
       scope: SCOPE,
       redirect_uri: this.redirectUri(),
       state,
+      // Fuerza el diálogo de consentimiento: si el usuario ya autorizó con
+      // scopes viejos, Spotify no re-pregunta y el token no incluiría los
+      // nuevos permisos (crear playlists). Con esto siempre otorga los scopes.
+      show_dialog: 'true',
     });
     return `https://accounts.spotify.com/authorize?${params.toString()}`;
   }
