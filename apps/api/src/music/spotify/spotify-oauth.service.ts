@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type {
   SpotifyOwnPlaylist,
@@ -7,9 +12,14 @@ import type {
 } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TracksService } from '../tracks/tracks.service';
+import { PlaylistsService } from '../playlists/playlists.service';
 
-/** Scopes para leer las playlists del usuario (privadas y colaborativas). */
-const SCOPE = 'playlist-read-private playlist-read-collaborative';
+/**
+ * Scopes: leer playlists del usuario y CREARLAS (para exportar una playlist
+ * interna a Spotify). Si amplías scopes, el usuario debe reconectar su cuenta.
+ */
+const SCOPE =
+  'playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private';
 
 const refreshKey = (userId: string) => `sp_refresh:${userId}`;
 const stateKey = (state: string) => `sp_state:${state}`;
@@ -26,7 +36,100 @@ export class SpotifyOAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tracks: TracksService,
+    private readonly playlists: PlaylistsService,
   ) {}
+
+  /**
+   * Crea una playlist en la cuenta de Spotify del usuario con las canciones (de
+   * Spotify) de una playlist interna. Snapshot: no se sincroniza. Requiere el
+   * scope playlist-modify (reconectar si la conexión es vieja).
+   */
+  async createFromInternal(
+    userId: string,
+    playlistId: string,
+    title: string | undefined,
+    isPublic: boolean,
+  ): Promise<{ playlistId: string; url: string; added: number; skipped: number }> {
+    const pl = await this.playlists.findOne(playlistId);
+    if (pl.ownerId !== userId) {
+      throw new ForbiddenException('Esta playlist no es tuya.');
+    }
+    const items = pl.items ?? [];
+    const uris = items
+      .filter((i) => i.track?.source === 'SPOTIFY' && i.track.sourceId)
+      .map((i) => `spotify:track:${i.track!.sourceId}`);
+    const skipped = items.length - uris.length;
+    if (!uris.length) {
+      throw new BadRequestException(
+        'La playlist no tiene canciones de Spotify para exportar.',
+      );
+    }
+
+    const token = await this.accessToken(userId);
+    const meRes = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!meRes.ok) {
+      throw new BadRequestException('No se pudo leer tu cuenta de Spotify.');
+    }
+    const meId = ((await meRes.json()) as { id: string }).id;
+
+    const createRes = await fetch(
+      `https://api.spotify.com/v1/users/${encodeURIComponent(meId)}/playlists`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: title?.trim() || `${pl.name} — Nectason`,
+          public: isPublic,
+          description: `Generada desde "${pl.name}" en Nectason (snapshot).`,
+        }),
+      },
+    );
+    if (!createRes.ok) {
+      // 403 típico: la conexión no tiene el scope de crear (reconectar).
+      throw new BadRequestException(
+        `No se pudo crear la playlist en Spotify: ${await createRes.text()}`,
+      );
+    }
+    const created = (await createRes.json()) as {
+      id: string;
+      external_urls?: { spotify?: string };
+    };
+
+    // Agrega en lotes de 100 (límite de la API).
+    for (let i = 0; i < uris.length; i += 100) {
+      const batch = uris.slice(i, i + 100);
+      const addRes = await fetch(
+        `https://api.spotify.com/v1/playlists/${created.id}/tracks`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ uris: batch }),
+        },
+      );
+      if (!addRes.ok) {
+        this.logger.warn(
+          `No se pudo agregar un lote a la playlist: ${await addRes.text()}`,
+        );
+      }
+    }
+
+    return {
+      playlistId: created.id,
+      url:
+        created.external_urls?.spotify ??
+        `https://open.spotify.com/playlist/${created.id}`,
+      added: uris.length,
+      skipped,
+    };
+  }
 
   get configured(): boolean {
     return Boolean(

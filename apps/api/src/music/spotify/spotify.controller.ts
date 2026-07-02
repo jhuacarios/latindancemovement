@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
   Param,
+  Post,
   Query,
   Res,
   UseGuards,
@@ -77,6 +79,23 @@ export class SpotifyController {
   @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
   playlistDetail(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.sp.getPlaylistDetail(user.id, id);
+  }
+
+  /** Crea una playlist en Spotify con las canciones de una playlist interna. */
+  @Post('from-internal/:playlistId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  createFromInternal(
+    @Param('playlistId') playlistId: string,
+    @Body() body: { title?: string; public?: boolean },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.sp.createFromInternal(
+      user.id,
+      playlistId,
+      body.title,
+      body.public ?? false,
+    );
   }
 
   /** Desconecta la cuenta de Spotify. */

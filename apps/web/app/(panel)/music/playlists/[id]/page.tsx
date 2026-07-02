@@ -15,6 +15,8 @@ import {
   type SpotifyPlayable,
 } from '@/components/spotify-player-bar';
 import { PlatformIcon } from '@/components/platform-icon';
+import { SpotifyIcon } from '@/components/spotify-icon';
+import { SpotifyFromInternalModal } from '@/components/spotify-from-internal-modal';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-modal';
 import { LibraryDrawer } from '@/components/library-drawer';
@@ -46,6 +48,7 @@ export default function PlaylistDetailPage() {
   const qc = useQueryClient();
   const { setCollapsed } = useLayoutUI();
   const [ytOpen, setYtOpen] = useState(false);
+  const [spExportOpen, setSpExportOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -102,6 +105,7 @@ export default function PlaylistDetailPage() {
   const items = localItems ?? data?.items ?? [];
   const isSpotify = data?.source === 'SPOTIFY';
   const ytCount = items.filter((i) => i.track?.source === 'YOUTUBE').length;
+  const spCount = items.filter((i) => i.track?.source === 'SPOTIFY').length;
   const inPlaylistIds = useMemo(
     () => new Set(items.map((i) => i.trackId)),
     [items],
@@ -412,6 +416,23 @@ export default function PlaylistDetailPage() {
                   </span>
                 </Button>
               )}
+              {data.source === 'SPOTIFY' && (
+                <Button
+                  variant="ghost"
+                  disabled={spCount === 0}
+                  title={
+                    spCount === 0
+                      ? 'No hay canciones de Spotify en esta playlist'
+                      : 'Crear una playlist en tu cuenta de Spotify con estas canciones (snapshot)'
+                  }
+                  onClick={() => setSpExportOpen(true)}
+                >
+                  <span className="flex items-center gap-2">
+                    <SpotifyIcon className="h-4 w-4" />
+                    Crear playlist en Spotify
+                  </span>
+                </Button>
+              )}
             </div>
           </div>
 
@@ -636,6 +657,15 @@ export default function PlaylistDetailPage() {
           playlistName={data.name}
           itemCount={ytCount}
           onClose={() => setYtOpen(false)}
+        />
+      )}
+
+      {spExportOpen && data && (
+        <SpotifyFromInternalModal
+          playlistId={id}
+          playlistName={data.name}
+          itemCount={spCount}
+          onClose={() => setSpExportOpen(false)}
         />
       )}
 
