@@ -90,9 +90,19 @@ export class SpotifyOAuthService {
       },
     );
     if (!createRes.ok) {
-      // 403 típico: la conexión no tiene el scope de crear (reconectar).
+      const body = await createRes.text();
+      if (createRes.status === 403) {
+        // Token con scope correcto pero Spotify bloquea la escritura: la app está
+        // en "modo desarrollo" y tu cuenta no está en "User Management".
+        throw new BadRequestException(
+          'Spotify rechazó crear la playlist (403). Tu app de Spotify está en ' +
+            'modo desarrollo: agrega tu cuenta en el dashboard de Spotify → tu ' +
+            'app → User Management (o pide "Extended Quota Mode"). No es un ' +
+            'problema de permisos ni de Nectason.',
+        );
+      }
       throw new BadRequestException(
-        `No se pudo crear la playlist en Spotify: ${await createRes.text()}`,
+        `No se pudo crear la playlist en Spotify: ${body}`,
       );
     }
     const created = (await createRes.json()) as {
