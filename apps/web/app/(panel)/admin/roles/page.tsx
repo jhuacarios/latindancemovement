@@ -9,10 +9,13 @@ import {
   type PermissionsMatrix,
   type UserRole,
 } from '@baile-latino/types';
+import type { PermissionAction } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { permTree, defaultRolesForKey } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
+import { useViewAsRole } from '@/lib/view-as-role';
 import { Button, Card, Select, Spinner } from '@/components/ui';
+import { clsx } from '@/components/clsx';
 
 const EDITABLE_ROLES = USER_ROLES.filter((r) => r !== 'SUPER_ADMIN');
 
@@ -34,6 +37,7 @@ function buildFullMatrix(saved: PermissionsMatrix): PermissionsMatrix {
 
 export default function RolesPage() {
   const perms = usePermissions();
+  const [mode, setMode] = useState<'edit' | 'compare'>('compare');
   const [role, setRole] = useState<UserRole>(EDITABLE_ROLES[0]);
   const [matrix, setMatrix] = useState<PermissionsMatrix | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -91,6 +95,28 @@ export default function RolesPage() {
         </p>
       </div>
 
+      <div className="inline-flex rounded-lg border border-neutral-700 p-0.5">
+        {(['compare', 'edit'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            className={clsx(
+              'rounded-md px-3 py-1.5 text-sm transition',
+              mode === m
+                ? 'bg-brand text-white'
+                : 'text-neutral-300 hover:bg-neutral-800',
+            )}
+          >
+            {m === 'compare' ? 'Comparar roles' : 'Editar por rol'}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'compare' && <CompareMatrix />}
+
+      {mode === 'edit' && (
+        <>
       <Card className="flex flex-wrap items-center gap-3">
         <label className="text-sm text-neutral-300">Rol:</label>
         <Select value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
@@ -171,6 +197,120 @@ export default function RolesPage() {
           </table>
         </Card>
       )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Símbolos por acción para la matriz comparativa. */
+const ACTION_LABEL: Record<PermissionAction, string> = {
+  ver: 'Ver',
+  editar: 'Editar',
+  eliminar: 'Eliminar',
+};
+
+/**
+ * Vista de solo lectura: todos los roles a la vez (columnas) contra cada
+ * módulo/sección (filas), para auditar de un vistazo. Refleja los permisos
+ * efectivos (guardados + defaults). Cada columna permite "Ver como" ese rol.
+ */
+function CompareMatrix() {
+  const perms = usePermissions();
+  const { setViewAsRole } = useViewAsRole();
+  const [action, setAction] = useState<PermissionAction>('ver');
+  const nodes = permTree();
+
+  return (
+    <div className="space-y-3">
+      <Card className="flex flex-wrap items-center gap-3">
+        <label className="text-sm text-neutral-300">Acción a comparar:</label>
+        <Select
+          value={action}
+          onChange={(e) => setAction(e.target.value as PermissionAction)}
+        >
+          {PERMISSION_ACTIONS.map((a) => (
+            <option key={a} value={a}>
+              {ACTION_LABEL[a]}
+            </option>
+          ))}
+        </Select>
+        <span className="text-xs text-neutral-500">
+          ✓ = el rol puede {ACTION_LABEL[action].toLowerCase()} · usa “👁” en la
+          cabecera para previsualizar la app como ese rol.
+        </span>
+      </Card>
+
+      <Card className="overflow-x-auto p-0">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead className="border-b border-neutral-800 text-neutral-400">
+            <tr>
+              <th className="sticky left-0 z-10 bg-neutral-900 px-4 py-3 text-left">
+                Módulo / sección
+              </th>
+              {USER_ROLES.map((r) => (
+                <th key={r} className="px-2 py-3 text-center align-bottom">
+                  <div className="flex flex-col items-center gap-1">
+                    <span
+                      className={clsx(
+                        'text-[11px] font-semibold',
+                        r === 'SUPER_ADMIN'
+                          ? 'text-brand'
+                          : 'text-neutral-300',
+                      )}
+                    >
+                      {r}
+                    </span>
+                    {r !== 'SUPER_ADMIN' && (
+                      <button
+                        type="button"
+                        title={`Ver la app como ${r}`}
+                        onClick={() => setViewAsRole(r)}
+                        className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 transition hover:bg-brand/20 hover:text-brand"
+                      >
+                        👁 Ver como
+                      </button>
+                    )}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {nodes.map((node) => (
+              <tr
+                key={node.key}
+                className={clsx(
+                  'border-b border-neutral-800/60 last:border-0 hover:bg-brand/5',
+                  node.depth === 0 ? 'font-medium' : 'text-neutral-300',
+                )}
+              >
+                <td
+                  className="sticky left-0 z-10 bg-neutral-900 py-2.5 pr-4"
+                  style={{ paddingLeft: `${1 + node.depth * 1.5}rem` }}
+                >
+                  {node.depth > 0 && (
+                    <span className="mr-1 text-neutral-600">└</span>
+                  )}
+                  {node.label}
+                </td>
+                {USER_ROLES.map((r) => {
+                  const ok = perms.can(r, node.key, action);
+                  return (
+                    <td key={r} className="px-2 py-2.5 text-center">
+                      {ok ? (
+                        <span className="text-emerald-400">✓</span>
+                      ) : (
+                        <span className="text-neutral-700">·</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }

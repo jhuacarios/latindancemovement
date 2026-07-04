@@ -23,6 +23,7 @@ import { toPublicTrack } from '../mappers';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { QueryTracksDto } from './dto/query-tracks.dto';
+import { SpotifyService } from './spotify.service';
 
 /** Adornos típicos a ignorar al detectar duplicados (incluye "en vivo", "demo"). */
 const DUP_NOISE =
@@ -43,7 +44,91 @@ function normForDup(s: string | null | undefined): string {
 
 @Injectable()
 export class TracksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly spotify: SpotifyService,
+  ) {}
+
+  /** Extrae "YYYY-MM-DD" del publishedAt (fecha de subida) guardado en ytMetadata. */
+  private publishedDateFromMeta(raw: string | null): string | null {
+    if (!raw) return null;
+    try {
+      const meta = JSON.parse(raw) as { publishedAt?: string | null };
+      const p = meta.publishedAt;
+      return p && /^\d{4}-\d{2}-\d{2}/.test(p) ? p.slice(0, 10) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Rellena `releaseDate` faltante. Las que estén en Spotify usan su
+   * `release_date` (con la precisión que dé Spotify): las de fuente Spotify por
+   * ID (exacto), las de YouTube por búsqueda título+artista. Las que no aparezcan
+   * en Spotify caen a la fecha de subida de YouTube (`publishedAt`); si tampoco,
+   * al año; si no hay nada, se marca "" para no reintentar. Procesa hasta `limit`
+   * por llamada (las búsquedas a Spotify son secuenciales). Idempotente.
+   */
+  async backfillReleaseDates(
+    limit = 40,
+  ): Promise<{ updated: number; remaining: number }> {
+    let budget = limit;
+    let updated = 0;
+
+    const setDate = async (id: string, value: string) => {
+      await this.prisma.track.update({
+        where: { id },
+        data: { releaseDate: value },
+      });
+      updated++;
+    };
+
+    // "Con precisión" = la fecha incluye mes (no solo año).
+    const withMonth = (d: string | null): string | null =>
+      d && /^\d{4}-\d{2}/.test(d) ? d : null;
+
+    // 1) Canciones de Spotify: por ID (exacto). Sin fuente YouTube, si Spotify
+    // solo da el año, se queda con el año.
+    const sp = await this.prisma.track.findMany({
+      where: { source: 'SPOTIFY', releaseDate: null },
+      select: { id: true, sourceId: true, year: true },
+      take: budget,
+    });
+    for (const t of sp) {
+      if (budget <= 0) break;
+      budget--;
+      const rd = await this.spotify.getReleaseDateById(t.sourceId);
+      await setDate(t.id, rd ?? (t.year != null ? String(t.year) : ''));
+    }
+
+    // 2) Canciones de YouTube: Spotify con mes; si no, fecha de subida de
+    // YouTube (que sí tiene mes); si tampoco, el año que dé Spotify o el propio.
+    if (budget > 0) {
+      const yt = await this.prisma.track.findMany({
+        where: { source: 'YOUTUBE', releaseDate: null },
+        select: { id: true, title: true, artist: true, year: true, ytMetadata: true },
+        take: budget,
+      });
+      for (const t of yt) {
+        if (budget <= 0) break;
+        budget--;
+        const rd = await this.spotify.searchReleaseDate(t.title, t.artist);
+        const uploaded = this.publishedDateFromMeta(t.ytMetadata);
+        await setDate(
+          t.id,
+          withMonth(rd) ??
+            uploaded ??
+            rd ??
+            (t.year != null ? String(t.year) : ''),
+        );
+      }
+    }
+
+    const remaining = await this.prisma.track.count({
+      where: { releaseDate: null },
+    });
+    return { updated, remaining };
+  }
 
   /**
    * Construye un patch que SOLO rellena campos vacíos de una canción existente;

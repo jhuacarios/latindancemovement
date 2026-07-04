@@ -47,7 +47,7 @@ export function SortTh({
   return (
     <th
       className={clsx(
-        'cursor-pointer select-none px-4 py-3 hover:text-neutral-200',
+        'cursor-pointer select-none px-4 py-2 hover:text-neutral-200',
         className,
       )}
       onClick={() => onSort(col, primary)}

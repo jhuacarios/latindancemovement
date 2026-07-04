@@ -126,6 +126,14 @@ export class TracksController {
     return this.tracks.backfillViewCounts();
   }
 
+  /** Rellena la fecha de lanzamiento faltante (Spotify, o subida de YouTube). */
+  @Post('backfill-release-dates')
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  backfillReleaseDates(@Query('limit') limit?: string) {
+    const n = Math.min(200, Math.max(1, Number(limit) || 40));
+    return this.tracks.backfillReleaseDates(n);
+  }
+
   /** Descarga una plantilla .xlsx para importar canciones. */
   @Get('template.xlsx')
   async template(@Res() reply: FastifyReply) {

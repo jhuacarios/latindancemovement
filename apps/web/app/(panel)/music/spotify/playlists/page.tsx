@@ -242,14 +242,21 @@ export default function SpotifyPlaylistsPage() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             {(playlists ?? []).map((p) => {
               const isSelected = selected.has(p.id);
+              const onActivate = () =>
+                selectMode ? toggleSel(p.id) : setSelectedId(p.id);
               return (
-                <button
+                <div
                   key={p.id}
-                  type="button"
-                  onClick={() =>
-                    selectMode ? toggleSel(p.id) : setSelectedId(p.id)
-                  }
-                  className="text-left"
+                  role="button"
+                  tabIndex={0}
+                  onClick={onActivate}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onActivate();
+                    }
+                  }}
+                  className="cursor-pointer text-left"
                 >
                   <Card
                     className={clsx(
@@ -321,7 +328,7 @@ export default function SpotifyPlaylistsPage() {
                       </div>
                     )}
                   </Card>
-                </button>
+                </div>
               );
             })}
           </div>

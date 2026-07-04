@@ -126,6 +126,8 @@ export interface Track {
   tags?: TagRef[];
   /** Datos completos de YouTube guardados (si se autocompletó). */
   details?: YoutubeDetails | null;
+  /** Fecha de lanzamiento (Spotify): "2024-04-04" | "2024-04" | "2024" | "". */
+  releaseDate?: string | null;
 }
 
 export interface PlaylistItem {

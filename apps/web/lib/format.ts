@@ -13,6 +13,30 @@ export function formatTotalDuration(sec: number): string {
   return h > 0 ? `${h} h ${m} min` : `${m} min`;
 }
 
+const MESES = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+];
+
+/**
+ * Formatea la fecha de lanzamiento: "2024-04-04"/"2024-04" -> "abr 2024";
+ * "2024" -> "2024". Si no hay fecha (o es ""), cae al año; si tampoco, "—".
+ */
+export function formatReleaseDate(
+  releaseDate: string | null | undefined,
+  year: number | null | undefined,
+): string {
+  if (releaseDate) {
+    const ym = /^(\d{4})-(\d{2})/.exec(releaseDate);
+    if (ym) {
+      const mi = Number(ym[2]) - 1;
+      if (mi >= 0 && mi < 12) return `${MESES[mi]} ${ym[1]}`;
+    }
+    if (/^\d{4}$/.test(releaseDate)) return releaseDate;
+  }
+  return year != null ? String(year) : '—';
+}
+
 /** Reproducciones compactas: 1.2M, 34K, 980 o "—". */
 export function formatViews(v: string | number | null | undefined): string {
   const n = Number(v ?? 0);

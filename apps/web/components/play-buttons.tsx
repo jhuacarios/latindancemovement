@@ -47,7 +47,7 @@ export function PlayButtons({ track }: { track: Track }) {
   return (
     <>
       <PlayBtn
-        icon="🎵"
+        icon="▶"
         label="Reproducir audio"
         blocked={blocked}
         onClick={() => player.playAudio(track)}

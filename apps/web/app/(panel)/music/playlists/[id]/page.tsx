@@ -16,7 +16,7 @@ import {
 } from '@/components/spotify-player-bar';
 import { PlatformIcon } from '@/components/platform-icon';
 import { SpotifyIcon } from '@/components/spotify-icon';
-import { SpotifyFromInternalModal } from '@/components/spotify-from-internal-modal';
+import { SpotifyCopyTracksModal } from '@/components/spotify-copy-tracks-modal';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-modal';
 import { LibraryDrawer } from '@/components/library-drawer';
@@ -46,7 +46,7 @@ export default function PlaylistDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const qc = useQueryClient();
-  const { setCollapsed } = useLayoutUI();
+  const { setCollapsed, setActiveNavKey } = useLayoutUI();
   const [ytOpen, setYtOpen] = useState(false);
   const [spExportOpen, setSpExportOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -101,6 +101,18 @@ export default function PlaylistDetailPage() {
     setCollapsed(drawerOpen);
     return () => setCollapsed(false);
   }, [drawerOpen, setCollapsed]);
+
+  // Marca la subsección correcta en el menú (Playlists Internas de Spotify o
+  // YouTube): esta ruta es compartida y solo aquí sabemos la plataforma.
+  useEffect(() => {
+    if (!data) return;
+    setActiveNavKey(
+      data.source === 'SPOTIFY'
+        ? 'music.spotify.internalplaylists'
+        : 'music.youtube.playlists',
+    );
+    return () => setActiveNavKey(null);
+  }, [data, setActiveNavKey]);
 
   const items = localItems ?? data?.items ?? [];
   const isSpotify = data?.source === 'SPOTIFY';
@@ -180,7 +192,11 @@ export default function PlaylistDetailPage() {
   function applyBlockOrder(shuffle = false, nOverride?: number, mOverride?: number) {
     const n = nOverride ?? data?.bachatasPerBlock ?? 0;
     const m = mOverride ?? data?.salsasPerBlock ?? 0;
-    if (n + m === 0) return;
+    // Sin distribución configurada: abre el editor para definirla primero.
+    if (n + m === 0) {
+      setDistForm({ n: 5, m: 3 });
+      return;
+    }
     const bachatas = items.filter((i) => i.track?.style === 'BACHATA');
     const salsas = items.filter((i) => i.track?.style !== 'BACHATA');
     if (shuffle) {
@@ -355,29 +371,36 @@ export default function PlaylistDetailPage() {
                 })()}
             </div>
             <div className="flex flex-wrap gap-2">
-              {(data.bachatasPerBlock != null ||
-                data.salsasPerBlock != null) &&
-                items.length > 1 && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      onClick={() => applyBlockOrder(false)}
-                      disabled={reorder.isPending}
-                      title={`Reordena en bloques de ${data.bachatasPerBlock ?? 0} bachatas → ${data.salsasPerBlock ?? 0} salsas; los sobrantes van al final`}
-                    >
-                      🧱 Ordenar en bloques ({data.bachatasPerBlock ?? 0}/
-                      {data.salsasPerBlock ?? 0})
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => applyBlockOrder(true)}
-                      disabled={reorder.isPending}
-                      title="Igual que ordenar en bloques, pero baraja las canciones de cada estilo antes"
-                    >
-                      🔀 Ordenar + barajar
-                    </Button>
-                  </>
-                )}
+              {items.length > 1 &&
+                (() => {
+                  const n = data.bachatasPerBlock ?? 0;
+                  const m = data.salsasPerBlock ?? 0;
+                  const hasDist = n + m > 0;
+                  return (
+                    <>
+                      <Button
+                        variant="ghost"
+                        onClick={() => applyBlockOrder(false)}
+                        disabled={reorder.isPending}
+                        title={
+                          hasDist
+                            ? `Reordena en bloques de ${n} bachatas → ${m} salsas; los sobrantes van al final`
+                            : 'Define una distribución por bloque para reordenar'
+                        }
+                      >
+                        🧱 Ordenar en bloques{hasDist ? ` (${n}/${m})` : ''}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => applyBlockOrder(true)}
+                        disabled={reorder.isPending}
+                        title="Igual que ordenar en bloques, pero baraja las canciones de cada estilo antes"
+                      >
+                        🔀 Ordenar + barajar
+                      </Button>
+                    </>
+                  );
+                })()}
               {items.length > 1 && (
                 <Button
                   variant="ghost"
@@ -423,13 +446,13 @@ export default function PlaylistDetailPage() {
                   title={
                     spCount === 0
                       ? 'No hay canciones de Spotify en esta playlist'
-                      : 'Crear una playlist en tu cuenta de Spotify con estas canciones (snapshot)'
+                      : 'Copiar las canciones para pegarlas en una playlist de Spotify (escritorio)'
                   }
                   onClick={() => setSpExportOpen(true)}
                 >
                   <span className="flex items-center gap-2">
                     <SpotifyIcon className="h-4 w-4" />
-                    Crear playlist en Spotify
+                    Copiar para Spotify
                   </span>
                 </Button>
               )}
@@ -661,10 +684,15 @@ export default function PlaylistDetailPage() {
       )}
 
       {spExportOpen && data && (
-        <SpotifyFromInternalModal
-          playlistId={id}
+        <SpotifyCopyTracksModal
           playlistName={data.name}
-          itemCount={spCount}
+          tracks={items
+            .filter((i) => i.track?.source === 'SPOTIFY' && i.track.sourceId)
+            .map((i) => ({
+              sourceId: i.track!.sourceId,
+              title: i.track!.title,
+              artist: i.track!.artist,
+            }))}
           onClose={() => setSpExportOpen(false)}
         />
       )}

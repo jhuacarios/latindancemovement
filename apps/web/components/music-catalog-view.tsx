@@ -16,7 +16,7 @@ import { PlayButtons } from '@/components/play-buttons';
 import { SearchInput } from '@/components/search-input';
 import { StyleFilter } from '@/components/style-filter';
 import { TrackThumb } from '@/components/track-thumb';
-import { formatDuration, formatViews } from '@/lib/format';
+import { formatDuration, formatReleaseDate, formatViews } from '@/lib/format';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
@@ -39,6 +39,29 @@ import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 
 // Sin paginación por ahora: traemos todo el catálogo de una.
 const PAGE_SIZE = 1000;
+
+/** Columnas que se pueden mostrar/ocultar desde el engranaje. Título y acciones
+ * siempre visibles; la miniatura tiene su propio toggle. */
+type ColKey = 'artist' | 'style' | 'duration' | 'year' | 'views' | 'added';
+type ColVis = Record<ColKey, boolean>;
+
+const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
+  { key: 'artist', label: 'Artista' },
+  { key: 'style', label: 'Estilo' },
+  { key: 'duration', label: 'Duración' },
+  { key: 'year', label: 'Fecha' },
+  { key: 'views', label: 'Reproducciones', youtubeOnly: true },
+  { key: 'added', label: 'Agregado' },
+];
+
+const ALL_COLS_VISIBLE: ColVis = {
+  artist: true,
+  style: true,
+  duration: true,
+  year: true,
+  views: true,
+  added: true,
+};
 
 /**
  * Catálogo reutilizable para una fuente (YouTube o Spotify). Cada fuente lista
@@ -72,6 +95,43 @@ export function MusicCatalogView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showThumb, toggleThumb] = useThumbs();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  // Columnas visibles (persistidas por fuente) + menú del engranaje.
+  const colsStorageKey = `nectason.catalogCols.${source}`;
+  const [cols, setCols] = useState<ColVis>(ALL_COLS_VISIBLE);
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const colMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(colsStorageKey);
+      if (raw) setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
+    } catch {
+      /* preferencia inválida: usa defaults */
+    }
+  }, [colsStorageKey]);
+
+  function toggleCol(key: ColKey) {
+    setCols((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(colsStorageKey, JSON.stringify(next));
+      } catch {
+        /* ignora si no hay storage */
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!colMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+        setColMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [colMenuOpen]);
   const [showSpotifyImport, setShowSpotifyImport] = useState(false);
   // Reproducción de Spotify en la barra inferior de la página.
   const [spotifyPlaying, setSpotifyPlaying] = useState<SpotifyPlayable | null>(
@@ -92,6 +152,33 @@ export function MusicCatalogView({
       })
       .catch(() => {});
   }, [isAdmin, isSpotify, qc]);
+
+  // Fecha de lanzamiento: rellena en lotes (Spotify por ID/búsqueda, o subida de
+  // YouTube). Corre una vez por montaje, en bucle hasta terminar; la columna se
+  // refresca a medida que llegan. Solo admin (hace llamadas a Spotify).
+  const releaseBackfillRan = useRef(false);
+  useEffect(() => {
+    if (!isAdmin || releaseBackfillRan.current) return;
+    releaseBackfillRan.current = true;
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 40 && !cancelled; i++) {
+        try {
+          const r = await api<{ updated: number; remaining: number }>(
+            '/music/tracks/backfill-release-dates',
+            { method: 'POST' },
+          );
+          if (r.updated > 0) qc.invalidateQueries({ queryKey: ['catalog'] });
+          if (r.remaining === 0) break;
+        } catch {
+          break;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, qc]);
 
   function toggleSel(id: string) {
     setSelected((prev) => {
@@ -171,8 +258,18 @@ export function MusicCatalogView({
   }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
-  // Columnas: Reproducciones solo en YouTube.
-  const baseCols = (selectMode ? 8 : 7) + (isSpotify ? 0 : 1) + (showThumb ? 1 : 0);
+  // Cuenta de columnas visibles (para el colSpan del estado vacío): Título +
+  // acciones siempre; el resto según toggles/fuente/selección/miniatura.
+  const baseCols =
+    2 +
+    (selectMode ? 1 : 0) +
+    (showThumb ? 1 : 0) +
+    (cols.artist ? 1 : 0) +
+    (cols.style ? 1 : 0) +
+    (cols.duration ? 1 : 0) +
+    (cols.year ? 1 : 0) +
+    (!isSpotify && cols.views ? 1 : 0) +
+    (cols.added ? 1 : 0);
 
   return (
     <div className="space-y-5">
@@ -309,7 +406,7 @@ export function MusicCatalogView({
             <thead className="border-b border-neutral-800 text-left text-neutral-400">
               <tr>
                 {selectMode && (
-                  <th className="px-4 py-3 w-10">
+                  <th className="px-4 py-2 w-10">
                     <input
                       type="checkbox"
                       className="accent-[var(--color-brand)]"
@@ -319,17 +416,72 @@ export function MusicCatalogView({
                     />
                   </th>
                 )}
-                {showThumb && <th className="px-3 py-3 w-20"></th>}
+                {showThumb && <th className="px-3 py-2 w-20"></th>}
                 <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
-                <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
-                <th className="px-4 py-3">Estilo</th>
-                <th className="px-4 py-3">Duración</th>
-                <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
-                {!isSpotify && (
+                {cols.artist && (
+                  <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
+                )}
+                {cols.style && <th className="px-4 py-2">Estilo</th>}
+                {cols.duration && <th className="px-4 py-2">Duración</th>}
+                {cols.year && (
+                  <SortTh label="Fecha" col="year" primary="desc" sort={sort} onSort={onSort} />
+                )}
+                {!isSpotify && cols.views && (
                   <SortTh label="Reproducciones" col="views" primary="desc" sort={sort} onSort={onSort} />
                 )}
-                <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
-                <th className="px-4 py-3"></th>
+                {cols.added && (
+                  <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
+                )}
+                <th className="px-4 py-2 text-right">
+                  <div className="relative inline-block" ref={colMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setColMenuOpen((o) => !o)}
+                      title="Mostrar u ocultar columnas"
+                      aria-label="Configurar columnas"
+                      aria-expanded={colMenuOpen}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-xs font-normal text-neutral-300 transition hover:bg-neutral-800"
+                    >
+                      ⚙️ <span className="hidden sm:inline">Columnas</span>
+                    </button>
+                    {colMenuOpen && (
+                      <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-neutral-700 bg-neutral-900 p-2 text-left shadow-xl">
+                        <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                          Columnas
+                        </p>
+                        <label className="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-500">
+                          <input type="checkbox" checked disabled className="accent-[var(--color-brand)]" />
+                          Título
+                        </label>
+                        <label className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800">
+                          <input
+                            type="checkbox"
+                            checked={showThumb}
+                            onChange={toggleThumb}
+                            className="accent-[var(--color-brand)]"
+                          />
+                          Miniatura
+                        </label>
+                        {COLUMN_DEFS.filter(
+                          (c) => !(c.youtubeOnly && isSpotify),
+                        ).map((c) => (
+                          <label
+                            key={c.key}
+                            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={cols[c.key]}
+                              onChange={() => toggleCol(c.key)}
+                              className="accent-[var(--color-brand)]"
+                            />
+                            {c.label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -361,32 +513,44 @@ export function MusicCatalogView({
                     </td>
                   )}
                   <td className="px-4 py-3 font-medium">{t.title}</td>
-                  <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-1">
-                      <StyleBadge style={t.style} />
-                      {t.substyles?.map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-neutral-400 tabular-nums">
-                    {formatDuration(t.durationSec)}
-                  </td>
-                  <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
-                  {!isSpotify && (
+                  {cols.artist && (
+                    <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
+                  )}
+                  {cols.style && (
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <StyleBadge style={t.style} />
+                        {t.substyles?.map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  )}
+                  {cols.duration && (
+                    <td className="px-4 py-3 text-neutral-400 tabular-nums">
+                      {formatDuration(t.durationSec)}
+                    </td>
+                  )}
+                  {cols.year && (
+                    <td className="px-4 py-3 text-neutral-400">
+                      {formatReleaseDate(t.releaseDate, t.year)}
+                    </td>
+                  )}
+                  {!isSpotify && cols.views && (
                     <td className="px-4 py-3 tabular-nums text-neutral-400">
                       {formatViews(t.details?.viewCount)}
                     </td>
                   )}
-                  <td className="px-4 py-3 text-neutral-400">
-                    {new Date(t.createdAt).toLocaleDateString('es-CL')}
-                  </td>
+                  {cols.added && (
+                    <td className="px-4 py-3 text-neutral-400">
+                      {new Date(t.createdAt).toLocaleDateString('es-CL')}
+                    </td>
+                  )}
                   <td
                     className="px-4 py-3 text-right"
                     onClick={() => setActiveRowId(t.id)}

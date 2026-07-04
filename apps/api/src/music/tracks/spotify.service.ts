@@ -159,6 +159,56 @@ export class SpotifyService {
   }
 
   /**
+   * `album.release_date` de un track de Spotify por su ID ("2024-04-04" |
+   * "2024-04" | "2024"). `GET /v1/tracks/{id}` funciona con client-credentials
+   * (a diferencia del lote `?ids=`). null si no hay o falla.
+   */
+  async getReleaseDateById(id: string): Promise<string | null> {
+    if (!this.enabled || !id) return null;
+    try {
+      const token = await this.getToken();
+      const res = await fetch(`https://api.spotify.com/v1/tracks/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        if (res.status === 401) this.token = null;
+        return null;
+      }
+      const t = (await res.json()) as any;
+      return t.album?.release_date ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Busca un track por título+artista y devuelve el `release_date` de su álbum
+   * (con la precisión que dé Spotify), o null si no hay match / falla.
+   */
+  async searchReleaseDate(
+    title: string,
+    artist: string | null,
+  ): Promise<string | null> {
+    if (!this.enabled) return null;
+    try {
+      const token = await this.getToken();
+      const q = encodeURIComponent([title, artist].filter(Boolean).join(' '));
+      const res = await fetch(
+        `https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        if (res.status === 401) this.token = null;
+        return null;
+      }
+      const track = ((await res.json()) as any).tracks?.items?.[0];
+      return track?.album?.release_date ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Nombre + descripción de una playlist (para inferir estilo por su nombre,
    * ej: "Bachata casual"). Vía Web API con token client-credentials (la metadata
    * sí se puede leer, a diferencia de las canciones). null si falla.

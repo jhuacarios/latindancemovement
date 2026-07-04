@@ -41,6 +41,7 @@ export function toPublicTrack(t: PrismaTrack): Track {
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     details: parseYtMetadata(t.ytMetadata),
+    releaseDate: t.releaseDate,
   };
 }
 

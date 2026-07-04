@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { USER_ROLES, type UserRole } from '@baile-latino/types';
 import { useAuth } from '@/lib/auth';
-import { Button, Card, Spinner } from '@/components/ui';
+import { Button, Card, Select, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 import { moduleForPath, permKeyForPath, type ModuleChild } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
@@ -12,6 +13,9 @@ import { PlayerProvider } from '@/components/player';
 import { WhatsNew } from '@/components/whats-new';
 import { BrandLogo, Wordmark } from '@/components/brand';
 import { LayoutUIContext } from '@/lib/layout-ui';
+import { ViewAsRoleContext } from '@/lib/view-as-role';
+
+const VIEW_AS_KEY = 'nectason.viewAsRole';
 
 export default function PanelLayout({
   children,
@@ -23,6 +27,25 @@ export default function PanelLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [activeNavKey, setActiveNavKey] = useState<string | null>(null);
+  const [viewAsRole, setViewAsRoleState] = useState<UserRole | null>(null);
+
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
+  // Persistencia del "Ver como rol" (solo aplica a super admin).
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    const saved = localStorage.getItem(VIEW_AS_KEY);
+    if (saved && USER_ROLES.includes(saved as UserRole)) {
+      setViewAsRoleState(saved as UserRole);
+    }
+  }, [isSuperAdmin]);
+
+  const setViewAsRole = (r: UserRole | null) => {
+    setViewAsRoleState(r);
+    if (r) localStorage.setItem(VIEW_AS_KEY, r);
+    else localStorage.removeItem(VIEW_AS_KEY);
+  };
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -36,15 +59,23 @@ export default function PanelLayout({
     );
   }
 
-  const myModules = perms.accessibleModules(user.role);
+  // Rol efectivo: si un super admin está "viendo como" otro rol, la navegación
+  // y los bloqueos se calculan con ese rol (solo UI; el JWT sigue siendo super).
+  const effectiveRole: UserRole =
+    isSuperAdmin && viewAsRole ? viewAsRole : user.role;
+
+  const myModules = perms.accessibleModules(effectiveRole);
   const activeModule = moduleForPath(pathname);
   // Bloquea por la sección específica de la ruta si existe; si no, por el módulo.
   const blockKey = permKeyForPath(pathname) ?? activeModule?.key;
   const blocked =
-    activeModule && blockKey && !perms.can(user.role, blockKey, 'ver');
+    activeModule && blockKey && !perms.can(effectiveRole, blockKey, 'ver');
 
   return (
-    <LayoutUIContext.Provider value={{ collapsed, setCollapsed }}>
+    <ViewAsRoleContext.Provider value={{ viewAsRole, setViewAsRole }}>
+    <LayoutUIContext.Provider
+      value={{ collapsed, setCollapsed, activeNavKey, setActiveNavKey }}
+    >
     <PlayerProvider>
     <div className="flex min-h-screen">
       <aside
@@ -130,10 +161,10 @@ export default function PanelLayout({
                 {isActive && m.children && (
                   <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-neutral-800 pl-3">
                     {m.children.map((c) => {
-                      if (!perms.can(user.role, c.key, 'ver')) return null;
+                      if (!perms.can(effectiveRole, c.key, 'ver')) return null;
                       if (c.children) {
                         const visible = c.children.filter((g) =>
-                          perms.can(user.role, g.key, 'ver'),
+                          perms.can(effectiveRole, g.key, 'ver'),
                         );
                         if (visible.length === 0) return null;
                         return (
@@ -143,14 +174,24 @@ export default function PanelLayout({
                             </div>
                             <div className="ml-2 flex flex-col gap-0.5 border-l border-neutral-800/60 pl-2">
                               {visible.map((g) => (
-                                <SubNavLink key={g.key} child={g} pathname={pathname} />
+                                <SubNavLink
+                                  key={g.key}
+                                  child={g}
+                                  pathname={pathname}
+                                  activeNavKey={activeNavKey}
+                                />
                               ))}
                             </div>
                           </div>
                         );
                       }
                       return (
-                        <SubNavLink key={c.key} child={c} pathname={pathname} />
+                        <SubNavLink
+                          key={c.key}
+                          child={c}
+                          pathname={pathname}
+                          activeNavKey={activeNavKey}
+                        />
                       );
                     })}
                   </div>
@@ -168,6 +209,12 @@ export default function PanelLayout({
             {activeModule ? `${activeModule.icon} ${activeModule.title}` : 'Panel'}
           </div>
           <div className="flex items-center gap-3 text-sm">
+            {isSuperAdmin && (
+              <ViewAsControl
+                viewAsRole={viewAsRole}
+                setViewAsRole={setViewAsRole}
+              />
+            )}
             <WhatsNew />
             <Link
               href="/profile"
@@ -183,6 +230,22 @@ export default function PanelLayout({
           </div>
         </header>
 
+        {isSuperAdmin && viewAsRole && (
+          <div className="flex items-center justify-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-6 py-2 text-sm text-amber-200">
+            <span>
+              👁 Viendo la plataforma como <b>{viewAsRole}</b> — es solo una
+              vista previa; tus permisos reales siguen intactos.
+            </span>
+            <button
+              type="button"
+              onClick={() => setViewAsRole(null)}
+              className="rounded-md bg-amber-500/20 px-2 py-0.5 font-medium text-amber-100 transition hover:bg-amber-500/30"
+            >
+              Volver a Super Admin
+            </button>
+          </div>
+        )}
+
         <main
           className="flex-1 overflow-auto p-6"
           style={{
@@ -194,8 +257,17 @@ export default function PanelLayout({
               <div className="mb-2 text-4xl">🚫</div>
               <h2 className="text-lg font-semibold">Sin acceso</h2>
               <p className="mt-1 text-sm text-neutral-400">
-                Tu rol ({user.role}) no tiene acceso al módulo{' '}
-                {activeModule?.title}.
+                {isSuperAdmin && viewAsRole ? (
+                  <>
+                    El rol <b>{viewAsRole}</b> (que estás previsualizando) no
+                    tiene acceso al módulo {activeModule?.title}.
+                  </>
+                ) : (
+                  <>
+                    Tu rol ({user.role}) no tiene acceso al módulo{' '}
+                    {activeModule?.title}.
+                  </>
+                )}
               </p>
               <Link
                 href="/"
@@ -212,6 +284,7 @@ export default function PanelLayout({
     </div>
     </PlayerProvider>
     </LayoutUIContext.Provider>
+    </ViewAsRoleContext.Provider>
   );
 }
 
@@ -240,22 +313,57 @@ function IconLink({
   );
 }
 
+/** Selector para que el super admin previsualice la app como otro rol. */
+function ViewAsControl({
+  viewAsRole,
+  setViewAsRole,
+}: {
+  viewAsRole: UserRole | null;
+  setViewAsRole: (r: UserRole | null) => void;
+}) {
+  return (
+    <label className="flex items-center gap-1.5" title="Ver la plataforma como otro rol (solo vista previa)">
+      <span className="hidden text-neutral-500 sm:inline">👁 Ver como</span>
+      <Select
+        value={viewAsRole ?? ''}
+        onChange={(e) =>
+          setViewAsRole(e.target.value ? (e.target.value as UserRole) : null)
+        }
+        className={clsx(
+          'py-1 text-xs',
+          viewAsRole && 'border-amber-500/50 text-amber-200',
+        )}
+      >
+        <option value="">Super Admin (yo)</option>
+        {USER_ROLES.filter((r) => r !== 'SUPER_ADMIN').map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+}
+
 function SubNavLink({
   child,
   pathname,
+  activeNavKey,
 }: {
   child: ModuleChild;
   pathname: string;
+  activeNavKey: string | null;
 }) {
   if (!child.href) return null;
+  // Activo por ruta exacta, o porque la página marcó esta subsección (para
+  // rutas compartidas como el detalle de playlist).
+  const active = pathname === child.href || activeNavKey === child.key;
   return (
     <Link
       href={child.href}
       className={clsx(
         'rounded-md px-2 py-1 text-sm transition',
-        pathname === child.href
-          ? 'text-brand'
-          : 'text-neutral-400 hover:text-neutral-200',
+        active ? 'text-brand' : 'text-neutral-400 hover:text-neutral-200',
       )}
     >
       {child.label}

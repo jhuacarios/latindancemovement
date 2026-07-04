@@ -55,6 +55,8 @@ model Track {
   durationSec    Int?
   searchText     String? // título+artista normalizado (sin acentos, minúsculas) para buscar; lo mantiene un trigger
   viewCount      BigInt? // reproducciones (de ytMetadata.viewCount), para ordenar
+  popularity     Int? // índice de popularidad de Spotify (0-100); Spotify no expone streams
+  releaseDate    String? // fecha de lanzamiento de Spotify ("2024-04-04" | "2024-04" | "2024" | "" = sin dato)
   isRelease      Boolean  @default(false)
   approvalStatus String   @default("APROBADA") // TrackApprovalStatus
   scope          String   @default("CATALOG") // TrackScope: CATALOG (global) | PERSONAL (privada del DJ)
