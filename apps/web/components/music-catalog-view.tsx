@@ -16,7 +16,13 @@ import { PlayButtons } from '@/components/play-buttons';
 import { SearchInput } from '@/components/search-input';
 import { StyleFilter } from '@/components/style-filter';
 import { TrackThumb } from '@/components/track-thumb';
-import { formatDuration, formatReleaseDate, formatViews } from '@/lib/format';
+import {
+  formatDuration,
+  formatReleaseDate,
+  formatViews,
+  isNewRelease,
+} from '@/lib/format';
+import { NewBadge } from '@/components/new-badge';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
@@ -88,6 +94,7 @@ export function MusicCatalogView({
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
   const [substyle, setSubstyle] = useState('');
+  const [onlyNew, setOnlyNew] = useState(false);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ by: '', dir: 'asc' });
   const [showForm, setShowForm] = useState(false);
@@ -258,6 +265,16 @@ export function MusicCatalogView({
   }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  // Novedades (lanzadas hace ≤ 2 meses): filtro en cliente, consistente con el
+  // badge ✨ NUEVO. El catálogo se trae completo, así que no requiere backend.
+  const newCount = data
+    ? data.data.filter((t) => isNewRelease(t.releaseDate)).length
+    : 0;
+  const visibleRows = data
+    ? onlyNew
+      ? data.data.filter((t) => isNewRelease(t.releaseDate))
+      : data.data
+    : [];
   // Cuenta de columnas visibles (para el colSpan del estado vacío): Título +
   // acciones siempre; el resto según toggles/fuente/selección/miniatura.
   const baseCols =
@@ -395,6 +412,22 @@ export function MusicCatalogView({
             />
           </div>
         )}
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">Novedades</label>
+          <button
+            type="button"
+            onClick={() => setOnlyNew((v) => !v)}
+            title="Mostrar solo canciones lanzadas hace 2 meses o menos"
+            className={
+              'rounded-lg border px-3 py-2 text-sm transition ' +
+              (onlyNew
+                ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
+            }
+          >
+            ✨ Solo nuevas{newCount > 0 ? ` (${newCount})` : ''}
+          </button>
+        </div>
       </Card>
 
       {isLoading && <Spinner />}
@@ -424,7 +457,7 @@ export function MusicCatalogView({
                 {cols.style && <th className="px-4 py-2">Estilo</th>}
                 {cols.duration && <th className="px-4 py-2">Duración</th>}
                 {cols.year && (
-                  <SortTh label="Fecha" col="year" primary="desc" sort={sort} onSort={onSort} />
+                  <SortTh label="Fecha" col="releaseDate" primary="desc" sort={sort} onSort={onSort} />
                 )}
                 {!isSpotify && cols.views && (
                   <SortTh label="Reproducciones" col="views" primary="desc" sort={sort} onSort={onSort} />
@@ -485,7 +518,7 @@ export function MusicCatalogView({
               </tr>
             </thead>
             <tbody>
-              {data.data.map((t) => (
+              {visibleRows.map((t) => (
                 <tr
                   key={t.id}
                   className={
@@ -512,7 +545,10 @@ export function MusicCatalogView({
                       <TrackThumb track={t} />
                     </td>
                   )}
-                  <td className="px-4 py-3 font-medium">{t.title}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {t.title}
+                    {isNewRelease(t.releaseDate) && <NewBadge />}
+                  </td>
                   {cols.artist && (
                     <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
                   )}
@@ -537,7 +573,7 @@ export function MusicCatalogView({
                     </td>
                   )}
                   {cols.year && (
-                    <td className="px-4 py-3 text-neutral-400">
+                    <td className="px-4 py-3 whitespace-nowrap text-neutral-400">
                       {formatReleaseDate(t.releaseDate, t.year)}
                     </td>
                   )}
@@ -640,15 +676,17 @@ export function MusicCatalogView({
                   </td>
                 </tr>
               ))}
-              {data.data.length === 0 && (
+              {visibleRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={baseCols}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
-                    {isSpotify
-                      ? 'El catálogo de Spotify está vacío. Agrega canciones con su link de Spotify.'
-                      : 'El catálogo está vacío.'}
+                    {onlyNew
+                      ? 'No hay canciones lanzadas en los últimos 2 meses.'
+                      : isSpotify
+                        ? 'El catálogo de Spotify está vacío. Agrega canciones con su link de Spotify.'
+                        : 'El catálogo está vacío.'}
                   </td>
                 </tr>
               )}

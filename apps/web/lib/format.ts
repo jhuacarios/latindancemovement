@@ -37,6 +37,20 @@ export function formatReleaseDate(
   return year != null ? String(year) : '—';
 }
 
+/**
+ * ¿La canción se lanzó hace 2 meses o menos? Solo cuenta si la fecha tiene al
+ * menos mes ("2024-04" / "2024-04-15"); las de solo año no se pueden ubicar.
+ */
+export function isNewRelease(releaseDate: string | null | undefined): boolean {
+  if (!releaseDate) return false;
+  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(releaseDate);
+  if (!m) return false;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, m[3] ? Number(m[3]) : 1);
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 2);
+  return d >= cutoff;
+}
+
 /** Reproducciones compactas: 1.2M, 34K, 980 o "—". */
 export function formatViews(v: string | number | null | undefined): string {
   const n = Number(v ?? 0);

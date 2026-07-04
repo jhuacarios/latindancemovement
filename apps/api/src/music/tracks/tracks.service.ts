@@ -24,6 +24,7 @@ import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
 import { QueryTracksDto } from './dto/query-tracks.dto';
 import { SpotifyService } from './spotify.service';
+import { YoutubeMetadataService } from './youtube-metadata.service';
 
 /** Adornos típicos a ignorar al detectar duplicados (incluye "en vivo", "demo"). */
 const DUP_NOISE =
@@ -47,7 +48,32 @@ export class TracksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly spotify: SpotifyService,
+    private readonly youtube: YoutubeMetadataService,
   ) {}
+
+  /**
+   * Rellena la duración faltante de canciones de YouTube consultando la YouTube
+   * Data API (contentDetails). Devuelve cuántas se actualizaron. Idempotente.
+   */
+  private async fillYoutubeDurations(
+    rows: { id: string; sourceId: string }[],
+  ): Promise<number> {
+    if (!rows.length) return 0;
+    const metas = await this.youtube.fetchByIds(rows.map((r) => r.sourceId));
+    const bySource = new Map(metas.map((m) => [m.sourceId, m.durationSec]));
+    let updated = 0;
+    for (const r of rows) {
+      const d = bySource.get(r.sourceId);
+      if (d != null) {
+        await this.prisma.track.update({
+          where: { id: r.id },
+          data: { durationSec: d },
+        });
+        updated++;
+      }
+    }
+    return updated;
+  }
 
   /** Extrae "YYYY-MM-DD" del publishedAt (fecha de subida) guardado en ytMetadata. */
   private publishedDateFromMeta(raw: string | null): string | null {
@@ -219,6 +245,19 @@ export class TracksService {
         createdById: userId,
       },
     });
+
+    // Si es de YouTube y no llegó con duración, la calcula desde la API ahora.
+    if (source === 'YOUTUBE' && created.durationSec == null) {
+      await this.fillYoutubeDurations([{ id: created.id, sourceId }]);
+      created.durationSec =
+        (
+          await this.prisma.track.findUnique({
+            where: { id: created.id },
+            select: { durationSec: true },
+          })
+        )?.durationSec ?? null;
+    }
+
     return toPublicTrack(created);
   }
 
@@ -853,6 +892,21 @@ export class TracksService {
       }
     }
 
+    // Rellena la duración de las importadas que hayan quedado sin ella.
+    const ids = items.map((i) => i.sourceId).filter(Boolean);
+    if (ids.length) {
+      const missing = await this.prisma.track.findMany({
+        where: {
+          source: 'YOUTUBE',
+          scope: 'CATALOG',
+          durationSec: null,
+          sourceId: { in: ids },
+        },
+        select: { id: true, sourceId: true },
+      });
+      await this.fillYoutubeDurations(missing);
+    }
+
     return { total: items.length, created, updated, errors };
   }
 
@@ -867,6 +921,9 @@ export class TracksService {
           return { artist: dir };
         case 'year':
           return { year: dir };
+        case 'releaseDate':
+          // Fecha de lanzamiento completa (mes+año). Sin fecha ('' o null) al final.
+          return { releaseDate: { sort: dir, nulls: 'last' } };
         case 'createdAt':
           return { createdAt: dir };
         case 'views':
