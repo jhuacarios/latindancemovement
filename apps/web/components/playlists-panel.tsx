@@ -407,14 +407,20 @@ export function PlaylistsPanel({
         {selected && (
           <>
             {songs.length > 0 && (
-              <div className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[11px]">
-                <span className="rounded-full bg-pink-500/15 px-2 py-0.5 text-pink-300">
-                  {summary.bachata} bachata{summary.bachata === 1 ? '' : 's'}
+              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-800/30 px-2 py-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-pink-500/40 bg-pink-500/15 px-2.5 py-1 text-xs font-semibold text-pink-300">
+                  <span className="text-base font-bold leading-none">
+                    {summary.bachata}
+                  </span>
+                  bachata{summary.bachata === 1 ? '' : 's'}
                 </span>
-                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300">
-                  {summary.salsa} salsa{summary.salsa === 1 ? '' : 's'}
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-300">
+                  <span className="text-base font-bold leading-none">
+                    {summary.salsa}
+                  </span>
+                  salsa{summary.salsa === 1 ? '' : 's'}
                 </span>
-                <span className="ml-auto text-neutral-400">
+                <span className="ml-auto text-right text-xs text-neutral-400">
                   {songs.length} · {formatTotalDuration(summary.seconds)}
                 </span>
               </div>

@@ -264,7 +264,6 @@ function Generator({ source }: { source: 'YOUTUBE' | 'SPOTIFY' }) {
   const [limitMode, setLimitMode] = useState<'count' | 'duration'>('count');
   const [maxTracks, setMaxTracks] = useState<number | ''>(30);
   const [minutes, setMinutes] = useState<number | ''>(60);
-  const [byPopularity, setByPopularity] = useState(false);
   const [name, setName] = useState('');
   const [result, setResult] = useState<PlaylistGenerationResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -283,7 +282,6 @@ function Generator({ source }: { source: 'YOUTUBE' | 'SPOTIFY' }) {
           maxTracks: limitMode === 'count' ? num(maxTracks, 1, 30) : undefined,
           targetMinutes:
             limitMode === 'duration' ? num(minutes, 5, 60) : undefined,
-          byPopularity,
           name: name || undefined,
         },
       }),
@@ -448,17 +446,6 @@ function Generator({ source }: { source: 'YOUTUBE' | 'SPOTIFY' }) {
               </label>
             )}
           </div>
-        </div>
-        <div className="flex items-end">
-          <label className="flex items-center gap-2 text-sm text-neutral-300">
-            <input
-              type="checkbox"
-              checked={byPopularity}
-              onChange={(e) => setByPopularity(e.target.checked)}
-              className="accent-[var(--color-brand)]"
-            />
-            Priorizar más solicitadas (recomendación)
-          </label>
         </div>
         <div className="md:col-span-2">
           <label className="mb-1 block text-xs text-neutral-400">

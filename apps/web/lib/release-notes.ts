@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.1',
+    date: '2026-07-05',
+    module: 'music',
+    type: 'improvement',
+    title: 'Resumen de la playlist más visible',
+    description:
+      'En el panel de playlist, el conteo de bachatas/salsas y la duración total se ven más destacados. Además se quitó del generador la opción “priorizar más solicitadas” (todavía no hay datos de solicitudes que la respalden).',
+  },
+  {
     version: '0.7.0',
     date: '2026-07-05',
     module: 'music',
