@@ -333,6 +333,7 @@ EXPO_PUBLIC_APP_NAME=Baile Latino
 - Jack and Jill con sorteo transparente y puntaje acumulado por rondas
 - Gestión de acompañantes con QR diferenciado
 - Historial de competencias en perfil del bailarín
+- Cada categoría define su **duración exacta** (ej: 1:00 / 2:00) → al inscribirse, ofrecer encargar el **edit a esa medida** (y voice-drop del artista) vía el Marketplace de talento
 - Cliente objetivo Fase 3: DareDance (~1.500 competidores)
 
 #### 11. Coreografía y ensayos
@@ -347,6 +348,7 @@ EXPO_PUBLIC_APP_NAME=Baile Latino
 - Control de asistencia a ensayos
 - Progreso semanal y countdown al estreno
 - Coordinación de grabación (cuándo y quién filma)
+- El looper / velocidad / capas de audio de esta sección son para **ensayar**; el **máster final** (edit producido a medida, a la duración exacta de competencia, con voice-drop opcional del artista) se encarga vía el **Marketplace de talento → Editores/Productores**
 
 #### 12. Marketplace de talento
 - Perfiles de DJs, filmmakers, artistas, coreógrafos, parejas pro
@@ -358,6 +360,23 @@ EXPO_PUBLIC_APP_NAME=Baile Latino
 - Comisión por contratación: 5–10%
 - Visibilidad para empresas externas (casinos, venues, empresas de eventos)
 - Matching de parejas de práctica
+
+##### Servicios de audio a medida (categoría "Editores / Productores")
+Cubren un vacío real que YouTube no llena y que **no es pirateable** (son servicios bespoke, no archivos → alta disposición a pagar, sin competir con lo gratis):
+- **Ediciones para competencia/coreografía:** corte a duración EXACTA de competencia (1:00 / 2:00), reestructuración (intro que arma → hits → corte limpio), mashups de 2+ temas, cambios de velocidad, silencios/marcas.
+  - Flujo: brief (canción(es), duración exacta, referencias, deadline) → editor acepta/cotiza → **pago en custodia (escrow)** → entrega → revisiones → liberación de fondos + comisión.
+  - Se conecta con **Competencias** (cada categoría conoce su duración exacta → ofrecer el edit "a esa medida" en la inscripción) y con **Coreografía** (esa sección es para *ensayar*; el máster final se produce/compra acá).
+- **Voice-drops del artista (el "Cameo" del baile):** el artista graba, **en su propia voz**, el shoutout personalizado ("Academia X presenta…") o su tag para la coreo.
+  - Legalmente limpio (voz propia + consentimiento del artista), viral (se comparte en redes = marketing), productizable con precio fijo por el artista.
+  - Add-on en el perfil del artista.
+  - **Priorizar primero** (limpio, alto margen, viral); las ediciones a medida después (escrow + comisión).
+- **Nota legal:** los edits parten de canciones con copyright, pero al ser un **servicio para uso propio en performance** (no venta/streaming público) el riesgo es mucho menor que una tienda de descargas. Términos: el cliente declara tener derecho a la fuente y usa el edit para su propia performance. Los **voice-drops originales** del artista son la parte más limpia y la que más se empuja.
+
+##### Principio de monetización de la música (importante)
+- **NO construir el negocio sobre "vender canciones/descargas mp3":** se pierde contra el ripeo gratis de YouTube. Además, bajar de YouTube/Spotify viola sus términos (revocan API keys) e infringe copyright → responsabilidad de la SpA. **No hacerlo.**
+- Lo que **sí** se paga: la **curaduría + data** (qué funciona por región/estilo — el verdadero moat), la **comodidad/flujo** (todo ordenado y con metadata) y lo **bespoke** (edits, voice-drops). El download del catálogo, a lo más, es un *perk* dentro de la suscripción, no el producto.
+- **Distribución de audio propio de artistas** (originales, con derechos): modelo suscripción DJ + **reparto pro-rata mensual** al pozo de artistas (como pools/Spotify) — solo se distribuye lo recaudado. Ojo: **originales del artista = limpio**; **covers / "Bachata Version" de temas ajenos = obra derivada** que requiere licencia mecánica → arrancar solo con originales.
+- Para el **artista**, el gancho de estar en Nectason es exposición + distribución + **que lo contraten** (este marketplace); la micro-regalía es el bonus, no el gancho.
 
 #### 13. Salas de ensayo
 - Catálogo de salas con disponibilidad en tiempo real

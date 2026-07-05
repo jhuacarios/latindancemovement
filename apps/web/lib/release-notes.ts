@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.6.1',
+    date: '2026-07-05',
+    module: 'music',
+    type: 'improvement',
+    title: 'Mejor importación de playlists de YouTube',
+    description:
+      'Al importar, la fecha de lanzamiento se calcula al instante para lo reciente y los años son más precisos (ya no confunde canciones con el mismo título de otro artista). El modal muestra el botón de play al inicio de la fila y una barra de progreso al cargar.',
+  },
+  {
     version: '0.6.0',
     date: '2026-07-04',
     module: 'music',

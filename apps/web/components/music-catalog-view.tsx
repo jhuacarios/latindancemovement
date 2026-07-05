@@ -36,6 +36,8 @@ import {
   type SpotifyPlayable,
 } from '@/components/spotify-player-bar';
 import { PlatformIcon } from '@/components/platform-icon';
+import { YoutubeIcon } from '@/components/youtube-icon';
+import { SpotifyIcon } from '@/components/spotify-icon';
 import { DuplicatesModal } from '@/components/duplicates-modal';
 import {
   ConfirmDialog,
@@ -392,7 +394,10 @@ export function MusicCatalogView({
                 Gestión del catálogo de Spotify:
               </span>
               <Button onClick={() => setShowSpotifyImport(true)}>
-                🟢 Importar playlist Spotify
+                <span className="flex items-center gap-2">
+                  <SpotifyIcon className="h-4 w-4" />
+                  Importar playlist Spotify
+                </span>
               </Button>
               <span className="text-xs text-neutral-500">
                 o agrega una por “+ Nueva canción al catálogo” con su link.
@@ -888,10 +893,16 @@ function AdminImportExport() {
           🔎 Buscar duplicados
         </Button>
         <Button onClick={() => setShowPlaylist(true)}>
-          📺 Importar playlist YouTube
+          <span className="flex items-center gap-2">
+            <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
+            Importar playlist YouTube
+          </span>
         </Button>
         <Button onClick={() => setShowSpotify(true)}>
-          🟢 Importar playlist Spotify
+          <span className="flex items-center gap-2">
+            <SpotifyIcon className="h-4 w-4" />
+            Importar playlist Spotify
+          </span>
         </Button>
       </div>
 

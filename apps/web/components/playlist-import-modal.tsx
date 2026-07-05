@@ -9,9 +9,11 @@ import {
   type Track,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Input, Spinner } from './ui';
+import { Button, Input } from './ui';
+import { LoadingBar } from './loading-bar';
 import { InlineAudioPlayer } from './player';
 import { trackThumbUrl } from './track-thumb';
+import { YoutubeIcon } from './youtube-icon';
 import { clsx } from './clsx';
 
 export function PlaylistImportModal({
@@ -140,10 +142,11 @@ export function PlaylistImportModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <YoutubeIcon className="h-5 w-5 text-[#FF0000]" />
             {isLibrary
-              ? '📺 Cargar playlist a Mis Canciones'
-              : '📺 Importar playlist de YouTube'}
+              ? 'Cargar playlist a Mis Canciones'
+              : 'Importar playlist de YouTube'}
           </h2>
           <button
             onClick={onClose}
@@ -182,7 +185,10 @@ export function PlaylistImportModal({
 
         {loading && (
           <div className="mt-4">
-            <Spinner label="Leyendo la playlist…" />
+            <LoadingBar
+              label="Leyendo y resolviendo la playlist en YouTube… (puede tardar en playlists grandes)"
+              estMs={12000}
+            />
           </div>
         )}
 
@@ -237,10 +243,10 @@ export function PlaylistImportModal({
               <table className="w-full text-sm">
                 <thead className="sticky top-0 border-b border-neutral-800 bg-neutral-900 text-left text-neutral-400">
                   <tr>
+                    <th className="w-10 px-2 py-2"></th>
                     <th className="w-14 px-2 py-2"></th>
                     <th className="px-3 py-2">Título</th>
                     <th className="px-3 py-2">Artista</th>
-                    <th className="w-10 px-2 py-2"></th>
                     <th className="px-3 py-2">Estilo</th>
                     <th className="w-16 px-3 py-2">Año</th>
                   </tr>
@@ -255,6 +261,22 @@ export function PlaylistImportModal({
                         key={it.sourceId}
                         className="border-b border-neutral-800/60 last:border-0"
                       >
+                        <td className="px-2 py-2">
+                          <button
+                            type="button"
+                            title={playing ? 'Detener' : 'Reproducir'}
+                            aria-label={playing ? 'Detener' : 'Reproducir'}
+                            onClick={() => setNowPlaying(playing ? null : it)}
+                            className={clsx(
+                              'flex h-8 w-8 items-center justify-center rounded-full text-sm transition',
+                              playing
+                                ? 'bg-brand text-white'
+                                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700',
+                            )}
+                          >
+                            {playing ? '⏸' : '▶'}
+                          </button>
+                        </td>
                         <td className="px-2 py-2">
                           {url ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -271,22 +293,6 @@ export function PlaylistImportModal({
                         <td className="px-3 py-2 font-medium">{it.title}</td>
                         <td className="px-3 py-2 text-neutral-300">
                           {it.artist ?? it.channelTitle ?? '—'}
-                        </td>
-                        <td className="px-2 py-2">
-                          <button
-                            type="button"
-                            title={playing ? 'Detener' : 'Reproducir'}
-                            aria-label={playing ? 'Detener' : 'Reproducir'}
-                            onClick={() => setNowPlaying(playing ? null : it)}
-                            className={clsx(
-                              'rounded-md px-2 py-1 text-sm transition',
-                              playing
-                                ? 'bg-brand/20 text-brand'
-                                : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100',
-                            )}
-                          >
-                            {playing ? '⏸' : '▶'}
-                          </button>
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1">

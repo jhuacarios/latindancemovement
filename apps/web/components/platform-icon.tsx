@@ -12,6 +12,6 @@ export function PlatformIcon({
   return source === 'SPOTIFY' ? (
     <SpotifyIcon className={className} />
   ) : (
-    <YoutubeIcon className={className} />
+    <YoutubeIcon className={`${className ?? ''} text-[#FF0000]`.trim()} />
   );
 }

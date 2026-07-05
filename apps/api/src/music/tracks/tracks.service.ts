@@ -88,6 +88,25 @@ export class TracksService {
   }
 
   /**
+   * Fecha de lanzamiento para una canción de YouTube al crear/importar: usa la
+   * fecha de subida SOLO si su año coincide con el año real (subida ≈ estreno).
+   * Si no coincide (video subido años después), devuelve null y se deja que el
+   * backfill busque la fecha real en Spotify. Acepta el ytMetadata como string
+   * (JSON) o el `publishedAt` ya extraído.
+   */
+  private youtubeReleaseAtCreate(
+    publishedAt: string | null,
+    year: number | null | undefined,
+  ): string | null {
+    const pub =
+      publishedAt && /^\d{4}-\d{2}-\d{2}/.test(publishedAt)
+        ? publishedAt.slice(0, 10)
+        : null;
+    if (!pub) return null;
+    return year == null || Number(pub.slice(0, 4)) === year ? pub : null;
+  }
+
+  /**
    * Rellena `releaseDate` faltante. Las que estén en Spotify usan su
    * `release_date` (con la precisión que dé Spotify): las de fuente Spotify por
    * ID (exacto), las de YouTube por búsqueda título+artista. Las que no aparezcan
@@ -143,11 +162,17 @@ export class TracksService {
         budget--;
         const rd = await this.spotify.searchReleaseDate(t.title, t.artist);
         const uploaded = this.publishedDateFromMeta(t.ytMetadata);
+        // La fecha de subida solo es fiable como lanzamiento si su año coincide
+        // con el año real (subida ≈ estreno; un video subido años después no
+        // sirve). Si no coincide, no inventamos mes: se deja el año.
+        const uploadedOk =
+          uploaded && (t.year == null || Number(uploaded.slice(0, 4)) === t.year)
+            ? uploaded
+            : null;
         await setDate(
           t.id,
           withMonth(rd) ??
-            uploaded ??
-            rd ??
+            uploadedOk ??
             (t.year != null ? String(t.year) : ''),
         );
       }
@@ -245,6 +270,16 @@ export class TracksService {
         artistUserId: dto.artistUserId ?? null,
         ytMetadata: dto.ytMetadata ?? null,
         viewCount: this.viewsFromMeta(dto.ytMetadata),
+        // Fecha de lanzamiento inmediata para YouTube (si la subida ≈ el año);
+        // si no, queda null y el backfill busca la real. Spotify: lo llena el
+        // backfill desde el embed.
+        releaseDate:
+          source === 'YOUTUBE'
+            ? this.youtubeReleaseAtCreate(
+                this.publishedDateFromMeta(dto.ytMetadata ?? null),
+                dto.year,
+              )
+            : null,
         createdById: userId,
       },
     });
@@ -928,8 +963,21 @@ export class TracksService {
           userId,
           { fillEmptyOnly: true },
         );
-        if (res.created) created++;
-        else updated++;
+        if (res.created) {
+          created++;
+          // Fecha de lanzamiento inmediata (si la subida coincide con el año);
+          // si no, queda null y el backfill busca la real en Spotify.
+          const rel = this.youtubeReleaseAtCreate(
+            it.details?.publishedAt ?? null,
+            it.year,
+          );
+          if (rel) {
+            await this.prisma.track.update({
+              where: { id: res.id },
+              data: { releaseDate: rel },
+            });
+          }
+        } else updated++;
       } catch (e) {
         errors.push(
           `${it.title}: ${e instanceof Error ? e.message : 'error'}`,

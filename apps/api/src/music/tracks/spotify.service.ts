@@ -90,7 +90,7 @@ export class SpotifyService {
     try {
       const token = await this.getToken();
       const q = encodeURIComponent([title, artist].filter(Boolean).join(' '));
-      const url = `https://api.spotify.com/v1/search?q=${q}&type=track&limit=3`;
+      const url = `https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -99,7 +99,9 @@ export class SpotifyService {
         return null;
       }
       const json = (await res.json()) as any;
-      const track = json.tracks?.items?.[0];
+      // Exige que el artista coincida: evita años/estilos de otra canción con el
+      // mismo título (ej. "Estambul" de 1979 de otro artista).
+      const track = pickByArtist(json.tracks?.items ?? [], artist);
       if (!track) return null;
 
       const year = parseYear(track.album?.release_date);
@@ -255,14 +257,15 @@ export class SpotifyService {
       const token = await this.getToken();
       const q = encodeURIComponent([title, artist].filter(Boolean).join(' '));
       const res = await fetch(
-        `https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`,
+        `https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) {
         if (res.status === 401) this.token = null;
         return null;
       }
-      const track = ((await res.json()) as any).tracks?.items?.[0];
+      // Solo acepta la fecha si el artista coincide (evita match por título).
+      const track = pickByArtist(((await res.json()) as any).tracks?.items ?? [], artist);
       return track?.album?.release_date ?? null;
     } catch {
       return null;
@@ -471,6 +474,43 @@ function parsePlaylistId(link: string): string | null {
 function parseTrackId(link: string): string | null {
   const m = link.match(/track[/:]([A-Za-z0-9]+)/);
   return m ? m[1] : null;
+}
+
+/** Normaliza un nombre de artista para comparar (sin acentos, sin feats, minúsculas). */
+function normArtist(s: string | null | undefined): string {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\b(feat|ft|featuring|con)\b.*$/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * ¿El artista de la búsqueda coincide con alguno del track de Spotify? Evita
+ * matches falsos por título repetido (ej. "Estambul" de 1979 de otro artista).
+ * Compara el artista principal (antes de coma/&) de forma laxa (contención).
+ */
+function artistLooseMatch(
+  queryArtist: string | null,
+  names: (string | null | undefined)[],
+): boolean {
+  const q = normArtist((queryArtist ?? '').split(/[,&]/)[0]);
+  if (q.length < 3) return false; // muy corto: no arriesgar falso positivo
+  return names.some((n) => {
+    const x = normArtist(n);
+    return x.length >= 3 && (x === q || x.includes(q) || q.includes(x));
+  });
+}
+
+/** De los resultados de búsqueda, elige el primero cuyo artista coincida. */
+function pickByArtist(items: any[], artist: string | null): any | null {
+  if (!artist) return items[0] ?? null;
+  const hit = items.find((t) =>
+    artistLooseMatch(artist, (t.artists ?? []).map((a: any) => a.name)),
+  );
+  return hit ?? null; // sin coincidencia de artista: no matchear (año/estilo dudosos)
 }
 
 interface EmbedTrack {
