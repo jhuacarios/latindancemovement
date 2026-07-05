@@ -5,7 +5,10 @@ import type {
   SpotifyImportMatch,
 } from '@baile-latino/types';
 import { SpotifyService, type SpotifyTrackInfo } from './spotify.service';
-import { YoutubeMetadataService } from './youtube-metadata.service';
+import {
+  YoutubeMetadataService,
+  YoutubeQuotaError,
+} from './youtube-metadata.service';
 
 /**
  * Matchea una playlist de Spotify con los mejores videos de YouTube.
@@ -29,9 +32,17 @@ export class SpotifyMatchService {
     // Concurrencia acotada: cada track gasta cuota de YouTube (search = 100).
     const CHUNK = 4;
     const out: SpotifyImportMatch[] = [];
+    // Una vez agotada la cuota, no vale la pena seguir buscando: el resto se
+    // marca como quotaError sin gastar llamadas (todas fallarían igual).
+    let quotaHit = false;
     for (let i = 0; i < tracks.length; i += CHUNK) {
       const slice = tracks.slice(i, i + CHUNK);
-      const matched = await Promise.all(slice.map((sp) => this.matchOne(sp)));
+      const matched = await Promise.all(
+        slice.map((sp) =>
+          quotaHit ? this.quotaMatch(sp) : this.matchOne(sp),
+        ),
+      );
+      if (matched.some((m) => m.quotaError)) quotaHit = true;
       out.push(...matched);
     }
     return out;
@@ -42,7 +53,8 @@ export class SpotifyMatchService {
     let candidates: ExtractedTrackMetadata[] = [];
     try {
       candidates = await this.youtube.search(query, 6);
-    } catch {
+    } catch (e) {
+      if (e instanceof YoutubeQuotaError) return this.quotaMatch(sp);
       candidates = [];
     }
 
@@ -61,6 +73,22 @@ export class SpotifyMatchService {
       best: top?.c ?? null,
       candidates: scored.slice(0, 4).map((x) => x.c),
       confidence: top ? confidenceOf(top.s, top.c, sp) : 'none',
+    };
+  }
+
+  /** Fila sin match por cuota agotada (no por falta de resultados). */
+  private quotaMatch(sp: SpotifyTrackInfo): SpotifyImportMatch {
+    return {
+      spotify: {
+        title: sp.title,
+        artist: sp.artist,
+        durationSec: sp.durationSec,
+        year: sp.year,
+      },
+      best: null,
+      candidates: [],
+      confidence: 'none',
+      quotaError: true,
     };
   }
 }

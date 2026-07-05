@@ -80,18 +80,29 @@ export function Card({
   );
 }
 
-export function StyleBadge({ style }: { style: string }) {
+export function StyleBadge({
+  style,
+  compact = false,
+}: {
+  style: string;
+  /** Muestra solo "B"/"S" (para espacios angostos, ej. el panel de playlist). */
+  compact?: boolean;
+}) {
   const isBachata = style.startsWith('BACHATA') || style === 'BACHATA';
   return (
     <span
+      title={compact ? style : undefined}
       className={clsx(
-        'inline-block rounded-full px-2 py-0.5 text-xs font-semibold',
+        'inline-block rounded-full font-semibold',
+        compact
+          ? 'h-5 w-5 text-center text-xs leading-5'
+          : 'px-2 py-0.5 text-xs',
         isBachata
           ? 'bg-amber-500/15 text-amber-300'
           : 'bg-red-500/15 text-red-300',
       )}
     >
-      {style}
+      {compact ? (isBachata ? 'B' : 'S') : style}
     </span>
   );
 }

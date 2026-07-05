@@ -283,6 +283,11 @@ export interface SpotifyImportMatch {
   /** Hasta 4 candidatos ordenados por puntaje (incluye `best`). */
   candidates: ExtractedTrackMetadata[];
   confidence: MatchConfidence;
+  /**
+   * true si la búsqueda en YouTube falló por **cuota agotada** (no por falta de
+   * match). Permite a la UI distinguirlo de un "sin resultados" real.
+   */
+  quotaError?: boolean;
 }
 
 export interface PlaylistGenerationSummary {

@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -45,6 +46,15 @@ export class CreateTrackDto {
   @Min(1900)
   @Max(2100)
   year?: number;
+
+  /**
+   * Fecha de lanzamiento "YYYY-MM-DD" | "YYYY-MM" | "YYYY". Si viene, pisa la
+   * fecha de subida de YouTube (el usuario editó mes/año en el formulario).
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}(-\d{2}(-\d{2})?)?$/)
+  releaseDate?: string;
 
   /**
    * Pega un link de Spotify/YouTube y se resuelve source + sourceId.

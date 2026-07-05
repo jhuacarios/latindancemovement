@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type {
   DanceStyle,
   DanceSubstyle,
@@ -8,6 +13,24 @@ import type {
 import { buildTrackUrl, parseTrackLink } from '../track-url.util';
 import { SpotifyService } from './spotify.service';
 import { DiscogsService } from './discogs.service';
+
+/** Mensaje único para cuota agotada (lo detecta la UI por la palabra "cuota"). */
+export const YOUTUBE_QUOTA_MESSAGE =
+  'Cuota diaria de YouTube agotada. Reintenta después de medianoche hora del ' +
+  'Pacífico (~01:00–02:00 en Chile) o usa otra API key.';
+
+/**
+ * La cuota diaria de YouTube se agotó (403 quotaExceeded). Se distingue de un
+ * "sin resultados" real para que la UI avise en vez de mentir con "sin match".
+ * Extiende ServiceUnavailableException: si nadie la captura, sale como 503 con
+ * el mensaje claro; el matcher de Spotify sí la captura (instanceof) para
+ * marcar la fila como "cuota agotada" en vez de romper toda la importación.
+ */
+export class YoutubeQuotaError extends ServiceUnavailableException {
+  constructor() {
+    super(YOUTUBE_QUOTA_MESSAGE);
+  }
+}
 
 /** Palabras de adorno típicas en títulos de YouTube que conviene limpiar. */
 const NOISE = [
@@ -88,7 +111,12 @@ export class YoutubeMetadataService {
       const chunk = videoIds.slice(i, i + 50);
       const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,status,topicDetails&id=${chunk.join(',')}&key=${apiKey}`;
       const res = await fetch(url);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (res.status === 403 && (await this.isQuotaError(res))) {
+          throw new YoutubeQuotaError();
+        }
+        continue;
+      }
       const json = (await res.json()) as any;
       for (const item of json.items ?? []) {
         out.push(this.toExtracted(String(item.id), this.buildVideoData(item)));
@@ -128,12 +156,32 @@ export class YoutubeMetadataService {
     const q = encodeURIComponent(query);
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${max}&q=${q}&key=${apiKey}`;
     const res = await fetch(url);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      if (res.status === 403 && (await this.isQuotaError(res))) {
+        throw new YoutubeQuotaError();
+      }
+      return [];
+    }
     const json = (await res.json()) as any;
     const ids: string[] = (json.items ?? [])
       .map((i: any) => i.id?.videoId)
       .filter(Boolean);
     return this.fetchByIds(ids);
+  }
+
+  /** ¿El 403 es por cuota (vs. otro motivo, ej. key inválida)? */
+  private async isQuotaError(res: Response): Promise<boolean> {
+    try {
+      const body = (await res.clone().json()) as any;
+      const reason = body?.error?.errors?.[0]?.reason;
+      return (
+        reason === 'quotaExceeded' ||
+        reason === 'dailyLimitExceeded' ||
+        reason === 'rateLimitExceeded'
+      );
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -159,9 +207,10 @@ export class YoutubeMetadataService {
   }
 
   /**
-   * Cascada de detección: Spotify (año + género mainstream) → Discogs
-   * (campo "Style", ideal para música cubana) → señales de YouTube
-   * (lo ya detectado). El año real del álbum pisa al de subida a YouTube.
+   * Cascada de detección de ESTILO: Spotify (género mainstream) → Discogs
+   * (campo "Style", ideal para música cubana) → señales de YouTube (lo ya
+   * detectado). El **año NO se toca**: para YouTube la fecha es la de SUBIDA
+   * (decisión de producto), no el año de álbum de Spotify/Discogs.
    */
   private async applyExternalStyle(
     item: ExtractedTrackMetadata,
@@ -169,7 +218,6 @@ export class YoutubeMetadataService {
     const sp = await this.spotify.lookup(item.title, item.artist);
     let style = sp?.style ?? null;
     let substyle = sp?.style ? (sp.substyle ?? null) : null;
-    let year = sp?.year ?? null;
 
     // Discogs solo si Spotify no resolvió el estilo (su "Style" es más certero
     // para géneros cubanos que Spotify no etiqueta).
@@ -179,14 +227,13 @@ export class YoutubeMetadataService {
         style = dc.style;
         substyle = dc.substyle;
       }
-      year = year ?? dc?.year ?? null;
     }
 
     return {
       ...item,
       detectedStyle: style ?? item.detectedStyle,
       detectedSubstyle: style ? (substyle ?? item.detectedSubstyle) : item.detectedSubstyle,
-      year: year ?? item.year,
+      // year: se conserva el de subida a YouTube (item.year), no se pisa.
     };
   }
 
@@ -248,7 +295,12 @@ export class YoutubeMetadataService {
         `&playlistId=${playlistId}&key=${apiKey}` +
         (pageToken ? `&pageToken=${pageToken}` : '');
       const res = await fetch(url);
-      if (!res.ok) break;
+      if (!res.ok) {
+        if (res.status === 403 && (await this.isQuotaError(res))) {
+          throw new YoutubeQuotaError();
+        }
+        break;
+      }
       const json = (await res.json()) as any;
       for (const it of json.items ?? []) {
         const vid = it.contentDetails?.videoId;

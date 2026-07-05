@@ -6,6 +6,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Playlist, PlaylistItem } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
+import { formatTotalDuration } from '@/lib/format';
+import { areSimilarTracks } from '@/lib/similarity';
 import { trackThumbUrl } from './track-thumb';
 import { usePlayer } from './player';
 import { clsx } from './clsx';
@@ -96,6 +98,36 @@ export function PlaylistsPanel({
   }, [selectedId, memberKey]);
 
   const songs = optimistic ?? serverItems;
+  // Resumen de la playlist: cuántas bachatas/salsas y la duración total.
+  const summary = useMemo(() => {
+    let bachata = 0;
+    let salsa = 0;
+    let seconds = 0;
+    for (const it of songs) {
+      const t = it.track;
+      if (!t) continue;
+      if (t.style === 'BACHATA') bachata++;
+      else if (t.style === 'SALSA') salsa++;
+      seconds += t.durationSec ?? 0;
+    }
+    return { bachata, salsa, seconds };
+  }, [songs]);
+  // Canciones (casi) duplicadas: título/artista muy parecidos o mismo video.
+  const dupIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (let i = 0; i < songs.length; i++) {
+      const a = songs[i].track;
+      if (!a) continue;
+      for (let j = i + 1; j < songs.length; j++) {
+        const b = songs[j].track;
+        if (b && areSimilarTracks(a, b)) {
+          ids.add(songs[i].id);
+          ids.add(songs[j].id);
+        }
+      }
+    }
+    return ids;
+  }, [songs]);
   const visibleSongs = useMemo(() => {
     if (!q) return songs;
     return songs.filter((it) => {
@@ -374,6 +406,25 @@ export function PlaylistsPanel({
         {/* Nivel 2: canciones de la playlist (drop target + reordenable) */}
         {selected && (
           <>
+            {songs.length > 0 && (
+              <div className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[11px]">
+                <span className="rounded-full bg-pink-500/15 px-2 py-0.5 text-pink-300">
+                  {summary.bachata} bachata{summary.bachata === 1 ? '' : 's'}
+                </span>
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300">
+                  {summary.salsa} salsa{summary.salsa === 1 ? '' : 's'}
+                </span>
+                <span className="ml-auto text-neutral-400">
+                  {songs.length} · {formatTotalDuration(summary.seconds)}
+                </span>
+              </div>
+            )}
+            {dupIds.size > 0 && (
+              <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-200/90">
+                ⚠️ {dupIds.size} posible{dupIds.size === 1 ? '' : 's'} duplicada
+                {dupIds.size === 1 ? '' : 's'} (título/artista muy parecidos).
+              </div>
+            )}
             {externalActive && (
               <p className="mb-1 px-1 text-center text-[10px] text-brand">
                 Suelta para agregar
@@ -431,6 +482,8 @@ export function PlaylistsPanel({
                       'flex select-none items-center gap-2 rounded-lg p-1 hover:bg-neutral-800/40',
                       clickable && 'cursor-pointer',
                       isPlaying && 'bg-brand/15',
+                      dupIds.has(it.id) &&
+                        'ring-1 ring-inset ring-amber-500/50',
                       isDragged && 'opacity-40',
                       showTop &&
                         'shadow-[inset_0_3px_0_0_var(--color-brand),inset_0_11px_11px_-9px_var(--color-brand)]',
@@ -472,13 +525,18 @@ export function PlaylistsPanel({
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-xs font-medium">
+                        {dupIds.has(it.id) && (
+                          <span title="Posible duplicada" className="mr-1">
+                            ⚠️
+                          </span>
+                        )}
                         {t?.title ?? '—'}
                       </div>
                       <div className="truncate text-[10px] text-neutral-500">
                         {t?.artist ?? ''}
                       </div>
                     </div>
-                    {t && <StyleBadge style={t.style} />}
+                    {t && <StyleBadge style={t.style} compact />}
                     <button
                       type="button"
                       title="Quitar de la playlist"

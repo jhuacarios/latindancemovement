@@ -100,6 +100,9 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
     });
   }
 
+  // Filas que fallaron por cuota de YouTube agotada (no por falta de match).
+  const quotaCount = matches?.filter((m) => m.quotaError).length ?? 0;
+
   // Selecciones finales: filas con candidato + estilo.
   const selections =
     matches?.flatMap((m, i) => {
@@ -194,6 +197,16 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
+            {quotaCount > 0 && (
+              <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+                ⚠️ <strong>Cuota de YouTube agotada:</strong> {quotaCount}{' '}
+                {quotaCount === 1 ? 'canción no se pudo' : 'canciones no se pudieron'}{' '}
+                buscar (aparecen como “Cuota agotada”, <strong>no</strong> es que
+                no tengan match). Reintenta después de medianoche hora del
+                Pacífico (~01:00–02:00 en Chile) o con otra API key.
+              </p>
+            )}
+
             {nowPlaying && (
               <div className="mt-3">
                 <InlineAudioPlayer
@@ -280,6 +293,10 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
                                 </select>
                               )}
                             </>
+                          ) : m.quotaError ? (
+                            <span className="text-xs text-amber-300/90">
+                              ⚠️ Cuota agotada
+                            </span>
                           ) : (
                             <span className="text-xs text-neutral-500">
                               Sin resultados

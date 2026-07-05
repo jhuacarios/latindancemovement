@@ -24,6 +24,60 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.0',
+    date: '2026-07-05',
+    module: 'music',
+    type: 'feature',
+    title: 'Canciones “Épicas” (las más top)',
+    description:
+      'Las 50 canciones con más reproducciones por día de cada estilo se marcan con “🔥 ÉPICA” (en bachata, de los últimos 24 meses). Hay un filtro “Solo épicas” para verlas de un vistazo.',
+  },
+  {
+    version: '0.7.0',
+    date: '2026-07-05',
+    module: 'music',
+    type: 'improvement',
+    title: 'Mis Canciones con los mismos filtros y columnas del catálogo',
+    description:
+      'Mis Canciones ahora tiene sub-estilos con selección múltiple, filtros “Solo nuevas”, “Solo épicas” y “Últimos meses”, columnas configurables (engranaje), numeración de filas, columna Fecha (mes y año) y Repr./día.',
+  },
+  {
+    version: '0.7.0',
+    date: '2026-07-05',
+    module: 'music',
+    type: 'improvement',
+    title: 'Panel de playlist: resumen y alerta de duplicados',
+    description:
+      'Al armar una playlist ves cuántas bachatas y salsas lleva y la duración total. Te avisa si hay canciones repetidas o muy parecidas (por título/artista), y al agregar una similar te lo advierte. Las etiquetas de estilo se compactan a “B/S” por espacio.',
+  },
+  {
+    version: '0.7.0',
+    date: '2026-07-05',
+    module: 'general',
+    type: 'improvement',
+    title: 'Botón de reproducir con play/pausa',
+    description:
+      'El botón de reproducir del catálogo y Mis Canciones ahora es redondo y refleja el estado: cambia entre ▶ y ⏸, y al clickearlo alterna reproducir/detener.',
+  },
+  {
+    version: '0.7.0',
+    date: '2026-07-05',
+    module: 'music',
+    type: 'improvement',
+    title: 'Aviso cuando se agota la cuota de YouTube',
+    description:
+      'Al importar playlists de Spotify o YouTube, si se agota la cuota diaria de YouTube ahora se avisa claramente (antes parecía “sin resultados”). La cuota se renueva a medianoche hora del Pacífico.',
+  },
+  {
+    version: '0.7.0',
+    date: '2026-07-05',
+    module: 'music',
+    type: 'improvement',
+    title: 'Fecha de subida y mes al agregar o importar (YouTube)',
+    description:
+      'Para YouTube la fecha es la de subida del video, y al agregar una canción o importar una playlist el mes se precarga desde YouTube (ya no queda solo el año).',
+  },
+  {
     version: '0.6.1',
     date: '2026-07-05',
     module: 'music',

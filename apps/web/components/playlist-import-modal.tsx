@@ -15,6 +15,7 @@ import { InlineAudioPlayer } from './player';
 import { trackThumbUrl } from './track-thumb';
 import { YoutubeIcon } from './youtube-icon';
 import { clsx } from './clsx';
+import { MONTHS, maxMonthFor } from '@/lib/months';
 
 export function PlaylistImportModal({
   onClose,
@@ -38,6 +39,12 @@ export function PlaylistImportModal({
   const [rowStyles, setRowStyles] = useState<Record<string, DanceStyle>>({});
   /** Año editado por fila (sourceId -> año como texto, para editar libremente). */
   const [rowYears, setRowYears] = useState<Record<string, string>>({});
+  /** Mes editado por fila (sourceId -> "01".."12" o "" = sin mes). */
+  const [rowMonths, setRowMonths] = useState<Record<string, string>>({});
+  /** Mes+año original de subida (para no pisar el día real si no se edita). */
+  const [origDates, setOrigDates] = useState<
+    Record<string, { m: string; y: string }>
+  >({});
   /** Filas que el usuario tocó a mano (no las pisa el "estilo por defecto"). */
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -85,19 +92,41 @@ export function PlaylistImportModal({
           : '/music/tracks/catalog-youtube-ids',
       );
       const have = new Set(existing);
-      const shown = res.filter((it) => !have.has(it.sourceId));
-      setSkipped(res.length - shown.length);
+      // La playlist puede traer el mismo video repetido: se deja una sola vez
+      // (el estado por fila se indexa por sourceId y no debe colisionar).
+      const seen = new Set<string>();
+      const unique = res.filter((it) => {
+        if (seen.has(it.sourceId)) return false;
+        seen.add(it.sourceId);
+        return true;
+      });
+      const shown = unique.filter((it) => !have.has(it.sourceId));
+      setSkipped(unique.length - shown.length);
       setItems(shown);
       // Estilo inicial por fila: el detectado (catálogo en Mis Canciones / por
       // palabras en el catálogo). Las NO detectadas quedan SIN estilo (sin marcar).
+      // Mes+año inicial: de la FECHA DE SUBIDA de YouTube (details.publishedAt).
       const init: Record<string, DanceStyle> = {};
       const initYears: Record<string, string> = {};
+      const initMonths: Record<string, string> = {};
+      const orig: Record<string, { m: string; y: string }> = {};
       for (const it of shown) {
         if (it.detectedStyle) init[it.sourceId] = it.detectedStyle;
-        if (it.year != null) initYears[it.sourceId] = String(it.year);
+        const pub = it.details?.publishedAt ?? '';
+        const ym = /^(\d{4})-(\d{2})/.exec(pub);
+        if (ym) {
+          initYears[it.sourceId] = ym[1];
+          initMonths[it.sourceId] = ym[2];
+          orig[it.sourceId] = { y: ym[1], m: ym[2] };
+        } else if (it.year != null) {
+          initYears[it.sourceId] = String(it.year);
+          orig[it.sourceId] = { y: String(it.year), m: '' };
+        }
       }
       setRowStyles(init);
       setRowYears(initYears);
+      setRowMonths(initMonths);
+      setOrigDates(orig);
       setTouched(new Set());
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'No se pudo leer la playlist');
@@ -116,10 +145,22 @@ export function PlaylistImportModal({
           .filter(([, v]) => /^\d{4}$/.test(v))
           .map(([k, v]) => [k, Number(v)]),
       );
+      // Fecha (mes+año) editada → "YYYY-MM-01". Solo se envía si el usuario
+      // CAMBIÓ el mes/año respecto a la subida; si no, el backend usa la fecha
+      // de subida completa (con su día real, más preciso para rep/día).
+      const dateOverrides: Record<string, string> = {};
+      for (const [sid, m] of Object.entries(rowMonths)) {
+        const y = rowYears[sid];
+        const og = origDates[sid];
+        const changed = !og || m !== og.m || (y ?? '') !== og.y;
+        if (changed && m && /^\d{4}$/.test(y ?? '')) {
+          dateOverrides[sid] = `${y}-${m}-01`;
+        }
+      }
       const res = await api<PlaylistImportResult>(importPath, {
         method: 'POST',
         // Sin estilo por defecto: el estilo sale de lo detectado o de la elección.
-        body: { link, overrides: rowStyles, yearOverrides },
+        body: { link, overrides: rowStyles, yearOverrides, dateOverrides },
       });
       setResult(res);
       if (isLibrary) {
@@ -184,7 +225,11 @@ export function PlaylistImportModal({
         </div>
 
         {err &&
-          (/no es p[úu]blica|vac[íi]a/i.test(err) ? (
+          (/cuota/i.test(err) ? (
+            <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+              ⚠️ <strong>{err}</strong>
+            </p>
+          ) : /no es p[úu]blica|vac[íi]a/i.test(err) ? (
             <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
               ⚠️ No se pudo leer la playlist: debe ser <strong>Pública</strong> o{' '}
               <strong>No listada</strong> (Unlisted), no <strong>privada</strong>{' '}
@@ -250,7 +295,7 @@ export function PlaylistImportModal({
               </div>
             )}
 
-            <div className="mt-3 flex-1 overflow-auto rounded-lg border border-neutral-800">
+            <div className="no-scrollbar mt-3 flex-1 overflow-auto rounded-lg border border-neutral-800">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 border-b border-neutral-800 bg-neutral-900 text-left text-neutral-400">
                   <tr>
@@ -335,25 +380,59 @@ export function PlaylistImportModal({
                           </div>
                         </td>
                         <td className="px-3 py-2 text-neutral-400">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={rowYears[it.sourceId] ?? ''}
-                            placeholder="—"
-                            onFocus={(e) => e.currentTarget.select()}
-                            onChange={(e) =>
-                              setRowYears((prev) => ({
-                                ...prev,
-                                [it.sourceId]: e.target.value
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={rowMonths[it.sourceId] ?? ''}
+                              onChange={(e) =>
+                                setRowMonths((prev) => ({
+                                  ...prev,
+                                  [it.sourceId]: e.target.value,
+                                }))
+                              }
+                              className="rounded-md border border-transparent bg-neutral-800/60 px-1 py-1 text-sm text-neutral-200 hover:border-neutral-700 focus:border-brand focus:bg-neutral-800 focus:outline-none"
+                            >
+                              <option value="">—</option>
+                              {MONTHS.slice(
+                                0,
+                                maxMonthFor(rowYears[it.sourceId] ?? ''),
+                              ).map((m, i) => (
+                                <option
+                                  key={m}
+                                  value={String(i + 1).padStart(2, '0')}
+                                >
+                                  {m}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={rowYears[it.sourceId] ?? ''}
+                              placeholder="—"
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={(e) => {
+                                const y = e.target.value
                                   .replace(/[^0-9]/g, '')
-                                  .slice(0, 4),
-                              }))
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') e.currentTarget.blur();
-                            }}
-                            className="w-16 rounded-md border border-transparent bg-neutral-800/60 px-2 py-1 text-sm text-neutral-200 [appearance:textfield] hover:border-neutral-700 focus:border-brand focus:bg-neutral-800 focus:outline-none"
-                          />
+                                  .slice(0, 4);
+                                setRowYears((prev) => ({
+                                  ...prev,
+                                  [it.sourceId]: y,
+                                }));
+                                // Si el mes elegido ya no es válido para el nuevo año, lo limpia.
+                                setRowMonths((prev) => {
+                                  const m = prev[it.sourceId];
+                                  if (m && Number(m) > maxMonthFor(y)) {
+                                    return { ...prev, [it.sourceId]: '' };
+                                  }
+                                  return prev;
+                                });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') e.currentTarget.blur();
+                              }}
+                              className="w-16 rounded-md border border-transparent bg-neutral-800/60 px-2 py-1 text-sm text-neutral-200 [appearance:textfield] hover:border-neutral-700 focus:border-brand focus:bg-neutral-800 focus:outline-none"
+                            />
+                          </div>
                         </td>
                       </tr>
                     );
@@ -386,7 +465,7 @@ export function PlaylistImportModal({
               (de {result.total}).
             </p>
             {result.errors.length > 0 && (
-              <ul className="mt-2 max-h-40 list-disc overflow-auto pl-5 text-xs text-red-300">
+              <ul className="no-scrollbar mt-2 max-h-40 list-disc overflow-auto pl-5 text-xs text-red-300">
                 {result.errors.map((e, i) => (
                   <li key={i}>{e}</li>
                 ))}

@@ -73,9 +73,11 @@ export class LibraryService {
         ? { title: dir }
         : q.sortBy === 'artist'
           ? { artist: dir }
-          : q.sortBy === 'year'
-            ? { year: dir }
-            : { createdAt: 'desc' };
+          : q.sortBy === 'releaseDate'
+            ? { releaseDate: { sort: dir, nulls: 'last' } }
+            : q.sortBy === 'year'
+              ? { year: dir }
+              : { createdAt: 'desc' };
 
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.track.findMany({

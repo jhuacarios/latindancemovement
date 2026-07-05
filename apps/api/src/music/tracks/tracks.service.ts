@@ -88,22 +88,16 @@ export class TracksService {
   }
 
   /**
-   * Fecha de lanzamiento para una canción de YouTube al crear/importar: usa la
-   * fecha de subida SOLO si su año coincide con el año real (subida ≈ estreno).
-   * Si no coincide (video subido años después), devuelve null y se deja que el
-   * backfill busque la fecha real en Spotify. Acepta el ytMetadata como string
-   * (JSON) o el `publishedAt` ya extraído.
+   * Para YouTube la "fecha" del catálogo es la fecha de SUBIDA del video
+   * (publishedAt) — así se usa para estadísticas/indicadores. Devuelve
+   * "YYYY-MM-DD" o null si no hay.
    */
   private youtubeReleaseAtCreate(
     publishedAt: string | null,
-    year: number | null | undefined,
   ): string | null {
-    const pub =
-      publishedAt && /^\d{4}-\d{2}-\d{2}/.test(publishedAt)
-        ? publishedAt.slice(0, 10)
-        : null;
-    if (!pub) return null;
-    return year == null || Number(pub.slice(0, 4)) === year ? pub : null;
+    return publishedAt && /^\d{4}-\d{2}-\d{2}/.test(publishedAt)
+      ? publishedAt.slice(0, 10)
+      : null;
   }
 
   /**
@@ -128,10 +122,6 @@ export class TracksService {
       updated++;
     };
 
-    // "Con precisión" = la fecha incluye mes (no solo año).
-    const withMonth = (d: string | null): string | null =>
-      d && /^\d{4}-\d{2}/.test(d) ? d : null;
-
     // 1) Canciones de Spotify: fecha completa desde el embed (confiable, sin
     // rate limit como la Web API). Si el embed no la da, cae al año.
     const sp = await this.prisma.track.findMany({
@@ -154,27 +144,16 @@ export class TracksService {
     if (budget > 0) {
       const yt = await this.prisma.track.findMany({
         where: { source: 'YOUTUBE', releaseDate: null },
-        select: { id: true, title: true, artist: true, year: true, ytMetadata: true },
+        select: { id: true, year: true, ytMetadata: true },
         take: budget,
       });
       for (const t of yt) {
         if (budget <= 0) break;
         budget--;
-        const rd = await this.spotify.searchReleaseDate(t.title, t.artist);
+        // YouTube: la fecha es la de SUBIDA del video (para estadísticas). Si no
+        // hay publishedAt, cae al año.
         const uploaded = this.publishedDateFromMeta(t.ytMetadata);
-        // La fecha de subida solo es fiable como lanzamiento si su año coincide
-        // con el año real (subida ≈ estreno; un video subido años después no
-        // sirve). Si no coincide, no inventamos mes: se deja el año.
-        const uploadedOk =
-          uploaded && (t.year == null || Number(uploaded.slice(0, 4)) === t.year)
-            ? uploaded
-            : null;
-        await setDate(
-          t.id,
-          withMonth(rd) ??
-            uploadedOk ??
-            (t.year != null ? String(t.year) : ''),
-        );
+        await setDate(t.id, uploaded ?? (t.year != null ? String(t.year) : ''));
       }
     }
 
@@ -270,16 +249,16 @@ export class TracksService {
         artistUserId: dto.artistUserId ?? null,
         ytMetadata: dto.ytMetadata ?? null,
         viewCount: this.viewsFromMeta(dto.ytMetadata),
-        // Fecha de lanzamiento inmediata para YouTube (si la subida ≈ el año);
-        // si no, queda null y el backfill busca la real. Spotify: lo llena el
-        // backfill desde el embed.
+        // Fecha de lanzamiento: la editada por el usuario (mes/año) tiene
+        // prioridad; si no, para YouTube la de subida (si la subida ≈ el año);
+        // si no, null y el backfill busca la real (Spotify: desde el embed).
         releaseDate:
-          source === 'YOUTUBE'
+          dto.releaseDate ||
+          (source === 'YOUTUBE'
             ? this.youtubeReleaseAtCreate(
                 this.publishedDateFromMeta(dto.ytMetadata ?? null),
-                dto.year,
               )
-            : null,
+            : null),
         createdById: userId,
       },
     });
@@ -820,6 +799,31 @@ export class TracksService {
     return { updated, remaining };
   }
 
+  /**
+   * Aplica fechas de lanzamiento por id: { id: "YYYY-MM-01" | "YYYY" | null }.
+   * `null` (o "") resetea (para que el backfill la recalcule). Formatos inválidos
+   * se ignoran. Devuelve cuántas se actualizaron.
+   */
+  async applyReleaseDates(
+    dates: Record<string, string | null>,
+  ): Promise<{ updated: number }> {
+    let updated = 0;
+    for (const [id, rd] of Object.entries(dates ?? {})) {
+      if (typeof id !== 'string' || !id) continue;
+      let value: string | null | undefined;
+      if (rd == null || rd === '') value = null; // reset
+      else if (/^\d{4}(-\d{2}(-\d{2})?)?$/.test(rd)) value = rd;
+      else value = undefined; // formato inválido: ignora
+      if (value === undefined) continue;
+      await this.prisma.track.update({
+        where: { id },
+        data: { releaseDate: value },
+      });
+      updated++;
+    }
+    return { updated };
+  }
+
   /** Aplica duraciones (en segundos) por id de track. */
   async setDurations(
     updates: { id: string; durationSec: number }[],
@@ -921,6 +925,7 @@ export class TracksService {
     defaultStyle: DanceStyle | undefined,
     userId: string,
     overrides?: Record<string, DanceStyle>,
+    dateOverrides?: Record<string, string>,
   ): Promise<PlaylistImportResult> {
     let created = 0;
     let updated = 0; // ya estaban en el catálogo (se omiten)
@@ -965,12 +970,13 @@ export class TracksService {
         );
         if (res.created) {
           created++;
-          // Fecha de lanzamiento inmediata (si la subida coincide con el año);
-          // si no, queda null y el backfill busca la real en Spotify.
-          const rel = this.youtubeReleaseAtCreate(
-            it.details?.publishedAt ?? null,
-            it.year,
-          );
+          // Fecha: la editada por el usuario (mes+año) tiene prioridad; si no,
+          // la de subida cuando coincide con el año; si no, la busca el backfill.
+          const override = dateOverrides?.[it.sourceId];
+          const rel =
+            override && /^\d{4}-\d{2}-\d{2}$/.test(override)
+              ? override
+              : this.youtubeReleaseAtCreate(it.details?.publishedAt ?? null);
           if (rel) {
             await this.prisma.track.update({
               where: { id: res.id },

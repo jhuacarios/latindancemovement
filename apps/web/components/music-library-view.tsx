@@ -18,7 +18,17 @@ import { SearchInput } from '@/components/search-input';
 import { StyleFilter } from '@/components/style-filter';
 import { PlaylistsPanel } from '@/components/playlists-panel';
 import { TrackThumb } from '@/components/track-thumb';
-import { formatDuration } from '@/lib/format';
+import {
+  formatDuration,
+  formatReleaseDate,
+  formatViewsPerDay,
+  isNewRelease,
+  isWithinLastMonths,
+  viewsPerDay,
+} from '@/lib/format';
+import { NewBadge } from '@/components/new-badge';
+import { EpicBadge } from '@/components/epic-badge';
+import { areSimilarTracks } from '@/lib/similarity';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { PlatformIcon } from '@/components/platform-icon';
@@ -27,8 +37,9 @@ import {
   type SpotifyPlayable,
 } from '@/components/spotify-player-bar';
 import { TagEditor } from '@/components/tag-editor';
-import { SubstyleFilterSelect } from '@/components/substyle-select';
+import { SubstyleFilterMultiSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
+import { YoutubeIcon } from '@/components/youtube-icon';
 import { YoutubePlaylistModal } from '@/components/youtube-playlist-modal';
 import { PlaylistImportModal } from '@/components/playlist-import-modal';
 import {
@@ -39,7 +50,34 @@ import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 50;
+/** Se carga todo lo que matchea búsqueda+estilo y se filtra/pagina en cliente
+ * (igual que el Catálogo), para que los filtros calculados (nuevas/épicas/meses)
+ * cubran toda la selección, no solo una página. */
+const LOAD_SIZE = 1000;
+
+/** Columnas que se pueden mostrar/ocultar desde el engranaje. Título, "#" y
+ * acciones siempre visibles; la miniatura tiene su propio toggle. */
+type ColKey = 'artist' | 'style' | 'origin' | 'duration' | 'date' | 'vpd';
+type ColVis = Record<ColKey, boolean>;
+
+const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
+  { key: 'artist', label: 'Artista' },
+  { key: 'style', label: 'Estilo' },
+  { key: 'origin', label: 'Origen' },
+  { key: 'duration', label: 'Duración' },
+  { key: 'date', label: 'Fecha' },
+  { key: 'vpd', label: 'Repr./día', youtubeOnly: true },
+];
+
+const ALL_COLS_VISIBLE: ColVis = {
+  artist: true,
+  style: true,
+  origin: true,
+  duration: true,
+  date: true,
+  vpd: true,
+};
 
 /**
  * "Mis Canciones" reutilizable para una fuente (YouTube o Spotify). La biblioteca
@@ -63,7 +101,14 @@ export function MusicLibraryView({
   const canDelete = user ? perms.can(user.role, permKey, 'eliminar') : false;
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
-  const [substyle, setSubstyle] = useState('');
+  const [substyles, setSubstyles] = useState<string[]>([]);
+  const [onlyNew, setOnlyNew] = useState(false);
+  /** Mostrar solo las marcadas como Épica (top 50 rep/día por estilo). */
+  const [onlyEpic, setOnlyEpic] = useState(false);
+  /** Filtrar a los últimos N meses (por fecha). '' = sin filtro. */
+  const [lastMonths, setLastMonths] = useState('');
+  /** Orden por Repr./día (client-side, es un valor calculado). null = sin orden. */
+  const [vpdSort, setVpdSort] = useState<'asc' | 'desc' | null>(null);
   const [page, setPage] = useState(1);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelSelectedId, setPanelSelectedId] = useState<string | null>(null);
@@ -90,6 +135,43 @@ export function MusicLibraryView({
   const [showYtPlaylist, setShowYtPlaylist] = useState(false);
   const [showImportPlaylist, setShowImportPlaylist] = useState(false);
   const [showThumb, toggleThumb] = useThumbs();
+  // Columnas visibles (persistidas por fuente) + menú del engranaje.
+  const colsStorageKey = `nectason.libraryCols.${source}`;
+  const [cols, setCols] = useState<ColVis>(ALL_COLS_VISIBLE);
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const colMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(colsStorageKey);
+      if (raw) setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
+    } catch {
+      /* preferencia inválida: usa defaults */
+    }
+  }, [colsStorageKey]);
+
+  function toggleCol(key: ColKey) {
+    setCols((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(colsStorageKey, JSON.stringify(next));
+      } catch {
+        /* ignora si no hay storage */
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!colMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+        setColMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [colMenuOpen]);
   // Reproducción de Spotify en la barra inferior de la página.
   const [spotifyPlaying, setSpotifyPlaying] = useState<SpotifyPlayable | null>(
     null,
@@ -124,10 +206,30 @@ export function MusicLibraryView({
     },
   });
 
+  /** Busca en la playlist abierta una canción (casi) igual a `t`. */
+  function similarInOpenPlaylist(t: Track): Track | null {
+    if (!panelSelectedId) return null;
+    const pl = playlists?.find((p) => p.id === panelSelectedId);
+    for (const it of pl?.items ?? []) {
+      if (it.track && it.track.id !== t.id && areSimilarTracks(it.track, t)) {
+        return it.track;
+      }
+    }
+    return null;
+  }
+
   async function addToOpenPlaylist(trackId: string, atIndex: number) {
     if (!panelSelectedId) return;
+    const t = data?.data.find((x) => x.id === trackId) ?? null;
+    const sim = t ? similarInOpenPlaylist(t) : null;
     try {
       await addTrack.mutateAsync({ playlistId: panelSelectedId, trackId, atIndex });
+      if (sim && t) {
+        pushToast(
+          `⚠️ “${t.title}” se parece a “${sim.title}” que ya está en la playlist`,
+          'error',
+        );
+      }
     } catch (e) {
       pushToast(
         e instanceof ApiError ? e.message : 'No se pudo agregar la canción',
@@ -138,13 +240,21 @@ export function MusicLibraryView({
 
   async function addByDoubleClick(t: Track) {
     if (!panelSelectedId) return;
+    const sim = similarInOpenPlaylist(t);
     try {
       await addTrack.mutateAsync({
         playlistId: panelSelectedId,
         trackId: t.id,
         atIndex: Number.MAX_SAFE_INTEGER,
       });
-      pushToast(`✓ “${t.title}” agregada a la playlist`, 'success');
+      if (sim) {
+        pushToast(
+          `⚠️ “${t.title}” se parece a “${sim.title}” que ya está en la playlist`,
+          'error',
+        );
+      } else {
+        pushToast(`✓ “${t.title}” agregada a la playlist`, 'success');
+      }
     } catch (e) {
       pushToast(
         e instanceof ApiError ? e.message : 'No se pudo agregar la canción',
@@ -179,22 +289,53 @@ export function MusicLibraryView({
   }, [qc]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['library', source, { search, style, substyle, page, sort }],
+    queryKey: ['library', source, { search, style, sort }],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('source', source);
       if (search) p.set('search', search);
       if (style) p.set('style', style);
-      if (substyle) p.set('substyle', substyle);
       if (sort.by) {
         p.set('sortBy', sort.by);
         p.set('sortDir', sort.dir);
       }
-      p.set('page', String(page));
-      p.set('pageSize', String(PAGE_SIZE));
+      p.set('page', '1');
+      p.set('pageSize', String(LOAD_SIZE));
       return api<Paginated<Track>>(`/music/library?${p.toString()}`);
     },
   });
+
+  // Pill "Épica": top 50 por reproducciones/día de cada estilo (bachata: últimos
+  // 24 meses; salsa: sin restricción), calculado sobre el CATÁLOGO completo —
+  // mismo criterio que la página de Catálogo. Se cruza por sourceId. Solo YouTube.
+  const { data: epicData } = useQuery({
+    queryKey: ['catalog-epic', source],
+    queryFn: () =>
+      api<Paginated<Track>>(`/music/tracks?source=${source}&pageSize=1000`),
+    enabled: source === 'YOUTUBE',
+  });
+  const epicKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const all = epicData?.data ?? [];
+    for (const st of ['BACHATA', 'SALSA'] as const) {
+      const maxMonths = st === 'SALSA' ? 0 : 24;
+      const top = all
+        .filter(
+          (t) =>
+            t.style === st &&
+            isWithinLastMonths(t.releaseDate, t.year, maxMonths),
+        )
+        .map((t) => ({
+          sid: t.sourceId,
+          vpd: viewsPerDay(t.details?.viewCount, t.releaseDate) ?? -1,
+        }))
+        .filter((x) => x.vpd > 0)
+        .sort((a, b) => b.vpd - a.vpd)
+        .slice(0, 50);
+      for (const x of top) keys.add(x.sid);
+    }
+    return keys;
+  }, [epicData]);
 
   const { data: playlists } = useQuery({
     queryKey: ['playlists', source],
@@ -236,7 +377,42 @@ export function MusicLibraryView({
     },
   });
 
-  const pageIds = data?.data.map((t) => t.id) ?? [];
+  // Filtros calculados en cliente (nuevas/épicas/sub-estilos/últimos meses)
+  // sobre TODO lo cargado, y luego paginado de a PAGE_SIZE.
+  const monthsN = Number(lastMonths) || 0;
+  const newCount = data
+    ? data.data.filter((t) => isNewRelease(t.releaseDate)).length
+    : 0;
+  const epicCount = data
+    ? data.data.filter((t) => epicKeys.has(t.sourceId)).length
+    : 0;
+  const filteredRows = data
+    ? data.data.filter(
+        (t) =>
+          (!onlyNew || isNewRelease(t.releaseDate)) &&
+          (!onlyEpic || epicKeys.has(t.sourceId)) &&
+          (substyles.length === 0 ||
+            substyles.some((s) => t.substyles?.includes(s))) &&
+          isWithinLastMonths(t.releaseDate, t.year, monthsN),
+      )
+    : [];
+  // Orden por Repr./día (client-side); las sin dato van al final.
+  const sortedRows = vpdSort
+    ? [...filteredRows].sort((a, b) => {
+        const va = viewsPerDay(a.details?.viewCount, a.releaseDate) ?? -1;
+        const vb = viewsPerDay(b.details?.viewCount, b.releaseDate) ?? -1;
+        return vpdSort === 'desc' ? vb - va : va - vb;
+      })
+    : filteredRows;
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const pageRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Si un filtro deja la página actual fuera de rango, vuelve a la 1.
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
+
+  const pageIds = pageRows.map((t) => t.id);
   const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
   function toggleAll() {
     setSelected((prev) => {
@@ -247,7 +423,18 @@ export function MusicLibraryView({
     });
   }
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  // Columnas del colSpan (estado vacío): "#" + Título + acciones siempre; el
+  // resto según selección/miniatura/toggles.
+  const baseCols =
+    3 +
+    (selectMode ? 1 : 0) +
+    (showThumb ? 1 : 0) +
+    (cols.artist ? 1 : 0) +
+    (cols.style ? 1 : 0) +
+    (cols.origin ? 1 : 0) +
+    (cols.duration ? 1 : 0) +
+    (cols.date ? 1 : 0) +
+    (!isSpotify && cols.vpd ? 1 : 0);
 
   return (
     <div className="space-y-5">
@@ -268,12 +455,14 @@ export function MusicLibraryView({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={toggleThumb}>
-            {showThumb ? '🖼 Ocultar thumbnails' : '🖼 Thumbnails'}
-          </Button>
           {!isSpotify && (
-            <Button variant="ghost" onClick={() => setShowYtPlaylist(true)}>
-              ▶️ Crear playlist YouTube rápida
+            <Button
+              variant="ghost"
+              className="inline-flex items-center gap-1.5"
+              onClick={() => setShowYtPlaylist(true)}
+            >
+              <YoutubeIcon className="h-4 w-4 shrink-0 text-[#FF0000]" /> Crear
+              playlist rápida
             </Button>
           )}
           {canDelete && (
@@ -285,8 +474,13 @@ export function MusicLibraryView({
             </Button>
           )}
           {!isSpotify && canEdit && (
-            <Button variant="ghost" onClick={() => setShowImportPlaylist(true)}>
-              📺 Cargar playlist
+            <Button
+              variant="ghost"
+              className="inline-flex items-center gap-1.5"
+              onClick={() => setShowImportPlaylist(true)}
+            >
+              <YoutubeIcon className="h-4 w-4 shrink-0 text-[#FF0000]" /> Cargar
+              playlist
             </Button>
           )}
           {canEdit && (
@@ -377,7 +571,7 @@ export function MusicLibraryView({
             value={style}
             onChange={(v) => {
               setStyle(v);
-              setSubstyle('');
+              setSubstyles([]);
               setPage(1);
             }}
           />
@@ -387,14 +581,87 @@ export function MusicLibraryView({
             <label className="mb-1 block text-xs text-neutral-400">
               Sub-estilo
             </label>
-            <SubstyleFilterSelect
+            <SubstyleFilterMultiSelect
               style={style as DanceStyle}
-              value={substyle}
+              value={substyles}
               onChange={(v) => {
-                setSubstyle(v);
+                setSubstyles(v);
                 setPage(1);
               }}
             />
+          </div>
+        )}
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">
+            Últimos meses
+          </label>
+          <div className="flex items-center gap-1 rounded-lg border border-neutral-700 px-2 py-1.5 focus-within:border-brand">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={lastMonths}
+              placeholder="—"
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => {
+                setLastMonths(e.target.value.replace(/[^0-9]/g, '').slice(0, 3));
+                setPage(1);
+              }}
+              className="w-10 bg-transparent text-sm text-neutral-200 [appearance:textfield] focus:outline-none"
+            />
+            <span className="text-xs text-neutral-500">meses</span>
+            {lastMonths && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLastMonths('');
+                  setPage(1);
+                }}
+                title="Quitar filtro"
+                className="ml-0.5 text-neutral-500 hover:text-neutral-200"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">Novedades</label>
+          <button
+            type="button"
+            onClick={() => {
+              setOnlyNew((v) => !v);
+              setPage(1);
+            }}
+            title="Mostrar solo canciones lanzadas hace 2 meses o menos"
+            className={
+              'rounded-lg border px-3 py-2 text-sm transition ' +
+              (onlyNew
+                ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
+            }
+          >
+            ✨ Solo nuevas{newCount > 0 ? ` (${newCount})` : ''}
+          </button>
+        </div>
+        {!isSpotify && (
+          <div>
+            <label className="mb-1 block text-xs text-neutral-400">Top</label>
+            <button
+              type="button"
+              onClick={() => {
+                setOnlyEpic((v) => !v);
+                setPage(1);
+              }}
+              title="Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo"
+              className={
+                'rounded-lg border px-3 py-2 text-sm transition ' +
+                (onlyEpic
+                  ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
+                  : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
+              }
+            >
+              🔥 Solo épicas{epicCount > 0 ? ` (${epicCount})` : ''}
+            </button>
           </div>
         )}
         <div className="ml-auto">
@@ -440,18 +707,107 @@ export function MusicLibraryView({
                         />
                       </th>
                     )}
+                    <th className="px-4 py-3 w-10 text-right tabular-nums">#</th>
                     {showThumb && <th className="px-3 py-3 w-20"></th>}
                     <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
-                    <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
-                    <th className="px-4 py-3">Estilo</th>
-                    <th className="px-4 py-3">Origen</th>
-                    <th className="px-4 py-3">Duración</th>
-                    <SortTh label="Año" col="year" primary="desc" sort={sort} onSort={onSort} />
-                    <th className="px-4 py-3"></th>
+                    {cols.artist && (
+                      <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
+                    )}
+                    {cols.style && <th className="px-4 py-3">Estilo</th>}
+                    {cols.origin && <th className="px-4 py-3">Origen</th>}
+                    {cols.duration && <th className="px-4 py-3">Duración</th>}
+                    {cols.date && (
+                      <SortTh
+                        label={isSpotify ? 'Fecha' : 'Fecha subida'}
+                        col="releaseDate"
+                        primary="desc"
+                        sort={sort}
+                        onSort={onSort}
+                      />
+                    )}
+                    {!isSpotify && cols.vpd && (
+                      <th
+                        className="cursor-pointer select-none px-4 py-3 hover:text-neutral-200"
+                        title="Reproducciones por día desde la subida (velocidad)"
+                        onClick={() =>
+                          setVpdSort((s) =>
+                            s === 'desc' ? 'asc' : s === 'asc' ? null : 'desc',
+                          )
+                        }
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          Repr./día
+                          <span
+                            className={
+                              'text-xs ' +
+                              (vpdSort ? 'text-brand' : 'text-neutral-600')
+                            }
+                          >
+                            {vpdSort === 'desc'
+                              ? '▼'
+                              : vpdSort === 'asc'
+                                ? '▲'
+                                : '↕'}
+                          </span>
+                        </span>
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-right">
+                      <div className="relative inline-block" ref={colMenuRef}>
+                        <button
+                          type="button"
+                          onClick={() => setColMenuOpen((o) => !o)}
+                          title="Mostrar u ocultar columnas"
+                          aria-label="Configurar columnas"
+                          aria-expanded={colMenuOpen}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-xs font-normal text-neutral-300 transition hover:bg-neutral-800"
+                        >
+                          ⚙️ <span className="hidden sm:inline">Columnas</span>
+                        </button>
+                        {colMenuOpen && (
+                          <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-neutral-700 bg-neutral-900 p-2 text-left shadow-xl">
+                            <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                              Columnas
+                            </p>
+                            <label className="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-500">
+                              <input type="checkbox" checked disabled className="accent-[var(--color-brand)]" />
+                              Título
+                            </label>
+                            <label className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800">
+                              <input
+                                type="checkbox"
+                                checked={showThumb}
+                                onChange={toggleThumb}
+                                className="accent-[var(--color-brand)]"
+                              />
+                              Miniatura
+                            </label>
+                            {COLUMN_DEFS.filter(
+                              (c) => !(c.youtubeOnly && isSpotify),
+                            ).map((c) => (
+                              <label
+                                key={c.key}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={cols[c.key]}
+                                  onChange={() => toggleCol(c.key)}
+                                  className="accent-[var(--color-brand)]"
+                                />
+                                {c.key === 'date' && !isSpotify
+                                  ? 'Fecha subida'
+                                  : c.label}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.data.map((t) => (
+                  {pageRows.map((t, i) => (
                     <tr
                       key={t.id}
                       draggable={!!panelSelectedId}
@@ -488,50 +844,76 @@ export function MusicLibraryView({
                           />
                         </td>
                       )}
+                      <td className="px-4 py-3 text-right tabular-nums text-neutral-500">
+                        {(page - 1) * PAGE_SIZE + i + 1}
+                      </td>
                       {showThumb && (
                         <td className="px-3 py-2">
                           <TrackThumb track={t} />
                         </td>
                       )}
-                      <td className="px-4 py-3 font-medium">{t.title}</td>
-                      <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-1">
-                          <StyleBadge style={t.style} />
-                          {t.tags && t.tags.length > 0
-                            ? t.tags.map((tag) => (
-                                <span
-                                  key={tag.id}
-                                  className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
-                                >
-                                  {tag.name}
-                                </span>
-                              ))
-                            : t.substyles?.map((s) => (
-                                <span
-                                  key={s}
-                                  className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
-                                >
-                                  {s}
-                                </span>
-                              ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {t.scope === 'PERSONAL' ? (
-                          <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300">
-                            personal
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-neutral-700/40 px-2 py-0.5 text-xs text-neutral-400">
-                            catálogo
-                          </span>
+                      <td className="px-4 py-3 font-medium">
+                        {t.title}
+                        {isNewRelease(t.releaseDate) && <NewBadge />}
+                        {source === 'YOUTUBE' && epicKeys.has(t.sourceId) && (
+                          <EpicBadge />
                         )}
                       </td>
-                      <td className="px-4 py-3 text-neutral-400 tabular-nums">
-                        {formatDuration(t.durationSec)}
-                      </td>
-                      <td className="px-4 py-3 text-neutral-400">{t.year ?? '—'}</td>
+                      {cols.artist && (
+                        <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
+                      )}
+                      {cols.style && (
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <StyleBadge style={t.style} />
+                            {t.tags && t.tags.length > 0
+                              ? t.tags.map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
+                                  >
+                                    {tag.name}
+                                  </span>
+                                ))
+                              : t.substyles?.map((s) => (
+                                  <span
+                                    key={s}
+                                    className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                                  >
+                                    {s}
+                                  </span>
+                                ))}
+                          </div>
+                        </td>
+                      )}
+                      {cols.origin && (
+                        <td className="px-4 py-3">
+                          {t.scope === 'PERSONAL' ? (
+                            <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300">
+                              personal
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-neutral-700/40 px-2 py-0.5 text-xs text-neutral-400">
+                              catálogo
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      {cols.duration && (
+                        <td className="px-4 py-3 text-neutral-400 tabular-nums">
+                          {formatDuration(t.durationSec)}
+                        </td>
+                      )}
+                      {cols.date && (
+                        <td className="px-4 py-3 whitespace-nowrap text-neutral-400">
+                          {formatReleaseDate(t.releaseDate, t.year)}
+                        </td>
+                      )}
+                      {!isSpotify && cols.vpd && (
+                        <td className="px-4 py-3 tabular-nums text-neutral-400">
+                          {formatViewsPerDay(t.details?.viewCount, t.releaseDate)}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <PlayButtons track={t} />
@@ -607,18 +989,28 @@ export function MusicLibraryView({
                       </td>
                     </tr>
                   ))}
-                  {data.data.length === 0 && (
+                  {pageRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={(selectMode ? 8 : 7) + (showThumb ? 1 : 0)}
+                        colSpan={baseCols}
                         className="px-4 py-10 text-center text-neutral-500"
                       >
-                        Aún no tienes canciones de {isSpotify ? 'Spotify' : 'YouTube'}.
-                        Agrega tu música o{' '}
-                        <Link href={catalogHref} className="text-brand hover:underline">
-                          elige del catálogo
-                        </Link>
-                        .
+                        {data.data.length > 0 ? (
+                          'Ninguna canción coincide con los filtros.'
+                        ) : (
+                          <>
+                            Aún no tienes canciones de{' '}
+                            {isSpotify ? 'Spotify' : 'YouTube'}. Agrega tu música
+                            o{' '}
+                            <Link
+                              href={catalogHref}
+                              className="text-brand hover:underline"
+                            >
+                              elige del catálogo
+                            </Link>
+                            .
+                          </>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -627,7 +1019,7 @@ export function MusicLibraryView({
             </Card>
           )}
 
-          {data && data.total > PAGE_SIZE && (
+          {data && filteredRows.length > PAGE_SIZE && (
             <div className="flex items-center justify-between text-sm">
               <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                 ← Anterior

@@ -51,6 +51,35 @@ export function isNewRelease(releaseDate: string | null | undefined): boolean {
   return d >= cutoff;
 }
 
+/** Convierte una fecha de lanzamiento/año a Date (año-solo → 1 de enero). */
+export function releaseDateToDate(
+  releaseDate: string | null | undefined,
+  year: number | null | undefined,
+): Date | null {
+  if (releaseDate) {
+    const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(releaseDate);
+    if (m) {
+      return new Date(Number(m[1]), Number(m[2]) - 1, m[3] ? Number(m[3]) : 1);
+    }
+    if (/^\d{4}$/.test(releaseDate)) return new Date(Number(releaseDate), 0, 1);
+  }
+  return year != null ? new Date(year, 0, 1) : null;
+}
+
+/** ¿La canción es de los últimos `months` meses? months<=0 → sin filtro (true). */
+export function isWithinLastMonths(
+  releaseDate: string | null | undefined,
+  year: number | null | undefined,
+  months: number,
+): boolean {
+  if (!months || months <= 0) return true;
+  const d = releaseDateToDate(releaseDate, year);
+  if (!d) return false;
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return d >= cutoff;
+}
+
 /** Reproducciones compactas: 1.2M, 34K, 980 o "—". */
 export function formatViews(v: string | number | null | undefined): string {
   const n = Number(v ?? 0);
@@ -58,4 +87,29 @@ export function formatViews(v: string | number | null | undefined): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
   return String(Math.round(n));
+}
+
+/**
+ * Reproducciones por día desde la fecha de subida (velocidad/popularidad).
+ * = viewCount / días desde `uploadDate`. null si falta el dato.
+ */
+export function viewsPerDay(
+  viewCount: string | number | null | undefined,
+  uploadDate: string | null | undefined,
+): number | null {
+  const v = Number(viewCount ?? 0);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  const d = releaseDateToDate(uploadDate, null);
+  if (!d) return null;
+  const days = Math.max(1, (Date.now() - d.getTime()) / 86_400_000);
+  return v / days;
+}
+
+/** Reproducciones/día compactas: "1.2K/d", "340/d" o "—". */
+export function formatViewsPerDay(
+  viewCount: string | number | null | undefined,
+  uploadDate: string | null | undefined,
+): string {
+  const vpd = viewsPerDay(viewCount, uploadDate);
+  return vpd == null ? '—' : `${formatViews(Math.round(vpd))}/d`;
 }

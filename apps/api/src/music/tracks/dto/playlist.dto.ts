@@ -35,4 +35,12 @@ export class ImportPlaylistDto {
   @IsOptional()
   @IsObject()
   yearOverrides?: Record<string, number>;
+
+  /**
+   * Fecha editada por fila (mes+año) en el preview: { sourceId: "YYYY-MM-01" }.
+   * Pisa la fecha de lanzamiento detectada.
+   */
+  @IsOptional()
+  @IsObject()
+  dateOverrides?: Record<string, string>;
 }

@@ -34,24 +34,46 @@ function PlayBtn({
 }
 
 /**
- * Botones de reproducir audio/video de una canción de YouTube. Si el video no
- * permite reproducción fuera de YouTube (`embeddable === false`), se muestran
- * con una ✕ roja encima y deshabilitados.
+ * Botones de reproducir audio/video de una canción de YouTube. El botón de
+ * audio es redondo y refleja el estado (▶/⏸): al clickearlo alterna entre
+ * reproducir y detener. Si el video no permite reproducción fuera de YouTube
+ * (`embeddable === false`), se muestran con una ✕ roja encima y deshabilitados.
  */
 export function PlayButtons({ track }: { track: Track }) {
   const player = usePlayer();
   if (!player.canPlay(track)) return null;
 
   const blocked = player.isBlocked(track);
+  const isPlaying = player.audioKey === `${track.source}:${track.sourceId}`;
 
   return (
     <>
-      <PlayBtn
-        icon="▶"
-        label="Reproducir audio"
-        blocked={blocked}
-        onClick={() => player.playAudio(track)}
-      />
+      <button
+        type="button"
+        className={
+          'relative flex h-7 w-7 items-center justify-center rounded-full text-xs transition disabled:cursor-not-allowed ' +
+          (blocked
+            ? 'bg-neutral-800'
+            : isPlaying
+              ? 'bg-brand text-white'
+              : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
+        }
+        disabled={blocked}
+        title={
+          blocked ? BLOCKED_TITLE : isPlaying ? 'Detener' : 'Reproducir audio'
+        }
+        aria-label={isPlaying ? 'Detener' : 'Reproducir audio'}
+        onClick={() => (isPlaying ? player.stopAudio() : player.playAudio(track))}
+      >
+        <span className={blocked ? 'opacity-30' : undefined}>
+          {isPlaying ? '⏸' : '▶'}
+        </span>
+        {blocked && (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-base font-bold text-red-500">
+            ✕
+          </span>
+        )}
+      </button>
       <PlayBtn
         icon="🎬"
         label="Reproducir video"

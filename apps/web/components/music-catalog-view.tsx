@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type DanceStyle,
@@ -20,15 +20,20 @@ import {
   formatDuration,
   formatReleaseDate,
   formatViews,
+  formatViewsPerDay,
   isNewRelease,
+  isWithinLastMonths,
+  viewsPerDay,
 } from '@/lib/format';
 import { NewBadge } from '@/components/new-badge';
+import { EpicBadge } from '@/components/epic-badge';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
 import { SubstyleFilterMultiSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import { PlaylistImportModal } from '@/components/playlist-import-modal';
+import { DateManagerModal } from '@/components/date-manager-modal';
 import { SpotifyImportModal } from '@/components/spotify-import-modal';
 import { SpotifyCatalogImportModal } from '@/components/spotify-catalog-import-modal';
 import {
@@ -50,7 +55,14 @@ const PAGE_SIZE = 1000;
 
 /** Columnas que se pueden mostrar/ocultar desde el engranaje. Título y acciones
  * siempre visibles; la miniatura tiene su propio toggle. */
-type ColKey = 'artist' | 'style' | 'duration' | 'year' | 'views' | 'added';
+type ColKey =
+  | 'artist'
+  | 'style'
+  | 'duration'
+  | 'year'
+  | 'views'
+  | 'vpd'
+  | 'added';
 type ColVis = Record<ColKey, boolean>;
 
 const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
@@ -59,6 +71,7 @@ const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
   { key: 'duration', label: 'Duración' },
   { key: 'year', label: 'Fecha' },
   { key: 'views', label: 'Reproducciones', youtubeOnly: true },
+  { key: 'vpd', label: 'Repr./día', youtubeOnly: true },
   { key: 'added', label: 'Agregado' },
 ];
 
@@ -68,6 +81,7 @@ const ALL_COLS_VISIBLE: ColVis = {
   duration: true,
   year: true,
   views: true,
+  vpd: true,
   added: true,
 };
 
@@ -97,6 +111,12 @@ export function MusicCatalogView({
   const [style, setStyle] = useState('');
   const [substyles, setSubstyles] = useState<string[]>([]);
   const [onlyNew, setOnlyNew] = useState(false);
+  /** Mostrar solo las marcadas como Épica (top 50 rep/día por estilo). */
+  const [onlyEpic, setOnlyEpic] = useState(false);
+  /** Filtrar a los últimos N meses (por fecha). '' = sin filtro. */
+  const [lastMonths, setLastMonths] = useState('');
+  /** Orden por Repr./día (client-side, es un valor calculado). null = sin orden. */
+  const [vpdSort, setVpdSort] = useState<'asc' | 'desc' | null>(null);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ by: '', dir: 'asc' });
   const [showForm, setShowForm] = useState(false);
@@ -142,6 +162,7 @@ export function MusicCatalogView({
     return () => document.removeEventListener('mousedown', onDown);
   }, [colMenuOpen]);
   const [showSpotifyImport, setShowSpotifyImport] = useState(false);
+  const [showDates, setShowDates] = useState(false);
   // Reproducción de Spotify en la barra inferior de la página.
   const [spotifyPlaying, setSpotifyPlaying] = useState<SpotifyPlayable | null>(
     null,
@@ -162,32 +183,6 @@ export function MusicCatalogView({
       .catch(() => {});
   }, [isAdmin, isSpotify, qc]);
 
-  // Fecha de lanzamiento: rellena en lotes (Spotify por ID/búsqueda, o subida de
-  // YouTube). Corre una vez por montaje, en bucle hasta terminar; la columna se
-  // refresca a medida que llegan. Solo admin (hace llamadas a Spotify).
-  const releaseBackfillRan = useRef(false);
-  useEffect(() => {
-    if (!isAdmin || releaseBackfillRan.current) return;
-    releaseBackfillRan.current = true;
-    let cancelled = false;
-    (async () => {
-      for (let i = 0; i < 40 && !cancelled; i++) {
-        try {
-          const r = await api<{ updated: number; remaining: number }>(
-            '/music/tracks/backfill-release-dates',
-            { method: 'POST' },
-          );
-          if (r.updated > 0) qc.invalidateQueries({ queryKey: ['catalog'] });
-          if (r.remaining === 0) break;
-        } catch {
-          break;
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAdmin, qc]);
 
   // Reproducibilidad de Spotify (restringidas por región): rellena en lotes.
   // Solo en el catálogo de Spotify, admin. Marca el botón de play deshabilitado.
@@ -246,6 +241,73 @@ export function MusicCatalogView({
     },
   });
 
+  // Pill "Épica": top 50 por reproducciones/día de CADA estilo (bachata y salsa
+  // por separado), solo entre las de los últimos 24 meses según la fecha de
+  // subida. Se calcula sobre el catálogo completo (sin filtros de búsqueda), no
+  // solo la página visible, para que la marca sea estable. Solo YouTube (Spotify
+  // no expone reproducciones). Devuelve el set de ids marcados como Épica.
+  const { data: epicData } = useQuery({
+    queryKey: ['catalog-epic', source],
+    queryFn: () =>
+      api<Paginated<Track>>(`/music/tracks?source=${source}&pageSize=1000`),
+    enabled: source === 'YOUTUBE',
+  });
+  const epicIds = useMemo(() => {
+    const ids = new Set<string>();
+    const all = epicData?.data ?? [];
+    // Bachata: solo últimos 24 meses. Salsa (prueba): sin restricción de año,
+    // solo las top 50 por rep/día.
+    for (const st of ['BACHATA', 'SALSA'] as const) {
+      const maxMonths = st === 'SALSA' ? 0 : 24;
+      const top = all
+        .filter(
+          (t) =>
+            t.style === st &&
+            isWithinLastMonths(t.releaseDate, t.year, maxMonths),
+        )
+        .map((t) => ({
+          id: t.id,
+          vpd: viewsPerDay(t.details?.viewCount, t.releaseDate) ?? -1,
+        }))
+        .filter((x) => x.vpd > 0)
+        .sort((a, b) => b.vpd - a.vpd)
+        .slice(0, 50);
+      for (const x of top) ids.add(x.id);
+    }
+    return ids;
+  }, [epicData]);
+
+  // Fecha de lanzamiento: rellena en lotes (Spotify por ID/búsqueda, o subida de
+  // YouTube). Se re-dispara cuando aparecen canciones sin fecha (ej. al importar
+  // una playlist), no solo al montar. Solo admin (hace llamadas a Spotify).
+  const backfillRunning = useRef(false);
+  useEffect(() => {
+    if (!isAdmin || backfillRunning.current) return;
+    // ¿Hay canciones cargadas sin fecha aún? (null = sin procesar por el backfill)
+    const needs = data?.data.some((t) => t.releaseDate == null);
+    if (!needs) return;
+    backfillRunning.current = true;
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 40 && !cancelled; i++) {
+        try {
+          const r = await api<{ updated: number; remaining: number }>(
+            '/music/tracks/backfill-release-dates',
+            { method: 'POST' },
+          );
+          if (r.updated > 0) qc.invalidateQueries({ queryKey: ['catalog'] });
+          if (r.remaining === 0) break;
+        } catch {
+          break;
+        }
+      }
+      backfillRunning.current = false;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, data, qc]);
+
   const toggle = useMutation({
     mutationFn: (t: Track) =>
       t.inLibrary
@@ -298,18 +360,29 @@ export function MusicCatalogView({
   const newCount = data
     ? data.data.filter((t) => isNewRelease(t.releaseDate)).length
     : 0;
+  const monthsN = Number(lastMonths) || 0;
   const visibleRows = data
     ? data.data.filter(
         (t) =>
           (!onlyNew || isNewRelease(t.releaseDate)) &&
+          (!onlyEpic || epicIds.has(t.id)) &&
           (substyles.length === 0 ||
-            substyles.some((s) => t.substyles?.includes(s))),
+            substyles.some((s) => t.substyles?.includes(s))) &&
+          isWithinLastMonths(t.releaseDate, t.year, monthsN),
       )
     : [];
+  // Orden por Repr./día (calculado en cliente); las sin dato van al final.
+  const sortedRows = vpdSort
+    ? [...visibleRows].sort((a, b) => {
+        const va = viewsPerDay(a.details?.viewCount, a.releaseDate) ?? -1;
+        const vb = viewsPerDay(b.details?.viewCount, b.releaseDate) ?? -1;
+        return vpdSort === 'desc' ? vb - va : va - vb;
+      })
+    : visibleRows;
   // Cuenta de columnas visibles (para el colSpan del estado vacío): Título +
   // acciones siempre; el resto según toggles/fuente/selección/miniatura.
   const baseCols =
-    2 +
+    3 + // Título + acciones + columna "#"
     (selectMode ? 1 : 0) +
     (showThumb ? 1 : 0) +
     (cols.artist ? 1 : 0) +
@@ -317,6 +390,7 @@ export function MusicCatalogView({
     (cols.duration ? 1 : 0) +
     (cols.year ? 1 : 0) +
     (!isSpotify && cols.views ? 1 : 0) +
+    (!isSpotify && cols.vpd ? 1 : 0) +
     (cols.added ? 1 : 0);
 
   return (
@@ -335,9 +409,6 @@ export function MusicCatalogView({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={toggleThumb}>
-            {showThumb ? '🖼 Ocultar thumbnails' : '🖼 Thumbnails'}
-          </Button>
           {canEdit && (
             <Button
               variant="ghost"
@@ -399,10 +470,19 @@ export function MusicCatalogView({
                   Importar playlist Spotify
                 </span>
               </Button>
+              <Button variant="ghost" onClick={() => setShowDates(true)}>
+                🗓 Actualizar fechas
+              </Button>
               <span className="text-xs text-neutral-500">
                 o agrega una por “+ Nueva canción al catálogo” con su link.
               </span>
             </div>
+            {showDates && (
+              <DateManagerModal
+                source="SPOTIFY"
+                onClose={() => setShowDates(false)}
+              />
+            )}
           </Card>
         ) : (
           <AdminImportExport />
@@ -447,6 +527,36 @@ export function MusicCatalogView({
           </div>
         )}
         <div>
+          <label className="mb-1 block text-xs text-neutral-400">
+            Últimos meses
+          </label>
+          <div className="flex items-center gap-1 rounded-lg border border-neutral-700 px-2 py-1.5 focus-within:border-brand">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={lastMonths}
+              placeholder="—"
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => {
+                setLastMonths(e.target.value.replace(/[^0-9]/g, '').slice(0, 3));
+                setPage(1);
+              }}
+              className="w-10 bg-transparent text-sm text-neutral-200 [appearance:textfield] focus:outline-none"
+            />
+            <span className="text-xs text-neutral-500">meses</span>
+            {lastMonths && (
+              <button
+                type="button"
+                onClick={() => setLastMonths('')}
+                title="Quitar filtro"
+                className="ml-0.5 text-neutral-500 hover:text-neutral-200"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        <div>
           <label className="mb-1 block text-xs text-neutral-400">Novedades</label>
           <button
             type="button"
@@ -462,6 +572,24 @@ export function MusicCatalogView({
             ✨ Solo nuevas{newCount > 0 ? ` (${newCount})` : ''}
           </button>
         </div>
+        {source === 'YOUTUBE' && (
+          <div>
+            <label className="mb-1 block text-xs text-neutral-400">Top</label>
+            <button
+              type="button"
+              onClick={() => setOnlyEpic((v) => !v)}
+              title="Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo (últimos 24 meses)"
+              className={
+                'rounded-lg border px-3 py-2 text-sm transition ' +
+                (onlyEpic
+                  ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
+                  : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
+              }
+            >
+              🔥 Solo épicas{epicIds.size > 0 ? ` (${epicIds.size})` : ''}
+            </button>
+          </div>
+        )}
       </Card>
 
       {isLoading && <Spinner />}
@@ -483,6 +611,7 @@ export function MusicCatalogView({
                     />
                   </th>
                 )}
+                <th className="px-4 py-2 w-10 text-right tabular-nums">#</th>
                 {showThumb && <th className="px-3 py-2 w-20"></th>}
                 <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
                 {cols.artist && (
@@ -491,10 +620,33 @@ export function MusicCatalogView({
                 {cols.style && <th className="px-4 py-2">Estilo</th>}
                 {cols.duration && <th className="px-4 py-2">Duración</th>}
                 {cols.year && (
-                  <SortTh label="Fecha" col="releaseDate" primary="desc" sort={sort} onSort={onSort} />
+                  <SortTh label={isSpotify ? 'Fecha' : 'Fecha subida'} col="releaseDate" primary="desc" sort={sort} onSort={onSort} />
                 )}
                 {!isSpotify && cols.views && (
                   <SortTh label="Reproducciones" col="views" primary="desc" sort={sort} onSort={onSort} />
+                )}
+                {!isSpotify && cols.vpd && (
+                  <th
+                    className="cursor-pointer select-none px-4 py-2 hover:text-neutral-200"
+                    title="Reproducciones por día desde la subida (velocidad)"
+                    onClick={() =>
+                      setVpdSort((s) =>
+                        s === 'desc' ? 'asc' : s === 'asc' ? null : 'desc',
+                      )
+                    }
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      Repr./día
+                      <span
+                        className={
+                          'text-xs ' +
+                          (vpdSort ? 'text-brand' : 'text-neutral-600')
+                        }
+                      >
+                        {vpdSort === 'desc' ? '▼' : vpdSort === 'asc' ? '▲' : '↕'}
+                      </span>
+                    </span>
+                  </th>
                 )}
                 {cols.added && (
                   <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
@@ -542,7 +694,9 @@ export function MusicCatalogView({
                               onChange={() => toggleCol(c.key)}
                               className="accent-[var(--color-brand)]"
                             />
-                            {c.label}
+                            {c.key === 'year' && !isSpotify
+                              ? 'Fecha subida'
+                              : c.label}
                           </label>
                         ))}
                       </div>
@@ -552,7 +706,7 @@ export function MusicCatalogView({
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((t) => (
+              {sortedRows.map((t, i) => (
                 <tr
                   key={t.id}
                   className={
@@ -574,6 +728,9 @@ export function MusicCatalogView({
                       />
                     </td>
                   )}
+                  <td className="px-4 py-3 text-right tabular-nums text-neutral-500">
+                    {i + 1}
+                  </td>
                   {showThumb && (
                     <td className="px-3 py-2">
                       <TrackThumb track={t} />
@@ -582,6 +739,7 @@ export function MusicCatalogView({
                   <td className="px-4 py-3 font-medium">
                     {t.title}
                     {isNewRelease(t.releaseDate) && <NewBadge />}
+                    {epicIds.has(t.id) && <EpicBadge />}
                   </td>
                   {cols.artist && (
                     <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
@@ -614,6 +772,11 @@ export function MusicCatalogView({
                   {!isSpotify && cols.views && (
                     <td className="px-4 py-3 tabular-nums text-neutral-400">
                       {formatViews(t.details?.viewCount)}
+                    </td>
+                  )}
+                  {!isSpotify && cols.vpd && (
+                    <td className="px-4 py-3 tabular-nums text-neutral-400">
+                      {formatViewsPerDay(t.details?.viewCount, t.releaseDate)}
                     </td>
                   )}
                   {cols.added && (
@@ -728,7 +891,9 @@ export function MusicCatalogView({
                     colSpan={baseCols}
                     className="px-4 py-10 text-center text-neutral-500"
                   >
-                    {onlyNew
+                    {onlyEpic
+                      ? 'No hay canciones épicas con estos filtros.'
+                      : onlyNew
                       ? 'No hay canciones lanzadas en los últimos 2 meses.'
                       : isSpotify
                         ? 'El catálogo de Spotify está vacío. Agrega canciones con su link de Spotify.'
@@ -804,6 +969,7 @@ function AdminImportExport() {
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [showSpotify, setShowSpotify] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showDates, setShowDates] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null);
 
@@ -889,6 +1055,9 @@ function AdminImportExport() {
         >
           {backfilling ? 'Completando…' : '⏱ Completar duraciones'}
         </Button>
+        <Button variant="ghost" onClick={() => setShowDates(true)}>
+          🗓 Actualizar fechas
+        </Button>
         <Button variant="ghost" onClick={() => setShowDuplicates(true)}>
           🔎 Buscar duplicados
         </Button>
@@ -925,6 +1094,9 @@ function AdminImportExport() {
       )}
       {showDuplicates && (
         <DuplicatesModal onClose={() => setShowDuplicates(false)} />
+      )}
+      {showDates && (
+        <DateManagerModal source="YOUTUBE" onClose={() => setShowDates(false)} />
       )}
     </Card>
   );

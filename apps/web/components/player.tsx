@@ -31,6 +31,10 @@ interface PlayerContextValue {
   isBlocked: (track: Track) => boolean;
   /** Clave (`source:sourceId`) de la canción que está sonando, o null. */
   playingKey: string | null;
+  /** Clave de la canción cuyo AUDIO está sonando (para el botón play/pausa). */
+  audioKey: string | null;
+  /** Detiene el audio actual (cierra la barra de audio). */
+  stopAudio: () => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -99,6 +103,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setVideo(null);
     setAudio(t);
   }, []);
+  const stopAudio = useCallback(() => setAudio(null), []);
   const playVideo = useCallback((t: Track) => {
     setAudio(null);
     setVideo(t);
@@ -143,10 +148,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const cur = audio ?? video;
   const playingKey = cur ? `${cur.source}:${cur.sourceId}` : null;
+  const audioKey = audio ? `${audio.source}:${audio.sourceId}` : null;
 
   return (
     <PlayerContext.Provider
-      value={{ playAudio, playVideo, canPlay, isBlocked, playingKey }}
+      value={{
+        playAudio,
+        playVideo,
+        canPlay,
+        isBlocked,
+        playingKey,
+        audioKey,
+        stopAudio,
+      }}
     >
       {children}
       {audio && (

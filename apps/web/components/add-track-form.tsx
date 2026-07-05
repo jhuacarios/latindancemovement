@@ -10,6 +10,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Select } from './ui';
 import { SubstyleMultiSelect } from './substyle-select';
+import { MONTHS, maxMonthFor } from '@/lib/months';
 
 export interface NewTrackBody {
   title: string;
@@ -17,6 +18,8 @@ export interface NewTrackBody {
   style: DanceStyle;
   substyles?: string[];
   year?: number;
+  /** "YYYY-MM-DD"|"YYYY-MM"|"YYYY" — solo si el usuario editó la fecha. */
+  releaseDate?: string;
   coverUrl?: string;
   link: string;
   ytMetadata?: string;
@@ -62,8 +65,14 @@ export function AddTrackForm({
     style: '' as DanceStyle | '',
     substyles: [] as string[],
     year: '',
+    month: '',
     coverUrl: '',
     link: '',
+  });
+  /** Mes+año original de subida (para no pisar el día real si no se edita). */
+  const [origDate, setOrigDate] = useState<{ m: string; y: string }>({
+    m: '',
+    y: '',
   });
   const [ytDetails, setYtDetails] = useState<YoutubeDetails | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -96,8 +105,10 @@ export function AddTrackForm({
           artist: m.artist ?? f.artist,
           style: m.detectedStyle ?? f.style,
           year: m.year ? String(m.year) : f.year,
+          month: '',
           coverUrl: m.coverUrl ?? f.coverUrl,
         }));
+        setOrigDate({ m: '', y: m.year ? String(m.year) : '' });
         setYtDetails(null);
         const parts: string[] = ['Spotify'];
         if (m.detectedStyle) parts.push(`estilo: ${m.detectedStyle}`);
@@ -108,14 +119,22 @@ export function AddTrackForm({
       const m = await api<ExtractedTrackMetadata>(
         `/music/tracks/metadata?link=${encodeURIComponent(link)}`,
       );
+      // Mes+año de la FECHA DE SUBIDA de YouTube (details.publishedAt).
+      const pub = m.details?.publishedAt ?? '';
+      const ym = /^(\d{4})-(\d{2})/.exec(pub);
       setForm((f) => ({
         ...f,
         title: m.title || f.title,
         artist: m.artist ?? f.artist,
         style: m.detectedStyle ?? f.style,
-        year: m.year ? String(m.year) : f.year,
+        year: ym ? ym[1] : m.year ? String(m.year) : f.year,
+        month: ym ? ym[2] : '',
         coverUrl: m.coverUrl ?? f.coverUrl,
       }));
+      setOrigDate({
+        m: ym ? ym[2] : '',
+        y: ym ? ym[1] : m.year ? String(m.year) : '',
+      });
       setYtDetails(m.details);
       const parts: string[] = [];
       if (m.detectedStyle) parts.push(`estilo: ${m.detectedStyle}`);
@@ -144,12 +163,22 @@ export function AddTrackForm({
     }
     setSaving(true);
     try {
+      // Fecha editada → "YYYY-MM-01". Solo se envía si el usuario CAMBIÓ el
+      // mes/año respecto a la subida; si no, el backend usa la fecha de subida
+      // completa (con su día real, más preciso para rep/día).
+      const changed =
+        form.month !== origDate.m || form.year !== origDate.y;
+      const releaseDate =
+        changed && form.month && /^\d{4}$/.test(form.year)
+          ? `${form.year}-${form.month}-01`
+          : undefined;
       await onCreate({
         title: form.title,
         artist: form.artist,
         style: form.style,
         substyles: form.substyles,
         year: form.year ? Number(form.year) : undefined,
+        releaseDate,
         coverUrl: form.coverUrl || undefined,
         link: form.link,
         ytMetadata: ytDetails ? JSON.stringify(ytDetails) : undefined,
@@ -223,12 +252,37 @@ export function AddTrackForm({
             </option>
           ))}
         </Select>
-        <Input
-          type="number"
-          placeholder="Año (opcional)"
-          value={form.year}
-          onChange={(e) => setForm({ ...form, year: e.target.value })}
-        />
+        <div className="flex items-center gap-1">
+          <Select
+            className="shrink-0"
+            value={form.month}
+            onChange={(e) => setForm({ ...form, month: e.target.value })}
+            aria-label="Mes"
+          >
+            <option value="">— mes</option>
+            {MONTHS.slice(0, maxMonthFor(form.year)).map((m, i) => (
+              <option key={m} value={String(i + 1).padStart(2, '0')}>
+                {m}
+              </option>
+            ))}
+          </Select>
+          <Input
+            type="text"
+            inputMode="numeric"
+            placeholder="Año (opcional)"
+            value={form.year}
+            onChange={(e) => {
+              const y = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+              setForm((f) => ({
+                ...f,
+                year: y,
+                // Si el mes ya no es válido para el nuevo año, se limpia.
+                month:
+                  f.month && Number(f.month) > maxMonthFor(y) ? '' : f.month,
+              }));
+            }}
+          />
+        </div>
         <div className="md:col-span-2">
           <label className="mb-1 block text-xs text-neutral-400">
             Sub-estilos (máx 4)

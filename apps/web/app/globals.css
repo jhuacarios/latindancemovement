@@ -29,6 +29,15 @@
   color-scheme: dark;
 }
 
+/* Oculta la barra de scroll (mantiene el scroll con rueda/touch/teclado). */
+@utility no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge viejo */
+  &::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+}
+
 html,
 body {
   height: 100%;

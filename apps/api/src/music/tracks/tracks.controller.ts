@@ -142,6 +142,13 @@ export class TracksController {
     return this.tracks.backfillSpotifyPlayable(n);
   }
 
+  /** Aplica fechas de lanzamiento por id (editar mes+año o resetear con null). */
+  @Patch('release-dates')
+  @Roles('SUPER_ADMIN')
+  applyReleaseDates(@Body() body: { dates?: Record<string, string | null> }) {
+    return this.tracks.applyReleaseDates(body?.dates ?? {});
+  }
+
   /** Descarga una plantilla .xlsx para importar canciones. */
   @Get('template.xlsx')
   async template(@Res() reply: FastifyReply) {
@@ -198,6 +205,7 @@ export class TracksController {
       undefined,
       user.id,
       dto.overrides,
+      dto.dateOverrides,
     );
   }
 
