@@ -184,6 +184,13 @@ export class TracksController {
   ) {
     const items = await this.youtube.extractPlaylist(dto.link);
     await this.tracks.fillStylesFromCatalog(items);
+    // Año editado por el usuario en el preview: pisa al detectado.
+    if (dto.yearOverrides) {
+      for (const it of items) {
+        const y = dto.yearOverrides[it.sourceId];
+        if (typeof y === 'number' && y > 1900 && y < 3000) it.year = y;
+      }
+    }
     // Sin estilo por defecto: el estilo sale de lo detectado o de la elección
     // del usuario (overrides). Las que queden sin estilo se omiten.
     return this.tracks.importPlaylistItems(

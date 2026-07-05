@@ -36,6 +36,8 @@ export function PlaylistImportModal({
   const [items, setItems] = useState<ExtractedTrackMetadata[] | null>(null);
   /** Estilo elegido por fila (sourceId -> estilo). Editable en el preview. */
   const [rowStyles, setRowStyles] = useState<Record<string, DanceStyle>>({});
+  /** Año editado por fila (sourceId -> año como texto, para editar libremente). */
+  const [rowYears, setRowYears] = useState<Record<string, string>>({});
   /** Filas que el usuario tocó a mano (no las pisa el "estilo por defecto"). */
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -89,10 +91,13 @@ export function PlaylistImportModal({
       // Estilo inicial por fila: el detectado (catálogo en Mis Canciones / por
       // palabras en el catálogo). Las NO detectadas quedan SIN estilo (sin marcar).
       const init: Record<string, DanceStyle> = {};
+      const initYears: Record<string, string> = {};
       for (const it of shown) {
         if (it.detectedStyle) init[it.sourceId] = it.detectedStyle;
+        if (it.year != null) initYears[it.sourceId] = String(it.year);
       }
       setRowStyles(init);
+      setRowYears(initYears);
       setTouched(new Set());
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'No se pudo leer la playlist');
@@ -105,10 +110,16 @@ export function PlaylistImportModal({
     setErr(null);
     setSaving(true);
     try {
+      // Años editados (solo los válidos de 4 dígitos) como { sourceId: número }.
+      const yearOverrides = Object.fromEntries(
+        Object.entries(rowYears)
+          .filter(([, v]) => /^\d{4}$/.test(v))
+          .map(([k, v]) => [k, Number(v)]),
+      );
       const res = await api<PlaylistImportResult>(importPath, {
         method: 'POST',
         // Sin estilo por defecto: el estilo sale de lo detectado o de la elección.
-        body: { link, overrides: rowStyles },
+        body: { link, overrides: rowStyles, yearOverrides },
       });
       setResult(res);
       if (isLibrary) {
@@ -324,7 +335,25 @@ export function PlaylistImportModal({
                           </div>
                         </td>
                         <td className="px-3 py-2 text-neutral-400">
-                          {it.year ?? '—'}
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={rowYears[it.sourceId] ?? ''}
+                            placeholder="—"
+                            onFocus={(e) => e.currentTarget.select()}
+                            onChange={(e) =>
+                              setRowYears((prev) => ({
+                                ...prev,
+                                [it.sourceId]: e.target.value
+                                  .replace(/[^0-9]/g, '')
+                                  .slice(0, 4),
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.currentTarget.blur();
+                            }}
+                            className="w-16 rounded-md border border-transparent bg-neutral-800/60 px-2 py-1 text-sm text-neutral-200 [appearance:textfield] hover:border-neutral-700 focus:border-brand focus:bg-neutral-800 focus:outline-none"
+                          />
                         </td>
                       </tr>
                     );

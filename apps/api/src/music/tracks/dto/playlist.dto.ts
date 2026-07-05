@@ -28,4 +28,11 @@ export class ImportPlaylistDto {
   @IsOptional()
   @IsObject()
   overrides?: Record<string, DanceStyle>;
+
+  /**
+   * Año editado por fila en el preview: { sourceId: año }. Pisa al detectado.
+   */
+  @IsOptional()
+  @IsObject()
+  yearOverrides?: Record<string, number>;
 }
