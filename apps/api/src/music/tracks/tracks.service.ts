@@ -668,6 +668,7 @@ export class TracksService {
       year?: number | null;
       coverUrl?: string | null;
       detectedStyle?: DanceStyle | null;
+      playable?: boolean | null;
     }[],
     overrides: Record<string, DanceStyle> | undefined,
     userId: string,
@@ -700,6 +701,13 @@ export class TracksService {
           userId,
           { fillEmptyOnly: true },
         );
+        // Reproducibilidad en el embed (restringidas por región): dato aparte.
+        if (typeof it.playable === 'boolean') {
+          await this.prisma.track.update({
+            where: { id: res.id },
+            data: { spotifyPlayable: it.playable },
+          });
+        }
         if (res.created) created++;
         else updated++;
       } catch (e) {
@@ -738,6 +746,36 @@ export class TracksService {
       }
     }
     return { updated };
+  }
+
+  /**
+   * Rellena `spotifyPlayable` (¿reproducible en el embed?) de las canciones de
+   * Spotify que aún no lo tienen, leyendo el embed de cada track. Idempotente y
+   * auto-terminante; procesa hasta `limit` por llamada (fetch por track).
+   */
+  async backfillSpotifyPlayable(
+    limit = 40,
+  ): Promise<{ updated: number; remaining: number }> {
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'SPOTIFY', spotifyPlayable: null },
+      select: { id: true, sourceId: true },
+      take: limit,
+    });
+    let updated = 0;
+    for (const r of rows) {
+      const playable = await this.spotify.getPlayableById(r.sourceId);
+      if (playable !== null) {
+        await this.prisma.track.update({
+          where: { id: r.id },
+          data: { spotifyPlayable: playable },
+        });
+        updated++;
+      }
+    }
+    const remaining = await this.prisma.track.count({
+      where: { source: 'SPOTIFY', spotifyPlayable: null },
+    });
+    return { updated, remaining };
   }
 
   /** Aplica duraciones (en segundos) por id de track. */

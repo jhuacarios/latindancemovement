@@ -42,6 +42,7 @@ export function toPublicTrack(t: PrismaTrack): Track {
     updatedAt: t.updatedAt.toISOString(),
     details: parseYtMetadata(t.ytMetadata),
     releaseDate: t.releaseDate,
+    spotifyPlayable: t.spotifyPlayable,
   };
 }
 

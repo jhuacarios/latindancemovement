@@ -57,6 +57,7 @@ model Track {
   viewCount      BigInt? // reproducciones (de ytMetadata.viewCount), para ordenar
   popularity     Int? // índice de popularidad de Spotify (0-100); Spotify no expone streams
   releaseDate    String? // fecha de lanzamiento de Spotify ("2024-04-04" | "2024-04" | "2024" | "" = sin dato)
+  spotifyPlayable Boolean? // Spotify: ¿reproducible en el embed? false = restringida (país/licencia); null = desconocido
   isRelease      Boolean  @default(false)
   approvalStatus String   @default("APROBADA") // TrackApprovalStatus
   scope          String   @default("CATALOG") // TrackScope: CATALOG (global) | PERSONAL (privada del DJ)

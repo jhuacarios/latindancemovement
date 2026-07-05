@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -36,6 +37,10 @@ export class SpotifyResolvedTrackDto {
   @IsOptional()
   @IsIn(DANCE_STYLES)
   detectedStyle?: DanceStyle | null;
+
+  @IsOptional()
+  @IsBoolean()
+  playable?: boolean | null;
 }
 
 export class SpotifyCatalogImportDto {

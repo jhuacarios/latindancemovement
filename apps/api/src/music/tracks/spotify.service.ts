@@ -8,11 +8,15 @@ interface StyleGuess {
 
 /** Datos de un track de una playlist de Spotify (para matchear con YouTube). */
 export interface SpotifyTrackInfo {
+  /** ID del track (extraído del `uri` del embed). null si no venía. */
+  sourceId: string | null;
   title: string;
   artist: string | null;
   durationSec: number | null;
   year: number | null;
   isrc: string | null;
+  /** ¿Reproducible en el embed? false = restringida; null = desconocido. */
+  playable: boolean | null;
 }
 
 /** Track resuelto de una playlist de Spotify (para importar al catálogo Spotify). */
@@ -27,6 +31,8 @@ export interface SpotifyResolvedTrack {
   coverUrl: string | null;
   detectedStyle: DanceStyle | null;
   detectedSubstyle: DanceSubstyle | null;
+  /** ¿Reproducible en el embed? false = restringida en la región; null = desconocido. */
+  playable: boolean | null;
 }
 
 /** Metadata de un track de Spotify para autocompletar al agregarlo. */
@@ -159,6 +165,48 @@ export class SpotifyService {
   }
 
   /**
+   * Lee del embed público de un track su reproducibilidad (`isPlayable`) y su
+   * carátula (`coverArt`). El embed no tiene rate limit como la Web API, así que
+   * es la fuente confiable para importar/mostrar. null si no se pudo determinar.
+   */
+  async getTrackEmbedInfo(id: string): Promise<{
+    playable: boolean | null;
+    coverUrl: string | null;
+    year: number | null;
+  }> {
+    const none = { playable: null, coverUrl: null, year: null };
+    if (!id) return none;
+    try {
+      const res = await fetch(`https://open.spotify.com/embed/track/${id}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      });
+      if (!res.ok) return none;
+      const html = await res.text();
+      const m = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
+      if (!m) return none;
+      const e = (JSON.parse(m[1]) as any)?.props?.pageProps?.state?.data
+        ?.entity;
+      const playable =
+        typeof e?.isPlayable === 'boolean' ? e.isPlayable : null;
+      // La carátula viene en `visualIdentity.image` (algunos embeds usan
+      // `coverArt.sources`); es un array de {url, maxWidth, maxHeight}.
+      const img = e?.visualIdentity?.image ?? e?.coverArt?.sources;
+      const coverUrl =
+        Array.isArray(img) && img.length ? (img[0]?.url ?? null) : null;
+      const iso = e?.releaseDate?.isoString;
+      const year = typeof iso === 'string' ? parseYear(iso) : null;
+      return { playable, coverUrl, year };
+    } catch {
+      return none;
+    }
+  }
+
+  /** ¿El track es reproducible en el embed? false = restringida por país/licencia. */
+  async getPlayableById(id: string): Promise<boolean | null> {
+    return (await this.getTrackEmbedInfo(id)).playable;
+  }
+
+  /**
    * `album.release_date` de un track de Spotify por su ID ("2024-04-04" |
    * "2024-04" | "2024"). `GET /v1/tracks/{id}` funciona con client-credentials
    * (a diferencia del lote `?ids=`). null si no hay o falla.
@@ -235,9 +283,11 @@ export class SpotifyService {
   }
 
   /**
-   * Lee una playlist pública de Spotify y resuelve cada canción a su track real
-   * de Spotify (id, carátula, año, estilo). El embed da título/artista pero no
-   * los IDs, así que cada canción se busca en la Web API (mejor coincidencia).
+   * Lee una playlist pública de Spotify y resuelve cada canción. El embed ya
+   * trae el ID real (del `uri`), título, artista y duración — se usan tal cual
+   * (así no dependemos de que una búsqueda por título acierte). Enriquecemos
+   * año, carátula y estilo con la Web API en modo best-effort: si esa llamada
+   * falla (p. ej. rate limit), la canción igual se importa con lo del embed.
    * Deduplica por sourceId. Para importar una playlist al catálogo de Spotify.
    */
   async getPlaylistResolved(link: string): Promise<SpotifyResolvedTrack[]> {
@@ -249,46 +299,50 @@ export class SpotifyService {
     const out: SpotifyResolvedTrack[] = [];
     const seen = new Set<string>();
     for (const e of embed) {
+      const id = e.sourceId;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+
+      // Carátula, año y reproducibilidad desde el embed (confiable, sin rate limit).
+      const info = await this.getTrackEmbedInfo(id);
+      let year = info.year ?? e.year;
+      let coverUrl = info.coverUrl;
+      let guess: StyleGuess = { style: null, substyle: null };
+      // Best-effort por la Web API para año y estilo (géneros del artista). Si
+      // da rate limit u otro error, se importa igual con lo del embed.
       try {
-        const q = encodeURIComponent(
-          [e.title, e.artist].filter(Boolean).join(' '),
-        );
-        const res = await fetch(
-          `https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!res.ok) {
-          if (res.status === 401) this.token = null;
-          continue;
-        }
-        const t = ((await res.json()) as any).tracks?.items?.[0];
-        if (!t?.id || seen.has(t.id)) continue;
-        seen.add(t.id);
-        let guess: StyleGuess = { style: null, substyle: null };
-        const artistId: string | undefined = t.artists?.[0]?.id;
-        if (artistId) {
-          const genres = await this.genresForArtist(artistId, token);
-          if (genres.length) guess = mapGenresToStyle(genres);
-        }
-        out.push({
-          source: 'SPOTIFY',
-          sourceId: t.id,
-          url: `https://open.spotify.com/track/${t.id}`,
-          title: t.name ?? e.title,
-          artist:
-            (t.artists ?? []).map((a: any) => a.name).filter(Boolean).join(', ') ||
-            e.artist,
-          durationSec: t.duration_ms
-            ? Math.round(t.duration_ms / 1000)
-            : e.durationSec,
-          year: parseYear(t.album?.release_date) ?? e.year,
-          coverUrl: t.album?.images?.[0]?.url ?? null,
-          detectedStyle: guess.style,
-          detectedSubstyle: guess.substyle,
+        const res = await fetch(`https://api.spotify.com/v1/tracks/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
+        if (res.ok) {
+          const t = (await res.json()) as any;
+          year = parseYear(t.album?.release_date) ?? year;
+          coverUrl = coverUrl ?? t.album?.images?.[0]?.url ?? null;
+          const artistId: string | undefined = t.artists?.[0]?.id;
+          if (artistId) {
+            const genres = await this.genresForArtist(artistId, token);
+            if (genres.length) guess = mapGenresToStyle(genres);
+          }
+        } else if (res.status === 401) {
+          this.token = null;
+        }
       } catch {
-        /* salta esta canción */
+        /* sin detalle: se usa lo del embed */
       }
+
+      out.push({
+        source: 'SPOTIFY',
+        sourceId: id,
+        url: `https://open.spotify.com/track/${id}`,
+        title: e.title,
+        artist: e.artist,
+        durationSec: e.durationSec,
+        year,
+        coverUrl,
+        detectedStyle: guess.style,
+        detectedSubstyle: guess.substyle,
+        playable: info.playable ?? e.playable,
+      });
     }
     return out;
   }
@@ -339,6 +393,7 @@ export class SpotifyService {
     }
     return list
       .map((t) => ({
+        sourceId: t.uri ? parseTrackId(t.uri) : null,
         title: String(t.title ?? '').trim(),
         artist: t.subtitle
           ? String(t.subtitle).split(/[,&]/)[0].trim() || null
@@ -346,6 +401,7 @@ export class SpotifyService {
         durationSec: t.duration ? Math.round(Number(t.duration) / 1000) : null,
         year: null,
         isrc: null,
+        playable: typeof t.isPlayable === 'boolean' ? t.isPlayable : null,
       }))
       .filter((t) => t.title);
   }
@@ -404,9 +460,11 @@ function parseTrackId(link: string): string | null {
 }
 
 interface EmbedTrack {
+  uri?: string;
   title?: string;
   subtitle?: string;
   duration?: number;
+  isPlayable?: boolean;
 }
 
 /** Busca recursivamente el array `trackList` dentro del JSON del embed. */

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { DanceStyle, Tag } from '@baile-latino/types';
 import { api } from '@/lib/api';
@@ -37,6 +38,94 @@ export function SubstyleFilterSelect({
         </option>
       ))}
     </Select>
+  );
+}
+
+/**
+ * Filtro por sub-estilo con selección múltiple (dropdown con checkboxes).
+ * Muestra solo los sub-estilos del estilo elegido. Vacío = todos.
+ */
+export function SubstyleFilterMultiSelect({
+  style,
+  value,
+  onChange,
+}: {
+  style: DanceStyle;
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { data: vocab } = useQuery({
+    queryKey: ['tags-vocab'],
+    queryFn: () => api<Tag[]>('/music/tags'),
+  });
+  const names = (vocab ?? [])
+    .filter((t) => t.style === style)
+    .map((t) => t.name);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const toggle = (n: string) =>
+    onChange(value.includes(n) ? value.filter((v) => v !== n) : [...value, n]);
+
+  const label =
+    value.length === 0
+      ? 'Todos'
+      : value.length === 1
+        ? value[0]
+        : `${value.length} seleccionados`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex min-w-[9rem] items-center justify-between gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 transition hover:bg-neutral-800"
+      >
+        <span className="truncate">{label}</span>
+        <span className="text-neutral-500">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 max-h-64 w-56 overflow-auto rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl">
+          {names.length === 0 && (
+            <p className="px-2 py-1.5 text-xs text-neutral-500">
+              Sin sub-estilos.
+            </p>
+          )}
+          {names.map((n) => (
+            <label
+              key={n}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800"
+            >
+              <input
+                type="checkbox"
+                checked={value.includes(n)}
+                onChange={() => toggle(n)}
+                className="accent-[var(--color-brand)]"
+              />
+              {n}
+            </label>
+          ))}
+          {value.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="mt-1 w-full rounded-md px-2 py-1.5 text-left text-xs text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200"
+            >
+              Limpiar selección
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

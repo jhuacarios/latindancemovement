@@ -9,7 +9,7 @@ import {
   type Track,
 } from '@baile-latino/types';
 import { api, ApiError, downloadFile, uploadFile } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { useEffectiveRole } from '@/lib/view-as-role';
 import { usePermissions } from '@/lib/permissions';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { PlayButtons } from '@/components/play-buttons';
@@ -26,7 +26,7 @@ import { NewBadge } from '@/components/new-badge';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
-import { SubstyleFilterSelect } from '@/components/substyle-select';
+import { SubstyleFilterMultiSelect } from '@/components/substyle-select';
 import { SortTh, nextSort, type SortState } from '@/components/sort-th';
 import { PlaylistImportModal } from '@/components/playlist-import-modal';
 import { SpotifyImportModal } from '@/components/spotify-import-modal';
@@ -82,18 +82,18 @@ export function MusicCatalogView({
   const isSpotify = source === 'SPOTIFY';
   const permKey = isSpotify ? 'music.spotify.catalog' : 'music.youtube.catalog';
 
-  const { user } = useAuth();
+  const role = useEffectiveRole();
   const perms = usePermissions();
   const qc = useQueryClient();
-  const isAdmin = user?.role === 'SUPER_ADMIN';
-  const canEdit = user ? perms.can(user.role, permKey, 'editar') : false;
-  const canDelete = user ? perms.can(user.role, permKey, 'eliminar') : false;
+  const isAdmin = role === 'SUPER_ADMIN';
+  const canEdit = role ? perms.can(role, permKey, 'editar') : false;
+  const canDelete = role ? perms.can(role, permKey, 'eliminar') : false;
   const [editTrack, setEditTrack] = useState<Track | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
 
   const [search, setSearch] = useState('');
   const [style, setStyle] = useState('');
-  const [substyle, setSubstyle] = useState('');
+  const [substyles, setSubstyles] = useState<string[]>([]);
   const [onlyNew, setOnlyNew] = useState(false);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState>({ by: '', dir: 'asc' });
@@ -187,6 +187,32 @@ export function MusicCatalogView({
     };
   }, [isAdmin, qc]);
 
+  // Reproducibilidad de Spotify (restringidas por región): rellena en lotes.
+  // Solo en el catálogo de Spotify, admin. Marca el botón de play deshabilitado.
+  const playableBackfillRan = useRef(false);
+  useEffect(() => {
+    if (!isAdmin || !isSpotify || playableBackfillRan.current) return;
+    playableBackfillRan.current = true;
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 40 && !cancelled; i++) {
+        try {
+          const r = await api<{ updated: number; remaining: number }>(
+            '/music/tracks/spotify/backfill-playable',
+            { method: 'POST' },
+          );
+          if (r.updated > 0) qc.invalidateQueries({ queryKey: ['catalog'] });
+          if (r.remaining === 0) break;
+        } catch {
+          break;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, isSpotify, qc]);
+
   function toggleSel(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -201,13 +227,13 @@ export function MusicCatalogView({
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['catalog', source, { search, style, substyle, page, sort }],
+    // Los sub-estilos se filtran en cliente (multi-selección), no por el server.
+    queryKey: ['catalog', source, { search, style, page, sort }],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('source', source);
       if (search) p.set('search', search);
       if (style) p.set('style', style);
-      if (substyle) p.set('substyle', substyle);
       if (sort.by) {
         p.set('sortBy', sort.by);
         p.set('sortDir', sort.dir);
@@ -271,9 +297,12 @@ export function MusicCatalogView({
     ? data.data.filter((t) => isNewRelease(t.releaseDate)).length
     : 0;
   const visibleRows = data
-    ? onlyNew
-      ? data.data.filter((t) => isNewRelease(t.releaseDate))
-      : data.data
+    ? data.data.filter(
+        (t) =>
+          (!onlyNew || isNewRelease(t.releaseDate)) &&
+          (substyles.length === 0 ||
+            substyles.some((s) => t.substyles?.includes(s))),
+      )
     : [];
   // Cuenta de columnas visibles (para el colSpan del estado vacío): Título +
   // acciones siempre; el resto según toggles/fuente/selección/miniatura.
@@ -392,7 +421,7 @@ export function MusicCatalogView({
             value={style}
             onChange={(v) => {
               setStyle(v);
-              setSubstyle('');
+              setSubstyles([]);
               setPage(1);
             }}
           />
@@ -402,11 +431,11 @@ export function MusicCatalogView({
             <label className="mb-1 block text-xs text-neutral-400">
               Sub-estilo
             </label>
-            <SubstyleFilterSelect
+            <SubstyleFilterMultiSelect
               style={style as DanceStyle}
-              value={substyle}
+              value={substyles}
               onChange={(v) => {
-                setSubstyle(v);
+                setSubstyles(v);
                 setPage(1);
               }}
             />
@@ -593,37 +622,48 @@ export function MusicCatalogView({
                   >
                     <div className="flex items-center justify-end gap-2">
                       <PlayButtons track={t} />
-                      {isSpotify && (
-                        <button
-                          type="button"
-                          title={
-                            spotifyPlaying?.sourceId === t.sourceId
-                              ? 'Detener'
-                              : 'Reproducir (Spotify)'
-                          }
-                          aria-label="Reproducir"
-                          onClick={() =>
-                            setSpotifyPlaying(
+                      {isSpotify &&
+                        (t.spotifyPlayable === false ? (
+                          <button
+                            type="button"
+                            disabled
+                            title="No disponible en tu región: Spotify restringe esta canción, no se puede reproducir."
+                            aria-label="No disponible en tu región"
+                            className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-full bg-neutral-800/50 text-xs text-neutral-600"
+                          >
+                            🚫
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            title={
                               spotifyPlaying?.sourceId === t.sourceId
-                                ? null
-                                : {
-                                    sourceId: t.sourceId,
-                                    title: t.title,
-                                    artist: t.artist,
-                                    imageUrl: t.coverUrl,
-                                  },
-                            )
-                          }
-                          className={
-                            'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
-                            (spotifyPlaying?.sourceId === t.sourceId
-                              ? 'bg-brand text-white'
-                              : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
-                          }
-                        >
-                          {spotifyPlaying?.sourceId === t.sourceId ? '⏸' : '▶'}
-                        </button>
-                      )}
+                                ? 'Detener'
+                                : 'Reproducir (Spotify)'
+                            }
+                            aria-label="Reproducir"
+                            onClick={() =>
+                              setSpotifyPlaying(
+                                spotifyPlaying?.sourceId === t.sourceId
+                                  ? null
+                                  : {
+                                      sourceId: t.sourceId,
+                                      title: t.title,
+                                      artist: t.artist,
+                                      imageUrl: t.coverUrl,
+                                    },
+                              )
+                            }
+                            className={
+                              'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
+                              (spotifyPlaying?.sourceId === t.sourceId
+                                ? 'bg-brand text-white'
+                                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
+                            }
+                          >
+                            {spotifyPlaying?.sourceId === t.sourceId ? '⏸' : '▶'}
+                          </button>
+                        ))}
                       <SourceLink track={t} />
                       {canEdit && (
                         <button
@@ -659,19 +699,20 @@ export function MusicCatalogView({
                           🗑
                         </button>
                       )}
-                      {canEdit && (
-                        <button
-                          className={
-                            t.inLibrary
-                              ? 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300'
-                              : 'rounded-lg bg-brand/15 px-2 py-1 text-xs text-brand hover:bg-brand/25'
-                          }
-                          disabled={toggle.isPending}
-                          onClick={() => toggle.mutate(t)}
-                        >
-                          {t.inLibrary ? '✓ En mis canciones' : '➕ Agregar'}
-                        </button>
-                      )}
+                      {/* Agregar a mi biblioteca: acción personal, disponible
+                          para cualquiera que vea el catálogo (no es editar el
+                          catálogo global). */}
+                      <button
+                        className={
+                          t.inLibrary
+                            ? 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300'
+                            : 'rounded-lg bg-brand/15 px-2 py-1 text-xs text-brand hover:bg-brand/25'
+                        }
+                        disabled={toggle.isPending}
+                        onClick={() => toggle.mutate(t)}
+                      >
+                        {t.inLibrary ? '✓ En mis canciones' : '➕ Agregar'}
+                      </button>
                     </div>
                   </td>
                 </tr>

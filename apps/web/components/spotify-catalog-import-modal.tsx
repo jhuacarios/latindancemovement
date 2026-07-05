@@ -20,6 +20,7 @@ interface SpotifyResolved {
   year: number | null;
   coverUrl: string | null;
   detectedStyle: DanceStyle | null;
+  playable: boolean | null;
 }
 
 /**
@@ -98,15 +99,19 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
     setErr(null);
     setSaving(true);
     try {
-      const payload = items.map((it) => ({
-        sourceId: it.sourceId,
-        title: it.title,
-        artist: it.artist,
-        durationSec: it.durationSec,
-        year: it.year,
-        coverUrl: it.coverUrl,
-        detectedStyle: it.detectedStyle,
-      }));
+      // Las restringidas por país no se importan (no se pueden reproducir).
+      const payload = items
+        .filter((it) => it.playable !== false)
+        .map((it) => ({
+          sourceId: it.sourceId,
+          title: it.title,
+          artist: it.artist,
+          durationSec: it.durationSec,
+          year: it.year,
+          coverUrl: it.coverUrl,
+          detectedStyle: it.detectedStyle,
+          playable: it.playable,
+        }));
       const res = await api<PlaylistImportResult>(
         '/music/tracks/spotify-catalog-import',
         { method: 'POST', body: { items: payload, overrides: rowStyles } },
@@ -120,10 +125,20 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
     }
   }
 
+  // Cuenta a importar: con estilo elegido y no restringidas por país.
   const willImport = items
-    ? items.filter((it) => rowStyles[it.sourceId]).length
+    ? items.filter((it) => rowStyles[it.sourceId] && it.playable !== false)
+        .length
     : 0;
-  const missing = items ? items.length - willImport : 0;
+  // Sin estilo (importables pero falta elegir estilo).
+  const missing = items
+    ? items.filter((it) => it.playable !== false && !rowStyles[it.sourceId])
+        .length
+    : 0;
+  // Restringidas por país: no se importan.
+  const restricted = items
+    ? items.filter((it) => it.playable === false).length
+    : 0;
 
   return (
     <div
@@ -196,6 +211,12 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                     · {missing} sin estilo (elige para incluirla)
                   </span>
                 )}
+                {restricted > 0 && (
+                  <span className="ml-2 text-amber-300/90">
+                    · {restricted} restringida{restricted === 1 ? '' : 's'} (no
+                    se importará{restricted === 1 ? '' : 'n'})
+                  </span>
+                )}
               </span>
             </div>
 
@@ -231,39 +252,51 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                         className="border-b border-neutral-800/60 last:border-0"
                       >
                         <td className="px-2 py-2">
-                          <button
-                            type="button"
-                            title={
-                              playing?.sourceId === it.sourceId
-                                ? 'Detener'
-                                : 'Reproducir (Spotify)'
-                            }
-                            aria-label={
-                              playing?.sourceId === it.sourceId
-                                ? 'Detener'
-                                : 'Reproducir'
-                            }
-                            onClick={() =>
-                              setPlaying(
+                          {it.playable === false ? (
+                            <button
+                              type="button"
+                              disabled
+                              title="Restricción de país: Spotify no permite reproducir esta canción en tu región."
+                              aria-label="No disponible en tu región"
+                              className="flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-full bg-neutral-800/50 text-sm text-neutral-600"
+                            >
+                              🚫
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              title={
                                 playing?.sourceId === it.sourceId
-                                  ? null
-                                  : {
-                                      sourceId: it.sourceId,
-                                      title: it.title,
-                                      artist: it.artist,
-                                      imageUrl: it.coverUrl,
-                                    },
-                              )
-                            }
-                            className={clsx(
-                              'flex h-8 w-8 items-center justify-center rounded-full text-sm transition',
-                              playing?.sourceId === it.sourceId
-                                ? 'bg-brand text-white'
-                                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700',
-                            )}
-                          >
-                            {playing?.sourceId === it.sourceId ? '⏸' : '▶'}
-                          </button>
+                                  ? 'Detener'
+                                  : 'Reproducir (Spotify)'
+                              }
+                              aria-label={
+                                playing?.sourceId === it.sourceId
+                                  ? 'Detener'
+                                  : 'Reproducir'
+                              }
+                              onClick={() =>
+                                setPlaying(
+                                  playing?.sourceId === it.sourceId
+                                    ? null
+                                    : {
+                                        sourceId: it.sourceId,
+                                        title: it.title,
+                                        artist: it.artist,
+                                        imageUrl: it.coverUrl,
+                                      },
+                                )
+                              }
+                              className={clsx(
+                                'flex h-8 w-8 items-center justify-center rounded-full text-sm transition',
+                                playing?.sourceId === it.sourceId
+                                  ? 'bg-brand text-white'
+                                  : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700',
+                              )}
+                            >
+                              {playing?.sourceId === it.sourceId ? '⏸' : '▶'}
+                            </button>
+                          )}
                         </td>
                         <td className="px-2 py-2">
                           {it.coverUrl ? (
@@ -278,38 +311,54 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                             <div className="h-12 w-12 rounded bg-neutral-800" />
                           )}
                         </td>
-                        <td className="px-3 py-2 font-medium">{it.title}</td>
+                        <td className="px-3 py-2 font-medium">
+                          {it.title}
+                          {it.playable === false && (
+                            <span
+                              title="Spotify no permite reproducir esta canción en tu región"
+                              className="ml-2 inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-normal text-amber-300"
+                            >
+                              🚫 Restricción de país
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-neutral-300">
                           {it.artist ?? '—'}
                         </td>
                         <td className="px-3 py-2">
-                          <div className="flex items-center gap-1">
-                            <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
-                              {(['BACHATA', 'SALSA'] as const).map((s) => {
-                                const active = value === s;
-                                return (
-                                  <button
-                                    key={s}
-                                    type="button"
-                                    onClick={() => setRowStyle(it.sourceId, s)}
-                                    className={clsx(
-                                      'rounded-md px-2 py-0.5 text-xs font-medium transition',
-                                      active
-                                        ? 'bg-brand text-white'
-                                        : 'text-neutral-300 hover:bg-neutral-700/60',
-                                    )}
-                                  >
-                                    {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
-                                  </button>
-                                );
-                              })}
+                          {it.playable === false ? (
+                            <span className="text-xs text-amber-300/80">
+                              No se importará
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+                                {(['BACHATA', 'SALSA'] as const).map((s) => {
+                                  const active = value === s;
+                                  return (
+                                    <button
+                                      key={s}
+                                      type="button"
+                                      onClick={() => setRowStyle(it.sourceId, s)}
+                                      className={clsx(
+                                        'rounded-md px-2 py-0.5 text-xs font-medium transition',
+                                        active
+                                          ? 'bg-brand text-white'
+                                          : 'text-neutral-300 hover:bg-neutral-700/60',
+                                      )}
+                                    >
+                                      {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {it.detectedStyle && !touched.has(it.sourceId) && (
+                                <span className="text-[10px] text-neutral-500">
+                                  (auto)
+                                </span>
+                              )}
                             </div>
-                            {it.detectedStyle && !touched.has(it.sourceId) && (
-                              <span className="text-[10px] text-neutral-500">
-                                (auto)
-                              </span>
-                            )}
-                          </div>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-neutral-400">
                           {it.year ?? '—'}

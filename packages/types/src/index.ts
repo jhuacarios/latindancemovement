@@ -128,6 +128,8 @@ export interface Track {
   details?: YoutubeDetails | null;
   /** Fecha de lanzamiento (Spotify): "2024-04-04" | "2024-04" | "2024" | "". */
   releaseDate?: string | null;
+  /** Spotify: ¿reproducible en el embed? false = restringida; null = desconocido. */
+  spotifyPlayable?: boolean | null;
 }
 
 export interface PlaylistItem {

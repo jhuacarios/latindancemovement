@@ -134,6 +134,14 @@ export class TracksController {
     return this.tracks.backfillReleaseDates(n);
   }
 
+  /** Rellena la reproducibilidad (embed) de las canciones de Spotify. */
+  @Post('spotify/backfill-playable')
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  backfillSpotifyPlayable(@Query('limit') limit?: string) {
+    const n = Math.min(100, Math.max(1, Number(limit) || 40));
+    return this.tracks.backfillSpotifyPlayable(n);
+  }
+
   /** Descarga una plantilla .xlsx para importar canciones. */
   @Get('template.xlsx')
   async template(@Res() reply: FastifyReply) {

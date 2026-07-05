@@ -24,6 +24,60 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.6.0',
+    date: '2026-07-04',
+    module: 'music',
+    type: 'feature',
+    title: 'Columna "Fecha" de lanzamiento y canciones nuevas',
+    description:
+      'El catálogo muestra la fecha de lanzamiento (mes y año) y se puede ordenar por ella. Las canciones lanzadas hace 2 meses o menos se marcan con "✨ NUEVA", y hay un filtro "Solo nuevas".',
+  },
+  {
+    version: '0.6.0',
+    date: '2026-07-04',
+    module: 'music',
+    type: 'improvement',
+    title: 'Columnas configurables y sub-estilo con selección múltiple',
+    description:
+      'Un engranaje en el catálogo permite mostrar u ocultar columnas (se recuerda tu preferencia). El filtro de sub-estilo ahora es de selección múltiple y muestra solo los del estilo elegido.',
+  },
+  {
+    version: '0.6.0',
+    date: '2026-07-04',
+    module: 'music',
+    type: 'improvement',
+    title: 'Duración automática al agregar o importar (YouTube)',
+    description:
+      'Al agregar una canción de YouTube o importar una playlist, la duración se calcula sola desde YouTube si venía sin ella.',
+  },
+  {
+    version: '0.6.0',
+    date: '2026-07-04',
+    module: 'music.spotify.catalog',
+    type: 'fix',
+    title: 'Importar playlist de Spotify (arreglado)',
+    description:
+      'La importación ahora carga bien todas las canciones, con carátula y año. Las canciones restringidas por país (que no se pueden reproducir) se marcan y no se importan.',
+  },
+  {
+    version: '0.6.0',
+    date: '2026-07-04',
+    module: 'general',
+    type: 'improvement',
+    title: 'Canciones de Spotify restringidas por región',
+    description:
+      'Las canciones que Spotify no permite reproducir en tu región se marcan con 🚫 y el botón de play queda deshabilitado, indicando el motivo.',
+  },
+  {
+    version: '0.6.0',
+    date: '2026-07-04',
+    module: 'admin',
+    type: 'feature',
+    title: '"Ver como rol" y matriz de permisos',
+    description:
+      'Como super admin puedes previsualizar la plataforma como cualquier rol (sin cambiar tus permisos reales) y comparar en una matriz qué puede ver o editar cada rol.',
+  },
+  {
     version: '0.5.0',
     date: '2026-07-02',
     module: 'general',
