@@ -21,6 +21,7 @@ interface SpotifyResolved {
   coverUrl: string | null;
   detectedStyle: DanceStyle | null;
   playable: boolean | null;
+  releaseDate: string | null;
 }
 
 /**
@@ -111,6 +112,7 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
           coverUrl: it.coverUrl,
           detectedStyle: it.detectedStyle,
           playable: it.playable,
+          releaseDate: it.releaseDate,
         }));
       const res = await api<PlaylistImportResult>(
         '/music/tracks/spotify-catalog-import',

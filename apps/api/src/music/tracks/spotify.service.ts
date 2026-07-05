@@ -33,6 +33,8 @@ export interface SpotifyResolvedTrack {
   detectedSubstyle: DanceSubstyle | null;
   /** ¿Reproducible en el embed? false = restringida en la región; null = desconocido. */
   playable: boolean | null;
+  /** Fecha de lanzamiento completa "YYYY-MM-DD" (del embed), o null. */
+  releaseDate: string | null;
 }
 
 /** Metadata de un track de Spotify para autocompletar al agregarlo. */
@@ -173,8 +175,14 @@ export class SpotifyService {
     playable: boolean | null;
     coverUrl: string | null;
     year: number | null;
+    releaseDate: string | null;
   }> {
-    const none = { playable: null, coverUrl: null, year: null };
+    const none = {
+      playable: null,
+      coverUrl: null,
+      year: null,
+      releaseDate: null,
+    };
     if (!id) return none;
     try {
       const res = await fetch(`https://open.spotify.com/embed/track/${id}`, {
@@ -195,7 +203,12 @@ export class SpotifyService {
         Array.isArray(img) && img.length ? (img[0]?.url ?? null) : null;
       const iso = e?.releaseDate?.isoString;
       const year = typeof iso === 'string' ? parseYear(iso) : null;
-      return { playable, coverUrl, year };
+      // Fecha completa "YYYY-MM-DD" (para el mes en la columna Fecha).
+      const releaseDate =
+        typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}/.test(iso)
+          ? iso.slice(0, 10)
+          : null;
+      return { playable, coverUrl, year, releaseDate };
     } catch {
       return none;
     }
@@ -342,6 +355,7 @@ export class SpotifyService {
         detectedStyle: guess.style,
         detectedSubstyle: guess.substyle,
         playable: info.playable ?? e.playable,
+        releaseDate: info.releaseDate,
       });
     }
     return out;

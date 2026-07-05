@@ -41,6 +41,10 @@ export class SpotifyResolvedTrackDto {
   @IsOptional()
   @IsBoolean()
   playable?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  releaseDate?: string | null;
 }
 
 export class SpotifyCatalogImportDto {

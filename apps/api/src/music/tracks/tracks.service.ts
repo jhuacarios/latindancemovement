@@ -113,8 +113,8 @@ export class TracksService {
     const withMonth = (d: string | null): string | null =>
       d && /^\d{4}-\d{2}/.test(d) ? d : null;
 
-    // 1) Canciones de Spotify: por ID (exacto). Sin fuente YouTube, si Spotify
-    // solo da el año, se queda con el año.
+    // 1) Canciones de Spotify: fecha completa desde el embed (confiable, sin
+    // rate limit como la Web API). Si el embed no la da, cae al año.
     const sp = await this.prisma.track.findMany({
       where: { source: 'SPOTIFY', releaseDate: null },
       select: { id: true, sourceId: true, year: true },
@@ -123,8 +123,11 @@ export class TracksService {
     for (const t of sp) {
       if (budget <= 0) break;
       budget--;
-      const rd = await this.spotify.getReleaseDateById(t.sourceId);
-      await setDate(t.id, rd ?? (t.year != null ? String(t.year) : ''));
+      const info = await this.spotify.getTrackEmbedInfo(t.sourceId);
+      await setDate(
+        t.id,
+        info.releaseDate ?? (t.year != null ? String(t.year) : ''),
+      );
     }
 
     // 2) Canciones de YouTube: Spotify con mes; si no, fecha de subida de
@@ -669,6 +672,7 @@ export class TracksService {
       coverUrl?: string | null;
       detectedStyle?: DanceStyle | null;
       playable?: boolean | null;
+      releaseDate?: string | null;
     }[],
     overrides: Record<string, DanceStyle> | undefined,
     userId: string,
@@ -701,11 +705,14 @@ export class TracksService {
           userId,
           { fillEmptyOnly: true },
         );
-        // Reproducibilidad en el embed (restringidas por región): dato aparte.
-        if (typeof it.playable === 'boolean') {
+        // Reproducibilidad + fecha completa (del embed): datos aparte del upsert.
+        const extra: Prisma.TrackUpdateInput = {};
+        if (typeof it.playable === 'boolean') extra.spotifyPlayable = it.playable;
+        if (it.releaseDate) extra.releaseDate = it.releaseDate;
+        if (Object.keys(extra).length) {
           await this.prisma.track.update({
             where: { id: res.id },
-            data: { spotifyPlayable: it.playable },
+            data: extra,
           });
         }
         if (res.created) created++;
