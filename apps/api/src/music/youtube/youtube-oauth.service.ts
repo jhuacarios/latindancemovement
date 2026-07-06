@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type {
@@ -205,9 +206,7 @@ export class YoutubeOAuthService {
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) {
-        throw new BadRequestException(
-          `No se pudieron traer tus playlists de YouTube: ${await res.text()}`,
-        );
+        await this.youtubeFail(res, 'No se pudieron traer tus playlists de YouTube.');
       }
       const json = (await res.json()) as {
         items?: Array<{
@@ -293,9 +292,7 @@ export class YoutubeOAuthService {
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) {
-        throw new BadRequestException(
-          `No se pudieron traer los videos: ${await res.text()}`,
-        );
+        await this.youtubeFail(res, 'No se pudieron traer los videos de la playlist.');
       }
       const json = (await res.json()) as {
         items?: Array<{
@@ -372,9 +369,7 @@ export class YoutubeOAuthService {
     );
     // 204 = borrada; 404 = ya no existe (lo tratamos como éxito idempotente).
     if (!res.ok && res.status !== 404) {
-      throw new BadRequestException(
-        `No se pudo eliminar la playlist en YouTube: ${await res.text()}`,
-      );
+      await this.youtubeFail(res, 'No se pudo eliminar la playlist en YouTube.');
     }
   }
 
@@ -432,6 +427,35 @@ export class YoutubeOAuthService {
     const min = Number(m[2] ?? 0);
     const s = Number(m[3] ?? 0);
     return h * 3600 + min * 60 + s;
+  }
+
+  /**
+   * Traduce una respuesta fallida de la API de YouTube a un error legible:
+   * cuota agotada → 503 con mensaje claro (la UI lo detecta por "cuota"); otro
+   * motivo → BadRequest con `fallback` (sin volcar el JSON crudo de Google).
+   */
+  private async youtubeFail(res: Response, fallback: string): Promise<never> {
+    let reason = '';
+    try {
+      const body = (await res.clone().json()) as {
+        error?: { errors?: Array<{ reason?: string }> };
+      };
+      reason = body.error?.errors?.[0]?.reason ?? '';
+    } catch {
+      /* cuerpo no-JSON: se usa el fallback */
+    }
+    if (
+      res.status === 403 &&
+      ['quotaExceeded', 'dailyLimitExceeded', 'rateLimitExceeded'].includes(
+        reason,
+      )
+    ) {
+      throw new ServiceUnavailableException(
+        'Cuota diaria de YouTube agotada. Reintenta después de medianoche hora ' +
+          'del Pacífico (~01:00–02:00 en Chile) o usa otra API key.',
+      );
+    }
+    throw new BadRequestException(fallback);
   }
 
   private async accessToken(userId: string): Promise<string> {

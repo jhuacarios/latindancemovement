@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.2',
+    date: '2026-07-06',
+    module: 'music.youtube.playlists',
+    type: 'improvement',
+    title: 'Reconectar YouTube y errores de cuota más claros',
+    description:
+      'Si tu conexión de YouTube venció, ahora aparece el botón “Conectar cuenta de YouTube” ahí mismo para reconectar. Y cuando se agota la cuota diaria de YouTube, se muestra un aviso claro (“reintenta después de medianoche hora del Pacífico”) en vez del error técnico.',
+  },
+  {
     version: '0.7.1',
     date: '2026-07-05',
     module: 'music',

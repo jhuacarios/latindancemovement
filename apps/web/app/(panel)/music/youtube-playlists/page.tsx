@@ -187,10 +187,13 @@ export default function YoutubePlaylistsPage() {
       )}
 
       {connected && playlists.isError && (
-        <Card className="text-sm text-red-300">
-          {playlists.error instanceof ApiError
-            ? playlists.error.message
-            : 'No se pudieron traer tus playlists.'}
+        <Card className="space-y-3">
+          <p className="text-sm text-red-300">
+            {playlists.error instanceof ApiError
+              ? playlists.error.message
+              : 'No se pudieron traer tus playlists.'}
+          </p>
+          <Button onClick={connect}>🔗 Conectar cuenta de YouTube</Button>
         </Card>
       )}
 

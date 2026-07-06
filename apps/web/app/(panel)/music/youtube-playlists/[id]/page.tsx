@@ -110,13 +110,26 @@ export default function YoutubePlaylistDetailPage() {
 
       {isLoading && <Spinner label="Trayendo la playlist…" />}
 
-      {isError && (
-        <Card className="text-sm text-red-300">
-          {error instanceof ApiError
-            ? error.message
-            : 'No se pudo traer la playlist.'}
-        </Card>
-      )}
+      {isError &&
+        (() => {
+          const msg =
+            error instanceof ApiError
+              ? error.message
+              : 'No se pudo traer la playlist.';
+          const quota = /cuota/i.test(msg);
+          return (
+            <Card
+              className={
+                quota
+                  ? 'border-amber-500/40 bg-amber-500/10 text-sm text-amber-200/90'
+                  : 'text-sm text-red-300'
+              }
+            >
+              {quota ? '⚠️ ' : ''}
+              {msg}
+            </Card>
+          );
+        })()}
 
       {data && (
         <>

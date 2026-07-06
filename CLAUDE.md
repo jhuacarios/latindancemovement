@@ -460,6 +460,59 @@ Expansión: Argentina, Colombia, México, España.
 
 ---
 
+## Backlog de ideas por discutir (capturadas, sin decidir)
+
+Ideas surgidas en conversación que NO están construidas ni priorizadas. Se
+guardan acá para no perderlas; hay que decidir enfoque antes de implementar.
+
+### Historial de "reproducidas" por social (con reset)
+**Qué:** que el DJ vea, durante el evento, qué canciones ya sonaron y arranque
+"limpio" en cada social (un botón que reinicia el historial).
+
+**Limitación clave (investigado 2026-07):** NO se puede leer/borrar el historial
+ni el "progreso" (la barrita roja) de la app de YouTube desde la API. YouTube
+deshabilitó el acceso al historial/"ver más tarde" en 2016 y no hay endpoint para
+resetear el resume-position; eso vive en el historial privado de la cuenta y
+ninguna app de terceros lo toca. El progreso es por video y global a la cuenta
+(una playlist nueva no lo resetea).
+
+**Opciones:**
+- (a) **Marcador manual en Nectason:** sigues reproduciendo en la app nativa de
+  YouTube (Premium, fondo); en Nectason tocas ✓ por canción a medida que la pones;
+  botón "Reiniciar" por social. Marcado manual (Nectason no "ve" qué suena en
+  YouTube).
+- (b) **Reproducir dentro de Nectason** (player embebido): progreso automático +
+  barra roja estilo YouTube (hasta dónde llegaste) + reset. Contra: pierdes la app
+  nativa de YouTube Premium.
+- Persistencia recomendada: backend (`TrackProgress`: userId, trackId, percent) →
+  cross-device y reset "desde la API".
+
+**Estado:** por decidir enfoque (a vs b). Ver también reconocimiento de audio.
+
+### Reconocimiento de audio para auto-marcar lo que suena (la más potente)
+**Qué:** la app móvil escucha por micrófono, identifica la canción que está
+sonando y la marca como reproducida sola — sin importar desde qué app se
+reproduzca (YouTube, Spotify, el setup del DJ). Resuelve la limitación de arriba.
+
+**Opciones técnicas:**
+- **ACRCloud** — API/SDK de pago, robusto en ambiente ruidoso, soporta **catálogo
+  propio**. El más sólido para un social.
+- **AudD** (audd.io) — API REST simple y barata (mandas ~5s de audio → track). La
+  más rápida para un POC.
+- **ShazamKit** — SDK nativo iOS/Android (gratis-ish), catálogo propio o el de
+  Shazam. Shazam **no** tiene API REST pública oficial.
+- **AcoustID/Chromaprint** — OSS (MusicBrainz), gratis pero menos robusto con micro.
+
+**Notas:** va en la app móvil (micrófono; el navegador no sirve para escucha en
+fondo). Costo por reconocimiento (para un social son pocas detecciones). El
+**catálogo propio** encaja con los edits/mashups del marketplace de audio a
+medida. Conecta con el historial de reproducidas (auto-marca) y con la data por
+región (qué suena dónde — el moat de "data premium DJs").
+
+**Estado:** idea; posible POC con AudD o ACRCloud en `apps/mobile`.
+
+---
+
 ## Convenciones de código
 
 ### API (NestJS)
