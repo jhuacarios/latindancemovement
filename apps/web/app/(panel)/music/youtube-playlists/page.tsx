@@ -186,16 +186,34 @@ export default function YoutubePlaylistsPage() {
         <Spinner label="Trayendo playlists…" />
       )}
 
-      {connected && playlists.isError && (
-        <Card className="space-y-3">
-          <p className="text-sm text-red-300">
-            {playlists.error instanceof ApiError
+      {connected &&
+        playlists.isError &&
+        (() => {
+          const msg =
+            playlists.error instanceof ApiError
               ? playlists.error.message
-              : 'No se pudieron traer tus playlists.'}
-          </p>
-          <Button onClick={connect}>🔗 Conectar cuenta de YouTube</Button>
-        </Card>
-      )}
+              : 'No se pudieron traer tus playlists.';
+          // La cuota NO se resuelve reconectando; solo los errores de token sí.
+          const isQuota = /cuota/i.test(msg);
+          const isAuth = /(reconect|conecta|expir|conexi[óo]n)/i.test(msg);
+          return (
+            <Card
+              className={
+                isQuota
+                  ? 'space-y-3 border-amber-500/40 bg-amber-500/10 text-amber-200/90'
+                  : 'space-y-3 text-red-300'
+              }
+            >
+              <p className="text-sm">
+                {isQuota ? '⚠️ ' : ''}
+                {msg}
+              </p>
+              {isAuth && !isQuota && (
+                <Button onClick={connect}>🔗 Conectar cuenta de YouTube</Button>
+              )}
+            </Card>
+          );
+        })()}
 
       {connected && playlists.data && items.length === 0 && (
         <p className="text-sm text-neutral-500">
