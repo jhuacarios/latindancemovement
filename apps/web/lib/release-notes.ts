@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.7',
+    date: '2026-07-08',
+    module: 'music',
+    type: 'improvement',
+    title: 'Detalle de playlist: pills, columnas configurables y Repr./día',
+    description:
+      'El detalle de una playlist interna muestra las pills “✨ Nueva” y “🔥 Épica” en cada canción, tiene el menú ⚙️ Columnas para mostrar u ocultar columnas (se recuerda tu preferencia) y agrega la columna “Repr./día” (reproducciones por día) en YouTube.',
+  },
+  {
     version: '0.7.6',
     date: '2026-07-08',
     module: 'music',

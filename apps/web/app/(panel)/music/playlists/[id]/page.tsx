@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Playlist, PlaylistItem } from '@baile-latino/types';
+import type {
+  Paginated,
+  Playlist,
+  PlaylistItem,
+  Track,
+} from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Spinner, StyleBadge } from '@/components/ui';
 import { PlayButtons } from '@/components/play-buttons';
@@ -22,7 +27,18 @@ import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-mod
 import { LibraryDrawer } from '@/components/library-drawer';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
-import { formatDuration, formatReleaseDate, formatViews } from '@/lib/format';
+import {
+  formatDuration,
+  formatReleaseDate,
+  formatViews,
+  formatViewsPerDay,
+  isNewRelease,
+  isWithinLastMonths,
+  viewsPerDay,
+} from '@/lib/format';
+import { buildEpicMatcher } from '@/lib/similarity';
+import { NewBadge } from '@/components/new-badge';
+import { EpicBadge } from '@/components/epic-badge';
 import { useLayoutUI } from '@/lib/layout-ui';
 
 type DropSide = { id: string; side: 'before' | 'after' } | null;
@@ -41,6 +57,28 @@ function shuffleInPlace<T>(a: T[]): void {
     [a[i], a[j]] = [a[j], a[i]];
   }
 }
+
+/** Columnas mostrables/ocultables (# , miniatura, Título y acciones fijas). */
+type ColKey = 'artist' | 'style' | 'duration' | 'date' | 'views' | 'vpd';
+type ColVis = Record<ColKey, boolean>;
+
+const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
+  { key: 'artist', label: 'Artista' },
+  { key: 'style', label: 'Estilo' },
+  { key: 'duration', label: 'Duración' },
+  { key: 'date', label: 'Fecha' },
+  { key: 'views', label: 'Reproducciones', youtubeOnly: true },
+  { key: 'vpd', label: 'Repr./día', youtubeOnly: true },
+];
+
+const ALL_COLS_VISIBLE: ColVis = {
+  artist: true,
+  style: true,
+  duration: true,
+  date: true,
+  views: true,
+  vpd: true,
+};
 
 export default function PlaylistDetailPage() {
   const params = useParams<{ id: string }>();
@@ -122,6 +160,94 @@ export default function PlaylistDetailPage() {
     () => new Set(items.map((i) => i.trackId)),
     [items],
   );
+
+  // Épicas: top 50 rep/día por estilo del catálogo de YouTube; Spotify hereda
+  // por título+artista+estilo+duración. Marca las canciones de la playlist.
+  const { data: epicData } = useQuery({
+    queryKey: ['catalog-epic', 'YOUTUBE'],
+    queryFn: () =>
+      api<Paginated<Track>>('/music/tracks?source=YOUTUBE&pageSize=1000'),
+  });
+  const epicYt = useMemo(() => {
+    const out: Track[] = [];
+    const all = epicData?.data ?? [];
+    for (const st of ['BACHATA', 'SALSA'] as const) {
+      const maxMonths = st === 'SALSA' ? 0 : 24;
+      const top = all
+        .filter(
+          (t) =>
+            t.style === st &&
+            isWithinLastMonths(t.releaseDate, t.year, maxMonths),
+        )
+        .map((t) => ({
+          t,
+          vpd: viewsPerDay(t.details?.viewCount, t.releaseDate) ?? -1,
+        }))
+        .filter((x) => x.vpd > 0)
+        .sort((a, b) => b.vpd - a.vpd)
+        .slice(0, 50);
+      for (const x of top) out.push(x.t);
+    }
+    return out;
+  }, [epicData]);
+  const epicIds = useMemo(() => {
+    const tracks = items.map((i) => i.track).filter(Boolean) as Track[];
+    const spMatch = buildEpicMatcher(epicYt);
+    const ytSourceIds = new Set(epicYt.map((t) => t.sourceId));
+    const ids = new Set<string>();
+    for (const t of tracks) {
+      const epic =
+        t.source === 'YOUTUBE' ? ytSourceIds.has(t.sourceId) : spMatch(t);
+      if (epic) ids.add(t.id);
+    }
+    return ids;
+  }, [items, epicYt]);
+
+  // Columnas visibles (persistidas por fuente) + menú del engranaje.
+  const [cols, setCols] = useState<ColVis>(ALL_COLS_VISIBLE);
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const colMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!data?.source) return;
+    try {
+      const raw = localStorage.getItem(`nectason.playlistCols.${data.source}`);
+      if (raw) setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
+    } catch {
+      /* preferencia inválida: usa defaults */
+    }
+  }, [data?.source]);
+  function toggleCol(key: ColKey) {
+    setCols((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(
+          `nectason.playlistCols.${data?.source}`,
+          JSON.stringify(next),
+        );
+      } catch {
+        /* ignora si no hay storage */
+      }
+      return next;
+    });
+  }
+  useEffect(() => {
+    if (!colMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+        setColMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [colMenuOpen]);
+  const baseCols =
+    4 +
+    (cols.artist ? 1 : 0) +
+    (cols.style ? 1 : 0) +
+    (cols.duration ? 1 : 0) +
+    (cols.date ? 1 : 0) +
+    (!isSpotify && cols.views ? 1 : 0) +
+    (!isSpotify && cols.vpd ? 1 : 0);
 
   const removeItem = useMutation({
     mutationFn: (itemId: string) =>
@@ -476,14 +602,63 @@ export default function PlaylistDetailPage() {
                   <th className="px-4 py-3 w-12">#</th>
                   <th className="px-3 py-3 w-16"></th>
                   <th className="px-4 py-3">Título</th>
-                  <th className="px-4 py-3">Artista</th>
-                  <th className="px-4 py-3">Estilo</th>
-                  <th className="px-4 py-3">Duración</th>
-                  <th className="px-4 py-3">
-                    {isSpotify ? 'Fecha' : 'Fecha subida'}
+                  {cols.artist && <th className="px-4 py-3">Artista</th>}
+                  {cols.style && <th className="px-4 py-3">Estilo</th>}
+                  {cols.duration && <th className="px-4 py-3">Duración</th>}
+                  {cols.date && (
+                    <th className="px-4 py-3">
+                      {isSpotify ? 'Fecha' : 'Fecha subida'}
+                    </th>
+                  )}
+                  {!isSpotify && cols.views && (
+                    <th className="px-4 py-3">Reproducciones</th>
+                  )}
+                  {!isSpotify && cols.vpd && (
+                    <th className="px-4 py-3">Repr./día</th>
+                  )}
+                  <th className="px-4 py-3 text-right">
+                    <div className="relative inline-block" ref={colMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => setColMenuOpen((o) => !o)}
+                        title="Mostrar u ocultar columnas"
+                        aria-label="Configurar columnas"
+                        aria-expanded={colMenuOpen}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-xs font-normal text-neutral-300 transition hover:bg-neutral-800"
+                      >
+                        ⚙️ <span className="hidden sm:inline">Columnas</span>
+                      </button>
+                      {colMenuOpen && (
+                        <div className="absolute right-0 z-20 mt-1 w-52 rounded-lg border border-neutral-700 bg-neutral-900 p-2 text-left shadow-xl">
+                          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                            Columnas
+                          </p>
+                          <label className="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-500">
+                            <input type="checkbox" checked disabled className="accent-[var(--color-brand)]" />
+                            Título
+                          </label>
+                          {COLUMN_DEFS.filter(
+                            (c) => !(c.youtubeOnly && isSpotify),
+                          ).map((c) => (
+                            <label
+                              key={c.key}
+                              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={cols[c.key]}
+                                onChange={() => toggleCol(c.key)}
+                                className="accent-[var(--color-brand)]"
+                              />
+                              {c.key === 'date' && !isSpotify
+                                ? 'Fecha subida'
+                                : c.label}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </th>
-                  {!isSpotify && <th className="px-4 py-3">Reproducciones</th>}
-                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -531,47 +706,70 @@ export default function PlaylistDetailPage() {
                     </td>
                     <td className="px-4 py-3 font-medium">
                       {item.track?.title ?? '—'}
+                      {item.track && isNewRelease(item.track.releaseDate) && (
+                        <NewBadge />
+                      )}
+                      {item.track && epicIds.has(item.track.id) && <EpicBadge />}
                       {item.isWarmup && (
                         <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">
                           warmup
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-neutral-300">
-                      {item.track?.artist ?? '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.track && (
-                        <div className="flex flex-wrap items-center gap-1">
-                          <StyleBadge style={item.track.style} />
-                          {item.track.substyles?.map((s) => (
-                            <span
-                              key={s}
-                              className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
-                            >
-                              {s}
-                            </span>
-                          ))}
-                          {item.track.tags?.map((tag) => (
-                            <span
-                              key={tag.id}
-                              className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
-                            >
-                              {tag.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums text-neutral-400">
-                      {formatDuration(item.track?.durationSec)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-neutral-400">
-                      {formatReleaseDate(item.track?.releaseDate, item.track?.year)}
-                    </td>
-                    {!isSpotify && (
+                    {cols.artist && (
+                      <td className="px-4 py-3 text-neutral-300">
+                        {item.track?.artist ?? '—'}
+                      </td>
+                    )}
+                    {cols.style && (
+                      <td className="px-4 py-3">
+                        {item.track && (
+                          <div className="flex flex-wrap items-center gap-1">
+                            <StyleBadge style={item.track.style} />
+                            {item.track.substyles?.map((s) => (
+                              <span
+                                key={s}
+                                className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                              >
+                                {s}
+                              </span>
+                            ))}
+                            {item.track.tags?.map((tag) => (
+                              <span
+                                key={tag.id}
+                                className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    )}
+                    {cols.duration && (
+                      <td className="px-4 py-3 tabular-nums text-neutral-400">
+                        {formatDuration(item.track?.durationSec)}
+                      </td>
+                    )}
+                    {cols.date && (
+                      <td className="whitespace-nowrap px-4 py-3 text-neutral-400">
+                        {formatReleaseDate(
+                          item.track?.releaseDate,
+                          item.track?.year,
+                        )}
+                      </td>
+                    )}
+                    {!isSpotify && cols.views && (
                       <td className="px-4 py-3 tabular-nums text-neutral-400">
                         {formatViews(item.track?.details?.viewCount)}
+                      </td>
+                    )}
+                    {!isSpotify && cols.vpd && (
+                      <td className="px-4 py-3 tabular-nums text-neutral-400">
+                        {formatViewsPerDay(
+                          item.track?.details?.viewCount,
+                          item.track?.releaseDate,
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-3 text-right">
@@ -618,7 +816,7 @@ export default function PlaylistDetailPage() {
                 {items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={isSpotify ? 8 : 9}
+                      colSpan={baseCols}
                       onDragOver={(e) => externalDragId && e.preventDefault()}
                       onDrop={(e) => {
                         if (!externalDragId) return;
