@@ -27,6 +27,7 @@ import {
 } from '@/lib/format';
 import { NewBadge } from '@/components/new-badge';
 import { EpicBadge } from '@/components/epic-badge';
+import { buildEpicMatcher } from '@/lib/similarity';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { EditTrackModal } from '@/components/edit-track-modal';
@@ -241,22 +242,18 @@ export function MusicCatalogView({
     },
   });
 
-  // Pill "Épica": top 50 por reproducciones/día de CADA estilo (bachata y salsa
-  // por separado), solo entre las de los últimos 24 meses según la fecha de
-  // subida. Se calcula sobre el catálogo completo (sin filtros de búsqueda), no
-  // solo la página visible, para que la marca sea estable. Solo YouTube (Spotify
-  // no expone reproducciones). Devuelve el set de ids marcados como Épica.
+  // Pill "Épica": top 50 por reproducciones/día de CADA estilo (bachata: últimos
+  // 24 meses; salsa: sin restricción), calculado sobre el catálogo de YouTube —
+  // la única fuente con reproducciones. Spotify HEREDA la marca cruzando por
+  // título+artista+estilo+duración casi iguales (no expone reproducciones).
   const { data: epicData } = useQuery({
-    queryKey: ['catalog-epic', source],
+    queryKey: ['catalog-epic', 'YOUTUBE'],
     queryFn: () =>
-      api<Paginated<Track>>(`/music/tracks?source=${source}&pageSize=1000`),
-    enabled: source === 'YOUTUBE',
+      api<Paginated<Track>>('/music/tracks?source=YOUTUBE&pageSize=1000'),
   });
-  const epicIds = useMemo(() => {
-    const ids = new Set<string>();
+  const epicYt = useMemo(() => {
+    const out: Track[] = [];
     const all = epicData?.data ?? [];
-    // Bachata: solo últimos 24 meses. Salsa (prueba): sin restricción de año,
-    // solo las top 50 por rep/día.
     for (const st of ['BACHATA', 'SALSA'] as const) {
       const maxMonths = st === 'SALSA' ? 0 : 24;
       const top = all
@@ -266,16 +263,29 @@ export function MusicCatalogView({
             isWithinLastMonths(t.releaseDate, t.year, maxMonths),
         )
         .map((t) => ({
-          id: t.id,
+          t,
           vpd: viewsPerDay(t.details?.viewCount, t.releaseDate) ?? -1,
         }))
         .filter((x) => x.vpd > 0)
         .sort((a, b) => b.vpd - a.vpd)
         .slice(0, 50);
-      for (const x of top) ids.add(x.id);
+      for (const x of top) out.push(x.t);
     }
-    return ids;
+    return out;
   }, [epicData]);
+  // Ids de las filas visibles marcadas como Épica: YouTube por sourceId (directo);
+  // Spotify heredando de YouTube (título+artista+estilo+duración casi iguales).
+  const epicIds = useMemo(() => {
+    const rows = data?.data ?? [];
+    if (isSpotify) {
+      const match = buildEpicMatcher(epicYt);
+      return new Set(rows.filter(match).map((r) => r.id));
+    }
+    const ytSourceIds = new Set(epicYt.map((t) => t.sourceId));
+    return new Set(
+      rows.filter((r) => ytSourceIds.has(r.sourceId)).map((r) => r.id),
+    );
+  }, [data, epicYt, isSpotify]);
 
   // Fecha de lanzamiento: rellena en lotes (Spotify por ID/búsqueda, o subida de
   // YouTube). Se re-dispara cuando aparecen canciones sin fecha (ej. al importar
@@ -572,24 +582,26 @@ export function MusicCatalogView({
             ✨ Solo nuevas{newCount > 0 ? ` (${newCount})` : ''}
           </button>
         </div>
-        {source === 'YOUTUBE' && (
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">Top</label>
-            <button
-              type="button"
-              onClick={() => setOnlyEpic((v) => !v)}
-              title="Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo (últimos 24 meses)"
-              className={
-                'rounded-lg border px-3 py-2 text-sm transition ' +
-                (onlyEpic
-                  ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
-                  : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
-              }
-            >
-              🔥 Solo épicas{epicIds.size > 0 ? ` (${epicIds.size})` : ''}
-            </button>
-          </div>
-        )}
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">Top</label>
+          <button
+            type="button"
+            onClick={() => setOnlyEpic((v) => !v)}
+            title={
+              isSpotify
+                ? 'Mostrar solo las Épicas (heredadas de YouTube por título/artista/duración)'
+                : 'Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo'
+            }
+            className={
+              'rounded-lg border px-3 py-2 text-sm transition ' +
+              (onlyEpic
+                ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
+                : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
+            }
+          >
+            🔥 Solo épicas{epicIds.size > 0 ? ` (${epicIds.size})` : ''}
+          </button>
+        </div>
       </Card>
 
       {isLoading && <Spinner />}

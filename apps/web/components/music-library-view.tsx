@@ -28,7 +28,7 @@ import {
 } from '@/lib/format';
 import { NewBadge } from '@/components/new-badge';
 import { EpicBadge } from '@/components/epic-badge';
-import { areSimilarTracks } from '@/lib/similarity';
+import { areSimilarTracks, buildEpicMatcher } from '@/lib/similarity';
 import { useThumbs } from '@/lib/use-thumbs';
 import { SourceLink } from '@/components/source-link';
 import { PlatformIcon } from '@/components/platform-icon';
@@ -306,16 +306,16 @@ export function MusicLibraryView({
   });
 
   // Pill "Épica": top 50 por reproducciones/día de cada estilo (bachata: últimos
-  // 24 meses; salsa: sin restricción), calculado sobre el CATÁLOGO completo —
-  // mismo criterio que la página de Catálogo. Se cruza por sourceId. Solo YouTube.
+  // 24 meses; salsa: sin restricción), calculado sobre el catálogo de YouTube —
+  // la única fuente con reproducciones. Spotify HEREDA la marca cruzando por
+  // título+artista+estilo+duración casi iguales.
   const { data: epicData } = useQuery({
-    queryKey: ['catalog-epic', source],
+    queryKey: ['catalog-epic', 'YOUTUBE'],
     queryFn: () =>
-      api<Paginated<Track>>(`/music/tracks?source=${source}&pageSize=1000`),
-    enabled: source === 'YOUTUBE',
+      api<Paginated<Track>>('/music/tracks?source=YOUTUBE&pageSize=1000'),
   });
-  const epicKeys = useMemo(() => {
-    const keys = new Set<string>();
+  const epicYt = useMemo(() => {
+    const out: Track[] = [];
     const all = epicData?.data ?? [];
     for (const st of ['BACHATA', 'SALSA'] as const) {
       const maxMonths = st === 'SALSA' ? 0 : 24;
@@ -326,16 +326,29 @@ export function MusicLibraryView({
             isWithinLastMonths(t.releaseDate, t.year, maxMonths),
         )
         .map((t) => ({
-          sid: t.sourceId,
+          t,
           vpd: viewsPerDay(t.details?.viewCount, t.releaseDate) ?? -1,
         }))
         .filter((x) => x.vpd > 0)
         .sort((a, b) => b.vpd - a.vpd)
         .slice(0, 50);
-      for (const x of top) keys.add(x.sid);
+      for (const x of top) out.push(x.t);
     }
-    return keys;
+    return out;
   }, [epicData]);
+  // Ids de las filas marcadas como Épica: YouTube por sourceId (directo); Spotify
+  // heredando de YouTube (título+artista+estilo+duración casi iguales).
+  const epicIds = useMemo(() => {
+    const rows = data?.data ?? [];
+    if (isSpotify) {
+      const match = buildEpicMatcher(epicYt);
+      return new Set(rows.filter(match).map((r) => r.id));
+    }
+    const ytSourceIds = new Set(epicYt.map((t) => t.sourceId));
+    return new Set(
+      rows.filter((r) => ytSourceIds.has(r.sourceId)).map((r) => r.id),
+    );
+  }, [data, epicYt, isSpotify]);
 
   const { data: playlists } = useQuery({
     queryKey: ['playlists', source],
@@ -383,14 +396,12 @@ export function MusicLibraryView({
   const newCount = data
     ? data.data.filter((t) => isNewRelease(t.releaseDate)).length
     : 0;
-  const epicCount = data
-    ? data.data.filter((t) => epicKeys.has(t.sourceId)).length
-    : 0;
+  const epicCount = epicIds.size;
   const filteredRows = data
     ? data.data.filter(
         (t) =>
           (!onlyNew || isNewRelease(t.releaseDate)) &&
-          (!onlyEpic || epicKeys.has(t.sourceId)) &&
+          (!onlyEpic || epicIds.has(t.id)) &&
           (substyles.length === 0 ||
             substyles.some((s) => t.substyles?.includes(s))) &&
           isWithinLastMonths(t.releaseDate, t.year, monthsN),
@@ -643,27 +654,29 @@ export function MusicLibraryView({
             ✨ Solo nuevas{newCount > 0 ? ` (${newCount})` : ''}
           </button>
         </div>
-        {!isSpotify && (
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">Top</label>
-            <button
-              type="button"
-              onClick={() => {
-                setOnlyEpic((v) => !v);
-                setPage(1);
-              }}
-              title="Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo"
-              className={
-                'rounded-lg border px-3 py-2 text-sm transition ' +
-                (onlyEpic
-                  ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
-                  : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
-              }
-            >
-              🔥 Solo épicas{epicCount > 0 ? ` (${epicCount})` : ''}
-            </button>
-          </div>
-        )}
+        <div>
+          <label className="mb-1 block text-xs text-neutral-400">Top</label>
+          <button
+            type="button"
+            onClick={() => {
+              setOnlyEpic((v) => !v);
+              setPage(1);
+            }}
+            title={
+              isSpotify
+                ? 'Mostrar solo las Épicas (heredadas de YouTube por título/artista/duración)'
+                : 'Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo'
+            }
+            className={
+              'rounded-lg border px-3 py-2 text-sm transition ' +
+              (onlyEpic
+                ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
+                : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
+            }
+          >
+            🔥 Solo épicas{epicCount > 0 ? ` (${epicCount})` : ''}
+          </button>
+        </div>
         <div className="ml-auto">
           <label className="mb-1 block text-xs text-neutral-400">&nbsp;</label>
           <button
@@ -855,9 +868,7 @@ export function MusicLibraryView({
                       <td className="px-4 py-3 font-medium">
                         {t.title}
                         {isNewRelease(t.releaseDate) && <NewBadge />}
-                        {source === 'YOUTUBE' && epicKeys.has(t.sourceId) && (
-                          <EpicBadge />
-                        )}
+                        {epicIds.has(t.id) && <EpicBadge />}
                       </td>
                       {cols.artist && (
                         <td className="px-4 py-3 text-neutral-300">{t.artist}</td>

@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.4',
+    date: '2026-07-08',
+    module: 'music',
+    type: 'feature',
+    title: 'Épicas también en Spotify (heredadas de YouTube)',
+    description:
+      'Spotify no expone reproducciones, así que las Épicas se heredan desde YouTube: una canción de Spotify se marca “🔥 Épica” solo si coincide con una Épica de YouTube en título, artista, estilo y duración (±5s). También está el filtro “Solo épicas” en el catálogo y Mis Canciones de Spotify.',
+  },
+  {
     version: '0.7.3',
     date: '2026-07-07',
     module: 'music.youtube.playlists',

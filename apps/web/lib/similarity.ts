@@ -70,3 +70,35 @@ export function areSimilarTracks(a: MatchTrack, b: MatchTrack): boolean {
   if (similarityRatio(ta, tb) < 0.85) return false;
   return artistCompatible(normalizeForMatch(a.artist), normalizeForMatch(b.artist));
 }
+
+export interface EpicRef {
+  title?: string | null;
+  artist?: string | null;
+  style?: string | null;
+  durationSec?: number | null;
+}
+
+/**
+ * Matcher para "heredar" la marca de Épica entre plataformas (ej. Spotify hereda
+ * de YouTube, que sí tiene reproducciones). Es **estricto** para no marcar de
+ * más: exige título+artista muy parecidos (`areSimilarTracks`), **mismo estilo**
+ * y **duración casi idéntica** (±`maxDiffSec`). Si a alguno le falta la duración,
+ * no se hereda (mejor perder una que marcar la equivocada).
+ */
+export function buildEpicMatcher(
+  refs: EpicRef[],
+  maxDiffSec = 5,
+): (t: EpicRef) => boolean {
+  return (t) =>
+    refs.some((c) => {
+      if (t.style && c.style && t.style !== c.style) return false;
+      if (
+        typeof t.durationSec !== 'number' ||
+        typeof c.durationSec !== 'number' ||
+        Math.abs(t.durationSec - c.durationSec) > maxDiffSec
+      ) {
+        return false;
+      }
+      return areSimilarTracks(t, c);
+    });
+}
