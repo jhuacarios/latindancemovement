@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.6',
+    date: '2026-07-08',
+    module: 'music',
+    type: 'improvement',
+    title: 'Panel “Agregar canciones” con pills y filtros',
+    description:
+      'Al armar una playlist, el panel de agregar muestra las pills “✨ Nueva” y “🔥 Épica” en cada canción, tiene filtros “Nuevas” y “Épicas” (que cargan todo el catálogo, no solo la primera página), las etiquetas de estilo se compactan a “B/S”, y el buscador tiene una ✕ para limpiarlo.',
+  },
+  {
+    version: '0.7.6',
+    date: '2026-07-08',
+    module: 'music',
+    type: 'improvement',
+    title: 'Columna “Fecha” en el detalle de la playlist',
+    description:
+      'El detalle de una playlist interna muestra la columna “Fecha” con mes y año (fecha de lanzamiento en Spotify, fecha de subida en YouTube) en vez de solo el año.',
+  },
+  {
     version: '0.7.5',
     date: '2026-07-08',
     module: 'music.spotify.catalog',

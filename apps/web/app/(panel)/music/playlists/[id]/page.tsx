@@ -22,7 +22,7 @@ import { YoutubeFromTemplateModal } from '@/components/youtube-from-template-mod
 import { LibraryDrawer } from '@/components/library-drawer';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
-import { formatDuration, formatViews } from '@/lib/format';
+import { formatDuration, formatReleaseDate, formatViews } from '@/lib/format';
 import { useLayoutUI } from '@/lib/layout-ui';
 
 type DropSide = { id: string; side: 'before' | 'after' } | null;
@@ -479,7 +479,9 @@ export default function PlaylistDetailPage() {
                   <th className="px-4 py-3">Artista</th>
                   <th className="px-4 py-3">Estilo</th>
                   <th className="px-4 py-3">Duración</th>
-                  <th className="px-4 py-3">Año</th>
+                  <th className="px-4 py-3">
+                    {isSpotify ? 'Fecha' : 'Fecha subida'}
+                  </th>
                   {!isSpotify && <th className="px-4 py-3">Reproducciones</th>}
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -564,8 +566,8 @@ export default function PlaylistDetailPage() {
                     <td className="px-4 py-3 tabular-nums text-neutral-400">
                       {formatDuration(item.track?.durationSec)}
                     </td>
-                    <td className="px-4 py-3 text-neutral-400">
-                      {item.track?.year ?? '—'}
+                    <td className="whitespace-nowrap px-4 py-3 text-neutral-400">
+                      {formatReleaseDate(item.track?.releaseDate, item.track?.year)}
                     </td>
                     {!isSpotify && (
                       <td className="px-4 py-3 tabular-nums text-neutral-400">

@@ -9,6 +9,10 @@ import { PlatformIcon } from './platform-icon';
 import { TrackThumb } from './track-thumb';
 import { usePlayer } from './player';
 import { clsx } from './clsx';
+import { isNewRelease, isWithinLastMonths, viewsPerDay } from '@/lib/format';
+import { buildEpicMatcher } from '@/lib/similarity';
+import { NewBadge } from './new-badge';
+import { EpicBadge } from './epic-badge';
 
 /**
  * Panel lateral de "Mis Canciones": busca en la biblioteca del usuario y permite
@@ -44,6 +48,8 @@ export function LibraryDrawer({
   const [debounced, setDebounced] = useState('');
   const [style, setStyle] = useState<DanceStyle | ''>('');
   const [substyles, setSubstyles] = useState<string[]>([]);
+  const [onlyNew, setOnlyNew] = useState(false);
+  const [onlyEpic, setOnlyEpic] = useState(false);
   const fromCatalog = source === 'catalog';
   const player = usePlayer();
   const qc = useQueryClient();
@@ -97,10 +103,24 @@ export function LibraryDrawer({
     );
   }
 
+  // Con los filtros calculados (Nuevas/Épicas) se carga todo el set para que el
+  // filtro cubra el catálogo completo, no solo los primeros resultados.
+  const pageSize = onlyNew || onlyEpic ? 1000 : 50;
   const { data, isLoading } = useQuery({
-    queryKey: ['library-drawer', platform, source, debounced, style, substyles],
+    queryKey: [
+      'library-drawer',
+      platform,
+      source,
+      debounced,
+      style,
+      substyles,
+      pageSize,
+    ],
     queryFn: () => {
-      const p = new URLSearchParams({ pageSize: '50', sort: 'recent' });
+      const p = new URLSearchParams({
+        pageSize: String(pageSize),
+        sort: 'recent',
+      });
       p.set('source', platform);
       if (debounced) p.set('search', debounced);
       if (style) p.set('style', style);
@@ -122,6 +142,57 @@ export function LibraryDrawer({
   const items = useMemo(
     () => (data?.data ?? []).filter((t) => !excludeTrackIds.has(t.id)),
     [data, excludeTrackIds],
+  );
+
+  // Épicas: se calculan sobre el catálogo de YouTube (la única fuente con
+  // reproducciones); Spotify hereda por título+artista+estilo+duración.
+  const { data: epicData } = useQuery({
+    queryKey: ['catalog-epic', 'YOUTUBE'],
+    queryFn: () =>
+      api<Paginated<Track>>('/music/tracks?source=YOUTUBE&pageSize=1000'),
+  });
+  const epicYt = useMemo(() => {
+    const out: Track[] = [];
+    const all = epicData?.data ?? [];
+    for (const st of ['BACHATA', 'SALSA'] as const) {
+      const maxMonths = st === 'SALSA' ? 0 : 24;
+      const top = all
+        .filter(
+          (t) =>
+            t.style === st &&
+            isWithinLastMonths(t.releaseDate, t.year, maxMonths),
+        )
+        .map((t) => ({
+          t,
+          vpd: viewsPerDay(t.details?.viewCount, t.releaseDate) ?? -1,
+        }))
+        .filter((x) => x.vpd > 0)
+        .sort((a, b) => b.vpd - a.vpd)
+        .slice(0, 50);
+      for (const x of top) out.push(x.t);
+    }
+    return out;
+  }, [epicData]);
+  const epicIds = useMemo(() => {
+    if (platform === 'SPOTIFY') {
+      const match = buildEpicMatcher(epicYt);
+      return new Set(items.filter(match).map((r) => r.id));
+    }
+    const ytSourceIds = new Set(epicYt.map((t) => t.sourceId));
+    return new Set(
+      items.filter((r) => ytSourceIds.has(r.sourceId)).map((r) => r.id),
+    );
+  }, [items, epicYt, platform]);
+
+  // Filtros cliente por Nueva / Épica (el epicIds se calcula sobre todo `items`).
+  const visibleItems = useMemo(
+    () =>
+      items.filter(
+        (t) =>
+          (!onlyNew || isNewRelease(t.releaseDate)) &&
+          (!onlyEpic || epicIds.has(t.id)),
+      ),
+    [items, onlyNew, onlyEpic, epicIds],
   );
 
   return (
@@ -166,13 +237,27 @@ export function LibraryDrawer({
           ))}
         </div>
 
-        <Input
-          placeholder={
-            fromCatalog ? 'Buscar en el catálogo…' : 'Buscar en mis canciones…'
-          }
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="relative">
+          <Input
+            placeholder={
+              fromCatalog ? 'Buscar en el catálogo…' : 'Buscar en mis canciones…'
+            }
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={search ? 'pr-8' : undefined}
+          />
+          {search && (
+            <button
+              type="button"
+              title="Limpiar búsqueda"
+              aria-label="Limpiar búsqueda"
+              onClick={() => setSearch('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-500 transition hover:bg-neutral-800 hover:text-neutral-200"
+            >
+              ✕
+            </button>
+          )}
+        </div>
 
         {/* Switch de estilo: bachata primero. Vuelve a "todos" al re-tocar. */}
         <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-neutral-800/60 p-0.5">
@@ -191,6 +276,36 @@ export function LibraryDrawer({
               {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
             </button>
           ))}
+        </div>
+
+        {/* Filtros por Nueva / Épica. */}
+        <div className="mt-2 flex gap-1">
+          <button
+            type="button"
+            onClick={() => setOnlyNew((v) => !v)}
+            title="Solo canciones nuevas (lanzadas hace 2 meses o menos)"
+            className={clsx(
+              'flex-1 rounded-md border py-1 text-xs font-medium transition',
+              onlyNew
+                ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300'
+                : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800',
+            )}
+          >
+            ✨ Nuevas
+          </button>
+          <button
+            type="button"
+            onClick={() => setOnlyEpic((v) => !v)}
+            title="Solo Épicas (top reproducciones/día por estilo)"
+            className={clsx(
+              'flex-1 rounded-md border py-1 text-xs font-medium transition',
+              onlyEpic
+                ? 'border-purple-500/60 bg-purple-500/15 text-purple-300'
+                : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800',
+            )}
+          >
+            🔥 Épicas
+          </button>
         </div>
 
         {/* Tags de sub-estilos del estilo elegido (activables, multi). */}
@@ -231,17 +346,19 @@ export function LibraryDrawer({
 
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading && <Spinner />}
-        {!isLoading && items.length === 0 && (
+        {!isLoading && visibleItems.length === 0 && (
           <p className="px-1 py-4 text-center text-xs text-neutral-500">
-            {debounced
-              ? 'Sin resultados.'
-              : fromCatalog
-                ? 'Ya tienes en Mis Canciones todo el catálogo con estos filtros.'
-                : 'No hay canciones disponibles para agregar.'}
+            {onlyNew || onlyEpic
+              ? 'Ninguna coincide con los filtros (Nuevas/Épicas).'
+              : debounced
+                ? 'Sin resultados.'
+                : fromCatalog
+                  ? 'Ya tienes en Mis Canciones todo el catálogo con estos filtros.'
+                  : 'No hay canciones disponibles para agregar.'}
           </p>
         )}
         <div className="flex flex-col gap-1">
-          {items.map((t) => {
+          {visibleItems.map((t) => {
             const isPlaying =
               player.playingKey === `${t.source}:${t.sourceId}` ||
               (t.source === 'SPOTIFY' && t.sourceId === playingSpotifyId);
@@ -281,12 +398,18 @@ export function LibraryDrawer({
                   <TrackThumb track={t} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-medium">{t.title}</div>
+                  <div className="flex items-center">
+                    <span className="truncate text-xs font-medium">
+                      {t.title}
+                    </span>
+                    {isNewRelease(t.releaseDate) && <NewBadge />}
+                    {epicIds.has(t.id) && <EpicBadge />}
+                  </div>
                   <div className="truncate text-[11px] text-neutral-500">
                     {t.artist}
                   </div>
                 </div>
-                <StyleBadge style={t.style} />
+                <StyleBadge style={t.style} compact />
               </div>
             );
           })}
