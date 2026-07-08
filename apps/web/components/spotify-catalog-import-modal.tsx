@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DanceStyle, PlaylistImportResult } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
+import { formatReleaseDate } from '@/lib/format';
 import { Button, Input } from './ui';
 import { LoadingBar } from './loading-bar';
 import { SpotifyPlayerBar, type SpotifyPlayable } from './spotify-player-bar';
@@ -241,7 +242,7 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                     <th className="px-3 py-2">Título</th>
                     <th className="px-3 py-2">Artista</th>
                     <th className="px-3 py-2">Estilo</th>
-                    <th className="w-16 px-3 py-2">Año</th>
+                    <th className="w-20 px-3 py-2">Fecha</th>
                     <th className="w-10 px-2 py-2"></th>
                   </tr>
                 </thead>
@@ -362,8 +363,8 @@ export function SpotifyCatalogImportModal({ onClose }: { onClose: () => void }) 
                             </div>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-neutral-400">
-                          {it.year ?? '—'}
+                        <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
+                          {formatReleaseDate(it.releaseDate, it.year)}
                         </td>
                         <td className="px-2 py-2 text-right">
                           <button

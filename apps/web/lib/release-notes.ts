@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.5',
+    date: '2026-07-08',
+    module: 'music.spotify.catalog',
+    type: 'improvement',
+    title: 'Fecha (mes y año) al importar playlist de Spotify',
+    description:
+      'Al importar una playlist de Spotify al catálogo, la columna ahora dice “Fecha” y muestra mes y año cuando Spotify lo entrega (ej. “abr 2017”); si solo hay año, muestra el año. Es la fecha de lanzamiento real del álbum.',
+  },
+  {
     version: '0.7.4',
     date: '2026-07-08',
     module: 'music',
