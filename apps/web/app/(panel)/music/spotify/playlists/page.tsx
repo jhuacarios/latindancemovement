@@ -6,14 +6,13 @@ import type {
   SpotifyConnectionStatus,
   SpotifyOwnPlaylist,
   SpotifyPlaylistDetail,
-  SpotifyPlaylistStats,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
-import { formatDuration, formatTotalDuration } from '@/lib/format';
+import { formatDuration } from '@/lib/format';
 import { LoadingBar } from '@/components/loading-bar';
 import { SpotifyIcon } from '@/components/spotify-icon';
 import {
@@ -52,11 +51,17 @@ export default function SpotifyPlaylistsPage() {
     enabled: connected,
   });
 
-  const { data: detail, isLoading: detailLoading } = useQuery({
+  const {
+    data: detail,
+    isLoading: detailLoading,
+    isError: detailIsError,
+    error: detailError,
+  } = useQuery({
     queryKey: ['spotify-playlist', selectedId],
     queryFn: () =>
       api<SpotifyPlaylistDetail>(`/music/spotify/playlists/${selectedId}`),
     enabled: connected && !!selectedId,
+    retry: 1,
   });
 
   const disconnect = useMutation({
@@ -292,10 +297,6 @@ export default function SpotifyPlaylistsPage() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="truncate pr-14 font-semibold">{p.name}</div>
-                      <div className="text-xs text-neutral-500">
-                        {p.itemCount} canciones · {p.owner}
-                      </div>
-                      {!selectMode && <PlaylistStats id={p.id} />}
                     </div>
 
                     {!selectMode && (
@@ -355,6 +356,56 @@ export default function SpotifyPlaylistsPage() {
               )}
             />
           )}
+
+          {detailIsError &&
+            !detailLoading &&
+            (() => {
+              const msg =
+                detailError instanceof ApiError
+                  ? detailError.message
+                  : 'No se pudo leer la playlist.';
+              const isRate = /(rate|429|demasiad|l[íi]mite)/i.test(msg);
+              const isAuth = /(reconect|conecta|expir|conexi[óo]n|401)/i.test(
+                msg,
+              );
+              // Restricción de Spotify (playlist generada por Spotify o
+              // restringida): no es un error nuestro y reintentar no ayuda.
+              const isRestricted =
+                /no permite leer|generadas? por spotify|restringid/i.test(msg);
+              const amber = isRate || isRestricted;
+              return (
+                <Card
+                  className={
+                    amber
+                      ? 'space-y-3 border-amber-500/40 bg-amber-500/10 text-amber-200/90'
+                      : 'space-y-3 text-red-300'
+                  }
+                >
+                  <p className="text-sm">
+                    {amber ? '⚠️ ' : ''}
+                    {isRate
+                      ? 'Spotify limitó las solicitudes por un momento (playlist grande o muchas seguidas). Espera unos segundos y reintenta.'
+                      : msg}
+                  </p>
+                  {!isRestricted && (
+                    <Button
+                      onClick={() =>
+                        qc.invalidateQueries({
+                          queryKey: ['spotify-playlist', selectedId],
+                        })
+                      }
+                    >
+                      Reintentar
+                    </Button>
+                  )}
+                  {isAuth && (
+                    <Button variant="ghost" onClick={connect}>
+                      🔗 Reconectar Spotify
+                    </Button>
+                  )}
+                </Card>
+              );
+            })()}
 
           {detail && (
             <>
@@ -559,59 +610,6 @@ export default function SpotifyPlaylistsPage() {
       )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
-    </div>
-  );
-}
-
-/**
- * Resumen de una playlist (bachatas/salsas/catálogo/externas + duración),
- * cargado de forma lazy y cacheado. Cada uno lee la playlist de Spotify, por eso
- * se calcula bajo demanda.
- */
-function PlaylistStats({ id }: { id: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['spotify-playlist-stats', id],
-    queryFn: () =>
-      api<SpotifyPlaylistStats>(`/music/spotify/playlists/${id}/stats`),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  if (isLoading) {
-    return <div className="mt-2 text-[11px] text-neutral-600">calculando…</div>;
-  }
-  if (!data) return null;
-
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-1">
-      <span
-        title="Bachatas (por match al catálogo)"
-        className="rounded-full bg-pink-500/15 px-1.5 py-0.5 text-[10px] text-pink-300"
-      >
-        Bachata {data.bachata}
-      </span>
-      <span
-        title="Salsas (por match al catálogo)"
-        className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300"
-      >
-        Salsa {data.salsa}
-      </span>
-      <span
-        title="En el catálogo global"
-        className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300"
-      >
-        Catálogo {data.inCatalog}
-      </span>
-      <span
-        title="No están en el catálogo"
-        className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300"
-      >
-        Externas {data.external}
-      </span>
-      {data.totalSec > 0 && (
-        <span title="Duración total" className="text-[11px] text-neutral-500">
-          · {formatTotalDuration(data.totalSec)}
-        </span>
-      )}
     </div>
   );
 }

@@ -52,7 +52,11 @@ import {
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 
 // Sin paginación por ahora: traemos todo el catálogo de una.
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 250;
+/** Se carga todo lo que matchea búsqueda+estilo (server-side) y se filtra/pagina
+ * en cliente, para que búsqueda cubra TODO el catálogo y los filtros calculados
+ * (nuevas/épicas/meses) cubran todo lo cargado. */
+const LOAD_SIZE = 1000;
 
 /** Columnas que se pueden mostrar/ocultar desde el engranaje. Título y acciones
  * siempre visibles; la miniatura tiene su propio toggle. */
@@ -225,8 +229,9 @@ export function MusicCatalogView({
   }
 
   const { data, isLoading, error } = useQuery({
-    // Los sub-estilos se filtran en cliente (multi-selección), no por el server.
-    queryKey: ['catalog', source, { search, style, page, sort }],
+    // Búsqueda/estilo/orden en el server (cubren TODO el catálogo); los
+    // sub-estilos/nuevas/épicas/meses se filtran en cliente sobre lo cargado.
+    queryKey: ['catalog', source, { search, style, sort }],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('source', source);
@@ -236,8 +241,8 @@ export function MusicCatalogView({
         p.set('sortBy', sort.by);
         p.set('sortDir', sort.dir);
       }
-      p.set('page', String(page));
-      p.set('pageSize', String(PAGE_SIZE));
+      p.set('page', '1');
+      p.set('pageSize', String(LOAD_SIZE));
       return api<Paginated<Track>>(`/music/tracks?${p.toString()}`);
     },
   });
@@ -353,18 +358,6 @@ export function MusicCatalogView({
     },
   });
 
-  const pageIds = data?.data.map((t) => t.id) ?? [];
-  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
-  function toggleAll() {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (allSelected) pageIds.forEach((id) => next.delete(id));
-      else pageIds.forEach((id) => next.add(id));
-      return next;
-    });
-  }
-
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
   // Novedades (lanzadas hace ≤ 2 meses): filtro en cliente, consistente con el
   // badge ✨ NUEVO. El catálogo se trae completo, así que no requiere backend.
   const newCount = data
@@ -389,6 +382,25 @@ export function MusicCatalogView({
         return vpdSort === 'desc' ? vb - va : va - vb;
       })
     : visibleRows;
+  // Paginación en cliente de a PAGE_SIZE sobre el set filtrado+ordenado.
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const pageRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Si un filtro/búsqueda deja la página fuera de rango, vuelve a la 1.
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
+
+  const pageIds = pageRows.map((t) => t.id);
+  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  function toggleAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
   // Cuenta de columnas visibles (para el colSpan del estado vacío): Título +
   // acciones siempre; el resto según toggles/fuente/selección/miniatura.
   const baseCols =
@@ -718,7 +730,7 @@ export function MusicCatalogView({
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((t, i) => (
+              {pageRows.map((t, i) => (
                 <tr
                   key={t.id}
                   className={
@@ -741,7 +753,7 @@ export function MusicCatalogView({
                     </td>
                   )}
                   <td className="px-4 py-3 text-right tabular-nums text-neutral-500">
-                    {i + 1}
+                    {(page - 1) * PAGE_SIZE + i + 1}
                   </td>
                   {showThumb && (
                     <td className="px-3 py-2">
@@ -918,7 +930,7 @@ export function MusicCatalogView({
         </Card>
       )}
 
-      {data && data.total > PAGE_SIZE && (
+      {data && sortedRows.length > PAGE_SIZE && (
         <div className="flex items-center justify-between text-sm">
           <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
             ← Anterior

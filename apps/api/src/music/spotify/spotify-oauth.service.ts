@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import type {
@@ -342,6 +343,39 @@ export class SpotifyOAuthService {
     };
   }
 
+  /**
+   * Traduce una respuesta fallida de la API de Spotify a un error legible: rate
+   * limit (429) → mensaje claro (la UI lo detecta por "límite/rate"); otro
+   * motivo → BadRequest con `fallback` (sin volcar el JSON crudo de Spotify).
+   */
+  private async spotifyFail(res: Response, fallback: string): Promise<never> {
+    if (res.status === 429) {
+      const retry = Number(res.headers.get('retry-after') ?? '');
+      const secs = Number.isFinite(retry) && retry > 0 ? ` (~${retry}s)` : '';
+      throw new ServiceUnavailableException(
+        `Spotify limitó las solicitudes por un momento${secs} (rate limit). ` +
+          'Espera unos segundos y reintenta.',
+      );
+    }
+    const body = await res.text().catch(() => '');
+    this.logger.warn(
+      `Spotify API ${res.status} ${res.statusText} @ ${res.url}: ${body.slice(0, 600)}`,
+    );
+    // Spotify bloquea el acceso vía API a ciertas playlists (las generadas por
+    // Spotify —Daily Mix, Descubrimiento, Radar, Blends— y algunas restringidas
+    // de terceros): metadata carga pero /tracks devuelve 403/404. No es un bug
+    // nuestro ni de permisos; es una restricción de Spotify.
+    if (res.status === 403 || res.status === 404) {
+      throw new BadRequestException(
+        'Spotify no permite leer las canciones de esta playlist desde la API. ' +
+          'Suele pasar con playlists generadas por Spotify (Daily Mix, ' +
+          'Descubrimiento Semanal, Radar, Blends) o restringidas. Prueba con una ' +
+          'playlist creada por ti.',
+      );
+    }
+    throw new BadRequestException(fallback);
+  }
+
   async getPlaylistDetail(
     userId: string,
     playlistId: string,
@@ -354,9 +388,7 @@ export class SpotifyOAuthService {
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!metaRes.ok) {
-      throw new BadRequestException(
-        `No se pudo traer la playlist: ${await metaRes.text()}`,
-      );
+      await this.spotifyFail(metaRes, 'No se pudo leer la playlist.');
     }
     const meta = this.mapPlaylist(await metaRes.json());
 
@@ -368,8 +400,9 @@ export class SpotifyOAuthService {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        throw new BadRequestException(
-          `No se pudieron traer las canciones: ${await res.text()}`,
+        await this.spotifyFail(
+          res,
+          'No se pudieron leer las canciones de la playlist.',
         );
       }
       const json = (await res.json()) as {

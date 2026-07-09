@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.8',
+    date: '2026-07-09',
+    module: 'music',
+    type: 'improvement',
+    title: 'Catálogo de a 250 por página (la búsqueda sigue cubriendo todo)',
+    description:
+      'El catálogo (YouTube y Spotify) ahora se muestra de a 250 canciones por página. La búsqueda, el filtro de estilo y el orden siguen operando sobre TODO el catálogo, no solo la página visible.',
+  },
+  {
+    version: '0.7.8',
+    date: '2026-07-09',
+    module: 'music.spotify.playlists',
+    type: 'fix',
+    title: 'Playlists de Spotify más livianas y con errores claros',
+    description:
+      'La lista de playlists de Spotify ya no calcula los conteos de cada una (eso disparaba el límite de solicitudes de Spotify): muestra imagen y nombre. Al abrir una playlist, si Spotify no permite leerla (playlists generadas por Spotify) o limita las solicitudes, ahora se avisa claramente en vez de quedar en blanco.',
+  },
+  {
     version: '0.7.7',
     date: '2026-07-08',
     module: 'music',
