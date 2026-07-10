@@ -14,6 +14,7 @@ import type {
 } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TracksService } from '../tracks/tracks.service';
+import { SpotifyService } from '../tracks/spotify.service';
 import { PlaylistsService } from '../playlists/playlists.service';
 
 /**
@@ -39,6 +40,7 @@ export class SpotifyOAuthService {
     private readonly prisma: PrismaService,
     private readonly tracks: TracksService,
     private readonly playlists: PlaylistsService,
+    private readonly spotify: SpotifyService,
   ) {}
 
   /**
@@ -309,9 +311,7 @@ export class SpotifyOAuthService {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        throw new BadRequestException(
-          `No se pudieron traer tus playlists de Spotify: ${await res.text()}`,
-        );
+        await this.spotifyFail(res, 'No se pudieron traer tus playlists de Spotify.');
       }
       const json = (await res.json()) as {
         items?: any[];
@@ -351,10 +351,18 @@ export class SpotifyOAuthService {
   private async spotifyFail(res: Response, fallback: string): Promise<never> {
     if (res.status === 429) {
       const retry = Number(res.headers.get('retry-after') ?? '');
-      const secs = Number.isFinite(retry) && retry > 0 ? ` (~${retry}s)` : '';
+      // Spotify puede imponer castigos largos (horas) tras una ráfaga; se
+      // formatea legible y, si es largo, se avisa que hay que esperar.
+      let wait = 'unos segundos';
+      if (Number.isFinite(retry) && retry > 0) {
+        if (retry >= 3600) wait = `~${Math.round(retry / 3600)} h`;
+        else if (retry >= 60) wait = `~${Math.round(retry / 60)} min`;
+        else wait = `~${retry} s`;
+      }
       throw new ServiceUnavailableException(
-        `Spotify limitó las solicitudes por un momento${secs} (rate limit). ` +
-          'Espera unos segundos y reintenta.',
+        `Spotify limitó las solicitudes (rate limit). Vuelve a intentar en ${wait}. ` +
+          'No refresques repetidamente: reintentar mientras está limitado puede ' +
+          'alargar la espera.',
       );
     }
     const body = await res.text().catch(() => '');
@@ -369,8 +377,7 @@ export class SpotifyOAuthService {
       throw new BadRequestException(
         'Spotify no permite leer las canciones de esta playlist desde la API. ' +
           'Suele pasar con playlists generadas por Spotify (Daily Mix, ' +
-          'Descubrimiento Semanal, Radar, Blends) o restringidas. Prueba con una ' +
-          'playlist creada por ti.',
+          'Descubrimiento Semanal, Radar, Blends) o restringidas.',
       );
     }
     throw new BadRequestException(fallback);
@@ -392,41 +399,36 @@ export class SpotifyOAuthService {
     }
     const meta = this.mapPlaylist(await metaRes.json());
 
-    // Canciones (paginando).
-    const items: SpotifyPlaylistTrackItem[] = [];
-    let url: string | null = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?limit=100`;
-    while (url) {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        await this.spotifyFail(
-          res,
-          'No se pudieron leer las canciones de la playlist.',
-        );
-      }
-      const json = (await res.json()) as {
-        items?: any[];
-        next?: string | null;
-      };
-      for (const row of json.items ?? []) {
-        const t = row?.track;
-        if (!t?.id) continue; // episodios/locales sin id
-        items.push({
-          sourceId: t.id,
-          title: t.name ?? '(sin título)',
-          artist:
-            (t.artists ?? []).map((a: any) => a.name).filter(Boolean).join(', ') ||
-            null,
-          durationSec: t.duration_ms ? Math.round(t.duration_ms / 1000) : null,
-          year: parseYear(t.album?.release_date),
-          imageUrl: t.album?.images?.[0]?.url ?? null,
-          url: t.external_urls?.spotify ?? `https://open.spotify.com/track/${t.id}`,
-          match: null,
-        });
-      }
-      url = json.next ?? null;
+    // Canciones: se leen del EMBED público de Spotify, no de la Web API. Spotify
+    // bloquea el endpoint `/playlists/{id}/tracks` para apps en Development Mode
+    // (403 Forbidden, incluso en playlists públicas y hasta con client creds).
+    // El embed es el mismo mecanismo que usa el import por link, y funciona.
+    // Limitación: solo playlists PÚBLICAS (el embed no expone las privadas).
+    let embedTracks;
+    try {
+      embedTracks = await this.spotify.getPlaylistTracks(
+        `https://open.spotify.com/playlist/${playlistId}`,
+      );
+    } catch {
+      throw new BadRequestException(
+        'Para leer las canciones, la playlist debe ser PÚBLICA. Spotify bloquea ' +
+          'la lectura de canciones de esta app vía API, así que las leemos del ' +
+          'embed público (que solo funciona con playlists públicas). Marca la ' +
+          'playlist como pública en Spotify y vuelve a intentar.',
+      );
     }
+    const items: SpotifyPlaylistTrackItem[] = embedTracks
+      .filter((t) => t.sourceId)
+      .map((t) => ({
+        sourceId: t.sourceId as string,
+        title: t.title || '(sin título)',
+        artist: t.artist,
+        durationSec: t.durationSec,
+        year: t.year,
+        imageUrl: null,
+        url: `https://open.spotify.com/track/${t.sourceId}`,
+        match: null,
+      }));
 
     // Enriquecer con nuestro catálogo/biblioteca (match por sourceId de Spotify).
     const bySpotifyId = await this.tracks.findBySpotifyIds(
@@ -484,11 +486,4 @@ export class SpotifyOAuthService {
       );
     }
   }
-}
-
-/** "2021-05-10" | "2021" -> 2021 (o null). */
-function parseYear(releaseDate?: string): number | null {
-  if (!releaseDate) return null;
-  const y = Number(String(releaseDate).slice(0, 4));
-  return Number.isFinite(y) && y > 1900 ? y : null;
 }

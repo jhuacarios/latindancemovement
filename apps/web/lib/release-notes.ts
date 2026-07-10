@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.7.9',
+    date: '2026-07-10',
+    module: 'music.spotify.playlists',
+    type: 'fix',
+    title: 'Tus playlists de Spotify ahora sí muestran las canciones',
+    description:
+      'Spotify bloquea leer las canciones de una playlist desde la API (aunque sea pública), así que ahora las leemos del reproductor incrustado público —igual que el importador— y sí aparecen con su match al catálogo. Solo funciona con playlists públicas: si es privada, un aviso te dice que la hagas pública. Además, la lista ya no reintenta sola cuando Spotify limita las solicitudes (eso alargaba la espera).',
+  },
+  {
     version: '0.7.8',
     date: '2026-07-09',
     module: 'music',

@@ -45,10 +45,19 @@ export default function SpotifyPlaylistsPage() {
   });
   const connected = status?.connected ?? false;
 
-  const { data: playlists, isLoading: listLoading } = useQuery({
+  const {
+    data: playlists,
+    isLoading: listLoading,
+    isError: listIsError,
+    error: listError,
+  } = useQuery({
     queryKey: ['spotify-playlists'],
     queryFn: () => api<SpotifyOwnPlaylist[]>('/music/spotify/playlists'),
     enabled: connected,
+    // No reintentar/refetch automático: reintentar mientras Spotify limita puede
+    // alargar el castigo. El usuario reintenta a mano con el botón.
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const {
@@ -61,7 +70,8 @@ export default function SpotifyPlaylistsPage() {
     queryFn: () =>
       api<SpotifyPlaylistDetail>(`/music/spotify/playlists/${selectedId}`),
     enabled: connected && !!selectedId,
-    retry: 1,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const disconnect = useMutation({
@@ -239,7 +249,38 @@ export default function SpotifyPlaylistsPage() {
       {connected && !selectedId && (
         <>
           {listLoading && <Spinner />}
-          {!listLoading && (playlists?.length ?? 0) === 0 && (
+          {!listLoading &&
+            listIsError &&
+            (() => {
+              const msg =
+                listError instanceof ApiError
+                  ? listError.message
+                  : 'No se pudieron traer tus playlists.';
+              const isRate = /(rate|429|demasiad|l[íi]mite)/i.test(msg);
+              return (
+                <Card
+                  className={
+                    isRate
+                      ? 'space-y-3 border-amber-500/40 bg-amber-500/10 text-amber-200/90'
+                      : 'space-y-3 text-red-300'
+                  }
+                >
+                  <p className="text-sm">
+                    {isRate
+                      ? '⚠️ Spotify limitó las solicitudes por un momento. Espera unos segundos y reintenta.'
+                      : msg}
+                  </p>
+                  <Button
+                    onClick={() =>
+                      qc.invalidateQueries({ queryKey: ['spotify-playlists'] })
+                    }
+                  >
+                    Reintentar
+                  </Button>
+                </Card>
+              );
+            })()}
+          {!listLoading && !listIsError && (playlists?.length ?? 0) === 0 && (
             <p className="text-sm text-neutral-500">
               No se encontraron playlists en tu cuenta.
             </p>
@@ -371,7 +412,9 @@ export default function SpotifyPlaylistsPage() {
               // Restricción de Spotify (playlist generada por Spotify o
               // restringida): no es un error nuestro y reintentar no ayuda.
               const isRestricted =
-                /no permite leer|generadas? por spotify|restringid/i.test(msg);
+                /no permite leer|generadas? por spotify|restringid|debe ser p[úu]blica|bloquea la lectura/i.test(
+                  msg,
+                );
               const amber = isRate || isRestricted;
               return (
                 <Card
