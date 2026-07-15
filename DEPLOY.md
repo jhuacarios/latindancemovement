@@ -161,6 +161,48 @@ del `.env`.
 
 ---
 
+## 4.2 Login público (separar cliente de login del de YouTube)
+
+**Problema:** el login con Google usa scopes básicos (`openid email profile`), pero
+la conexión de YouTube usa el scope **sensible** `auth/youtube`. Como el *consent
+screen* es **por proyecto**, si login y YouTube comparten proyecto, publicar la
+app exige **verificación de Google** (por el scope de YouTube) → mientras tanto
+**solo los "usuarios de prueba" (máx 100) pueden entrar** y el resto ve
+`Error 403: access_denied`.
+
+**Solución:** el login usa su **propio** cliente OAuth en un **proyecto aparte**
+con **solo scopes básicos** → ese consent screen se **publica sin auditoría** y
+cualquiera inicia sesión. YouTube queda en su proyecto (Testing/verificación).
+El código ya lo soporta: el login lee `GOOGLE_LOGIN_CLIENT_ID/SECRET` (si no
+existen, cae a `GOOGLE_OAUTH_*`).
+
+**Crear el proyecto de LOGIN (una vez, para prod):**
+1. Google Cloud Console → **Crear proyecto** `nectason-login`.
+2. **Pantalla de consentimiento de OAuth** → *External* → nombre `Nectason`,
+   correos de soporte/desarrollador. **NO agregues el scope de YouTube** (solo
+   los básicos que Google ya incluye: email, profile, openid).
+3. **Publicar la app** ("Publish app" → *In production*). Con solo scopes básicos
+   **no requiere verificación** y no muestra advertencia de "app no verificada".
+4. **Credenciales → ID de cliente OAuth** (Web application):
+   - Authorized redirect URIs: `https://api.nectason.app/api/v1/auth/google/callback`
+   - Authorized JavaScript origins: `https://nectason.app`, `https://www.nectason.app`
+5. En **Railway** (prod) define:
+   ```
+   GOOGLE_LOGIN_CLIENT_ID=<client id del proyecto nectason-login>
+   GOOGLE_LOGIN_CLIENT_SECRET=<secret>
+   ```
+   Deja `GOOGLE_OAUTH_CLIENT_ID/SECRET` como están (esos son el cliente de
+   **YouTube**). Redeploy.
+
+**Resultado:** cualquier persona con cuenta de Google puede **registrarse/entrar**
+en prod; conectar YouTube sigue restringido a testers hasta que verifiques ese
+scope (si algún día lo abres a todos).
+
+> El `[Bootstrap] Entorno:` del arranque muestra `Login client …` — verifica que
+> en prod sea el del proyecto `nectason-login` (distinto del `YouTube client`).
+
+---
+
 ## 5. Probar
 
 1. Entra a `https://nectason.app`.

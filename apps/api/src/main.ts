@@ -65,7 +65,10 @@ async function bootstrap() {
   Logger.log(
     `Entorno: NODE_ENV=${process.env.NODE_ENV ?? 'undefined'} · ` +
       `YouTube key ${fp(process.env.YOUTUBE_API_KEY)} · ` +
-      `Google client ${fp(process.env.GOOGLE_OAUTH_CLIENT_ID)}`,
+      `YouTube client ${fp(process.env.GOOGLE_OAUTH_CLIENT_ID)} · ` +
+      `Login client ${fp(
+        process.env.GOOGLE_LOGIN_CLIENT_ID ?? process.env.GOOGLE_OAUTH_CLIENT_ID,
+      )}`,
     'Bootstrap',
   );
 }

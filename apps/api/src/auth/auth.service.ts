@@ -144,10 +144,27 @@ export class AuthService {
   }
 
   // --- Login con Google -----------------------------------------------------
-  get googleConfigured(): boolean {
-    return Boolean(
-      process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+  // El login usa su PROPIO cliente OAuth (scopes básicos: openid email profile),
+  // separado del de YouTube (scope sensible que exige verificación de Google).
+  // Así el consent screen del login se puede publicar sin auditoría y cualquiera
+  // inicia sesión. Si no se define, cae al cliente combinado GOOGLE_OAUTH_* (dev).
+  private get loginClientId(): string {
+    return (
+      process.env.GOOGLE_LOGIN_CLIENT_ID ??
+      process.env.GOOGLE_OAUTH_CLIENT_ID ??
+      ''
     );
+  }
+  private get loginClientSecret(): string {
+    return (
+      process.env.GOOGLE_LOGIN_CLIENT_SECRET ??
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET ??
+      ''
+    );
+  }
+
+  get googleConfigured(): boolean {
+    return Boolean(this.loginClientId && this.loginClientSecret);
   }
 
   private googleRedirectUri(): string {
@@ -161,7 +178,8 @@ export class AuthService {
   async buildGoogleAuthUrl(): Promise<string> {
     if (!this.googleConfigured) {
       throw new BadRequestException(
-        'Falta configurar GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET.',
+        'Falta configurar GOOGLE_LOGIN_CLIENT_ID / GOOGLE_LOGIN_CLIENT_SECRET ' +
+          '(o los GOOGLE_OAUTH_* de respaldo).',
       );
     }
     const state = randomBytes(16).toString('hex');
@@ -171,7 +189,7 @@ export class AuthService {
       update: { value: String(Date.now()) },
     });
     const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_OAUTH_CLIENT_ID as string,
+      client_id: this.loginClientId,
       redirect_uri: this.googleRedirectUri(),
       response_type: 'code',
       scope: 'openid email profile',
@@ -204,8 +222,8 @@ export class AuthService {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: process.env.GOOGLE_OAUTH_CLIENT_ID as string,
-        client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET as string,
+        client_id: this.loginClientId,
+        client_secret: this.loginClientSecret,
         redirect_uri: this.googleRedirectUri(),
         grant_type: 'authorization_code',
       }).toString(),
