@@ -34,9 +34,11 @@ export default function PrivacyPage() {
           </li>
           <li>
             <b>Integraciones (opcionales):</b> si conectas Spotify o YouTube,
-            guardamos un token de acceso para leer tus playlists y, con tu
-            permiso, crear playlists en tu cuenta. No guardamos tu contraseña de
-            esas plataformas.
+            guardamos únicamente un <b>token de acceso</b> para mantener la
+            conexión. No guardamos tu contraseña ni el <b>contenido</b> de esas
+            cuentas (tus playlists, videos, historial): ese contenido se lee en
+            el momento para mostrártelo o para la acción que solicitas, y no se
+            almacena en Nectason.
           </li>
         </ul>
       </Section>
@@ -58,25 +60,77 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="4. Uso de datos de YouTube / Google">
-        Si conectas YouTube (mediante Google OAuth), usamos la YouTube Data API
-        para leer y, con tu permiso, crear playlists en tu cuenta. El uso de datos
-        de la API de YouTube se rige también por la{' '}
-        <a
-          className="text-brand hover:underline"
-          href="https://policies.google.com/privacy"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Política de Privacidad de Google
-        </a>
-        . El inicio de sesión con Google se usa solo para autenticarte.
+        Si conectas tu cuenta de YouTube (mediante Google OAuth), usamos los{' '}
+        <b>YouTube API Services</b> únicamente para:
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>Leer las playlists de tu cuenta de YouTube para mostrártelas y compararlas con tu catálogo dentro de Nectason.</li>
+          <li>Crear playlists en tu canal de YouTube a partir de las que armaste en Nectason (solo cuando tú lo solicitas explícitamente).</li>
+        </ul>
+        <p className="mt-2">
+          <b>No almacenamos datos de tu cuenta de YouTube.</b> No guardamos tus
+          playlists, videos ni historial: se leen en el momento y se muestran.
+          Lo único que conservamos es el token de acceso para mantener la
+          conexión, que se elimina apenas usas <b>Desconectar</b>. No modificamos
+          ni eliminamos contenido de tu YouTube salvo la acción que tú inicias.
+          No usamos datos de YouTube para publicidad, no los vendemos ni los
+          transferimos a terceros.
+        </p>
+        <p className="mt-2">
+          El uso y la transferencia de la información recibida de las APIs de
+          Google por parte de Nectason se ajustan a la{' '}
+          <a
+            className="text-brand hover:underline"
+            href="https://developers.google.com/terms/api-services-user-data-policy"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Google API Services User Data Policy
+          </a>
+          , incluidos sus requisitos de <b>Uso Limitado (Limited Use)</b>. Al usar
+          la integración de YouTube aceptas los{' '}
+          <a
+            className="text-brand hover:underline"
+            href="https://www.youtube.com/t/terms"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Términos de Servicio de YouTube
+          </a>{' '}
+          y la{' '}
+          <a
+            className="text-brand hover:underline"
+            href="https://policies.google.com/privacy"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Política de Privacidad de Google
+          </a>
+          . El inicio de sesión con Google se usa solo para autenticarte (nombre
+          y correo); no accede a tu YouTube.
+        </p>
+        <p className="mt-2">
+          Puedes revocar el acceso de Nectason a tu cuenta de Google/YouTube en
+          cualquier momento desde{' '}
+          <a
+            className="text-brand hover:underline"
+            href="https://myaccount.google.com/permissions"
+            target="_blank"
+            rel="noreferrer"
+          >
+            la página de permisos de seguridad de Google
+          </a>
+          .
+        </p>
       </Section>
 
-      <Section title="5. Cómo protegemos y conservas tus datos">
+      <Section title="5. Cómo protegemos y conservamos tus datos">
         Los tokens de las integraciones se almacenan de forma segura en nuestros
-        servidores y se usan solo para las funciones descritas. Conservamos tus
-        datos mientras tu cuenta esté activa. Puedes solicitar la eliminación de
-        tu cuenta y datos escribiéndonos.
+        servidores y se usan solo para las funciones descritas. Los datos que
+        conservamos mientras tu cuenta esté activa son los <b>internos de
+        Nectason</b> (tu curaduría: canciones seleccionadas, tu biblioteca y tus
+        playlists armadas en la plataforma). Los datos de las cuentas de YouTube
+        o Spotify <b>no se conservan</b> (solo el token de conexión). Puedes
+        solicitar la eliminación de tu cuenta y datos escribiéndonos.
       </Section>
 
       <Section title="6. Cómo desconectar o revocar el acceso">
@@ -132,9 +186,12 @@ export default function PrivacyPage() {
         .
       </Section>
 
-      <div className="mt-10 border-t border-neutral-800 pt-6 text-sm">
+      <div className="mt-10 flex gap-4 border-t border-neutral-800 pt-6 text-sm">
         <Link href="/" className="text-brand hover:underline">
           ← Volver a Nectason
+        </Link>
+        <Link href="/terminos" className="text-brand hover:underline">
+          Términos y Condiciones
         </Link>
       </div>
     </main>
