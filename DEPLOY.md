@@ -125,6 +125,42 @@ Las redirect URIs deben ser **idénticas** a las envs `GOOGLE_*_REDIRECT_URI` de
 
 ---
 
+## 4.1 Segmentación de entornos (YouTube / Google) — recomendado
+
+**Por qué:** la cuota de la **API de YouTube** (10.000 unidades/día) es **por
+proyecto de Google Cloud**. Si **dev y prod comparten** la misma `YOUTUBE_API_KEY`
+/ cliente OAuth, probar en local **le quema la cuota a producción** (una búsqueda =
+100 unidades) y comparten los límites de OAuth. La solución: **un proyecto de
+Google Cloud por entorno**. El código ya es env-driven; solo cambian los valores
+del `.env`.
+
+**Crear el proyecto de DEV (una vez):**
+1. [Google Cloud Console](https://console.cloud.google.com/) → **Crear proyecto**
+   → nombre `nectason-dev`.
+2. **APIs y servicios → Biblioteca** → habilita **YouTube Data API v3**.
+3. **Credenciales → Crear credenciales → Clave de API** → cópiala a
+   `YOUTUBE_API_KEY` del `.env` **local**.
+4. **Credenciales → Crear credenciales → ID de cliente de OAuth** (tipo *Aplicación
+   web*):
+   - **Authorized redirect URIs**:
+     - `http://localhost:3000/api/v1/auth/google/callback`
+     - `http://localhost:3000/api/v1/music/youtube/callback`
+   - **Authorized JavaScript origins**: `http://localhost:3001`
+   - Copia el client id/secret a `GOOGLE_OAUTH_CLIENT_ID` /
+     `GOOGLE_OAUTH_CLIENT_SECRET` del `.env` **local**.
+5. **Pantalla de consentimiento de OAuth** (del proyecto dev) → en *Testing* →
+   agrega tu correo (y el de quien pruebe) como **Usuarios de prueba**.
+
+**Resultado:**
+- **dev** (`apps/api/.env`) → credenciales de `nectason-dev` (redirects a localhost).
+- **prod** (Railway) → las credenciales de producción **quedan solo en prod**.
+- Probar en local ya **no afecta** la cuota ni el OAuth de producción.
+
+> Mismo criterio aplica a **Spotify** (crear una app de Spotify aparte para dev) y
+> es lo que evita que un rate-limit en local penalice producción.
+
+---
+
 ## 5. Probar
 
 1. Entra a `https://nectason.app`.

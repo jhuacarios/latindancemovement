@@ -56,6 +56,18 @@ async function bootstrap() {
   await app.listen({ port, host: '0.0.0.0' });
 
   Logger.log(`API arriba en http://localhost:${port}/api/v1`, 'Bootstrap');
+
+  // Huella (enmascarada) de las credenciales de Google/YouTube activas, para
+  // verificar de un vistazo que dev y prod usan proyectos DISTINTOS (la cuota de
+  // YouTube es por proyecto). No expone secretos: solo primeros/últimos chars.
+  const fp = (v?: string) =>
+    v && v.length > 10 ? `${v.slice(0, 6)}…${v.slice(-4)}` : v || '(vacía)';
+  Logger.log(
+    `Entorno: NODE_ENV=${process.env.NODE_ENV ?? 'undefined'} · ` +
+      `YouTube key ${fp(process.env.YOUTUBE_API_KEY)} · ` +
+      `Google client ${fp(process.env.GOOGLE_OAUTH_CLIENT_ID)}`,
+    'Bootstrap',
+  );
 }
 
 void bootstrap();
