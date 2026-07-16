@@ -442,10 +442,14 @@ export interface YoutubeOwnPlaylist {
 /** Datos de nuestro catálogo que matchean un video de la playlist (por videoId). */
 export interface YoutubePlaylistVideoMatch {
   trackId: string;
+  /** Artista(s) del catálogo (limpio). De la personal si existe, si no del catálogo. */
+  artist: string;
   style: DanceStyle;
   substyles: string[];
   durationSec: number | null;
   year: number | null;
+  /** Fecha de lanzamiento (para la píldora "Nueva"). De la personal si existe, si no del catálogo. */
+  releaseDate: string | null;
   approvalStatus: TrackApprovalStatus;
   /** Si existe en el catálogo global. */
   inCatalog: boolean;
@@ -458,6 +462,8 @@ export interface YoutubePlaylistVideoMatch {
 /** Un video dentro de una playlist de YouTube. */
 export interface YoutubePlaylistVideo {
   videoId: string;
+  /** id del item DENTRO de la playlist (para poder quitarlo de YouTube). */
+  playlistItemId: string;
   title: string;
   channelTitle: string;
   thumbnailUrl: string | null;

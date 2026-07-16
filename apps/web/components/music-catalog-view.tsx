@@ -869,7 +869,7 @@ export function MusicCatalogView({
                       )}
                       {canDelete && (
                         <button
-                          className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
+                          className="rounded-md bg-neutral-800 px-2 py-1 text-base font-bold leading-none text-red-500 transition hover:bg-red-600/20 hover:text-red-400"
                           title="Eliminar del catálogo"
                           aria-label="Eliminar del catálogo"
                           onClick={() =>
@@ -888,7 +888,7 @@ export function MusicCatalogView({
                             })
                           }
                         >
-                          🗑
+                          ✕
                         </button>
                       )}
                       {/* Agregar a mi biblioteca: acción personal, disponible
@@ -898,7 +898,7 @@ export function MusicCatalogView({
                         className={
                           t.inLibrary
                             ? 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300'
-                            : 'rounded-lg bg-brand/15 px-2 py-1 text-xs text-brand hover:bg-brand/25'
+                            : 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/25'
                         }
                         disabled={toggle.isPending}
                         onClick={() => toggle.mutate(t)}

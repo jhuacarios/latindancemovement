@@ -12,6 +12,8 @@ import { usePermissions } from '@/lib/permissions';
 import { PlayerProvider } from '@/components/player';
 import { WhatsNew } from '@/components/whats-new';
 import { BrandLogo, Wordmark } from '@/components/brand';
+import { YoutubeIcon } from '@/components/youtube-icon';
+import { SpotifyIcon } from '@/components/spotify-icon';
 import { LayoutUIContext } from '@/lib/layout-ui';
 import { ViewAsRoleContext } from '@/lib/view-as-role';
 
@@ -169,7 +171,13 @@ export default function PanelLayout({
                         if (visible.length === 0) return null;
                         return (
                           <div key={c.key} className="mt-1">
-                            <div className="px-2 py-1 text-xs font-semibold text-neutral-500">
+                            <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-neutral-500">
+                              {c.brandIcon === 'youtube' && (
+                                <YoutubeIcon className="h-3.5 w-3.5 shrink-0 text-[#FF0000]" />
+                              )}
+                              {c.brandIcon === 'spotify' && (
+                                <SpotifyIcon className="h-3.5 w-3.5 shrink-0" />
+                              )}
                               {c.label}
                             </div>
                             <div className="ml-2 flex flex-col gap-0.5 border-l border-neutral-800/60 pl-2">

@@ -6,14 +6,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   YoutubeConnectionStatus,
   YoutubeOwnPlaylist,
-  YoutubePlaylistStats,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Spinner } from '@/components/ui';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { clsx } from '@/components/clsx';
-import { formatTotalDuration } from '@/lib/format';
 
 const PRIVACY_LABEL: Record<string, string> = {
   public: 'Pública',
@@ -268,7 +266,6 @@ export default function YoutubePlaylistsPage() {
                   <span className="mt-1 inline-block rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">
                     {PRIVACY_LABEL[p.privacyStatus] ?? p.privacyStatus}
                   </span>
-                  {!selectMode && <PlaylistStats id={p.id} />}
                 </div>
 
                 {!selectMode && (
@@ -323,60 +320,6 @@ export default function YoutubePlaylistsPage() {
       )}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
-    </div>
-  );
-}
-
-/**
- * Contadores (Mis Canciones / Catálogo / externas) + duración total de una
- * playlist, cargados de forma lazy y cacheados por playlist. Cada uno consume
- * algo de cuota de YouTube, por eso se calcula bajo demanda.
- */
-function PlaylistStats({ id }: { id: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['youtube-playlist-stats', id],
-    queryFn: () => api<YoutubePlaylistStats>(`/music/youtube/playlists/${id}/stats`),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  if (isLoading) {
-    return <div className="mt-2 text-[11px] text-neutral-600">calculando…</div>;
-  }
-  if (!data) return null;
-
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-1">
-      <span
-        title="En tus Mis Canciones"
-        className="rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] text-brand"
-      >
-        ★ {data.inLibrary}
-      </span>
-      <span
-        title="En el catálogo global"
-        className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300"
-      >
-        Catálogo {data.inCatalog}
-      </span>
-      <span
-        title="No están en el sistema"
-        className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300"
-      >
-        Externas {data.external}
-      </span>
-      {data.totalSec > 0 && (
-        <span
-          title={
-            data.partialDuration
-              ? 'Algunas duraciones no se pudieron obtener (el total es un mínimo)'
-              : 'Duración total'
-          }
-          className="text-[11px] text-neutral-500"
-        >
-          · {formatTotalDuration(data.totalSec)}
-          {data.partialDuration && '+'}
-        </span>
-      )}
     </div>
   );
 }

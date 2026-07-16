@@ -503,14 +503,14 @@ export function MusicLibraryView({
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-pink-500/30 bg-pink-500/10 px-4 py-2">
-          <span className="text-2xl font-bold text-pink-300">
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
+          <span className="text-2xl font-bold text-amber-300">
             {summary?.bachata ?? '—'}
           </span>
           <span className="text-sm text-neutral-300">Bachatas</span>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
-          <span className="text-2xl font-bold text-amber-300">
+        <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2">
+          <span className="text-2xl font-bold text-red-300">
             {summary?.salsa ?? '—'}
           </span>
           <span className="text-sm text-neutral-300">Salsas</span>

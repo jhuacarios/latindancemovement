@@ -24,6 +24,51 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.8.0',
+    date: '2026-07-16',
+    module: 'music.youtube.ytplaylists',
+    type: 'feature',
+    title: 'Artistas, grupos y DJs presentes en la playlist',
+    description:
+      'El detalle de una playlist de YouTube ahora muestra arriba los artistas, grupos y DJs presentes y en qué porcentaje de las canciones aparece cada uno. Usa el artista real del catálogo (Mis Canciones primero, si no el catálogo).',
+  },
+  {
+    version: '0.8.0',
+    date: '2026-07-16',
+    module: 'music.youtube.ytplaylists',
+    type: 'feature',
+    title: 'Quita canciones de tu playlist de YouTube',
+    description:
+      'Cada canción del detalle tiene un botón para quitarla de tu playlist de YouTube (afecta la lista real en tu cuenta, no borra el video ni el catálogo). Aviso útil: si la estás reproduciendo en la app de YouTube, evita borrar la que suena justo después (reinicia la lista); borra las que están 2 o más posiciones adelante.',
+  },
+  {
+    version: '0.8.0',
+    date: '2026-07-16',
+    module: 'music.youtube.ytplaylists',
+    type: 'improvement',
+    title: 'Detalle de playlist YouTube: pills, sub-estilos y contadores',
+    description:
+      'Cada canción muestra “✨ Nueva”, “🔥 Épica” y sus sub-estilos, y arriba ves el total de Bachatas y Salsas. Además el menú lateral vuelve a marcar en qué sección estás al entrar al detalle.',
+  },
+  {
+    version: '0.8.0',
+    date: '2026-07-16',
+    module: 'music.youtube.ytplaylists',
+    type: 'improvement',
+    title: 'Playlists de YouTube más livianas (menos cuota)',
+    description:
+      'La lista de Playlists de YouTube ya no calcula los tiempos y estadísticas de cada una por adelantado (eso gastaba cuota de YouTube): los pide solo al abrir el detalle. Además el detalle se cachea y las correcciones del catálogo se reflejan al instante.',
+  },
+  {
+    version: '0.8.0',
+    date: '2026-07-16',
+    module: 'general',
+    type: 'improvement',
+    title: 'Íconos de YouTube y Spotify y mejor legibilidad',
+    description:
+      'El menú lateral usa los íconos reales de YouTube y Spotify. Se mejoró el contraste de varias etiquetas (“En Mis Canciones”, “Agregar”), el botón de eliminar del catálogo ahora es una ✕ roja, y los contadores de Bachatas/Salsas usan los mismos colores que las etiquetas de cada canción.',
+  },
+  {
     version: '0.7.9',
     date: '2026-07-10',
     module: 'music.spotify.playlists',

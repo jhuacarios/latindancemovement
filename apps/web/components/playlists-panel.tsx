@@ -408,13 +408,13 @@ export function PlaylistsPanel({
           <>
             {songs.length > 0 && (
               <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-800/30 px-2 py-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-pink-500/40 bg-pink-500/15 px-2.5 py-1 text-xs font-semibold text-pink-300">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-300">
                   <span className="text-base font-bold leading-none">
                     {summary.bachata}
                   </span>
                   bachata{summary.bachata === 1 ? '' : 's'}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-300">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 bg-red-500/15 px-2.5 py-1 text-xs font-semibold text-red-300">
                   <span className="text-base font-bold leading-none">
                     {summary.salsa}
                   </span>

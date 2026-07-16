@@ -131,6 +131,19 @@ export class YoutubeController {
     return { deleted: true };
   }
 
+  /** Quita un video (playlistItem) de una playlist de YouTube. Afecta YouTube directo. */
+  @Delete('playlists/:playlistId/items/:itemId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  async removePlaylistItem(
+    @Param('playlistId') playlistId: string,
+    @Param('itemId') itemId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    await this.yt.removePlaylistItem(user.id, playlistId, itemId);
+    return { removed: true };
+  }
+
   /** Crea una playlist en YouTube con las canciones de una playlist interna (snapshot). */
   @Post('from-template/:playlistId')
   @UseGuards(JwtAuthGuard, RolesGuard)

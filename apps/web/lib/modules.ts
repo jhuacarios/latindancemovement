@@ -6,6 +6,8 @@ export interface ModuleChild {
   key: string;
   /** Enlace (hoja). Ausente si es un grupo con sub-items. */
   href?: string;
+  /** Ícono de marca (SVG real) para el header del grupo, en vez de emoji. */
+  brandIcon?: 'youtube' | 'spotify';
   /** Sub-items (un nivel de anidamiento, ej: YouTube → Canciones/Catálogo/Playlists). */
   children?: ModuleChild[];
 }
@@ -41,8 +43,9 @@ export const MODULES: AppModule[] = [
     children: [
       { label: 'Resumen', key: 'music.resumen', href: '/music' },
       {
-        label: '📺 YouTube',
+        label: 'YouTube',
         key: 'music.youtube',
+        brandIcon: 'youtube',
         children: [
           { label: 'Mis Canciones', key: 'music.youtube.tracks', href: '/music/tracks' },
           { label: 'Catálogo', key: 'music.youtube.catalog', href: '/music/catalog' },
@@ -51,8 +54,9 @@ export const MODULES: AppModule[] = [
         ],
       },
       {
-        label: '🟢 Spotify',
+        label: 'Spotify',
         key: 'music.spotify',
+        brandIcon: 'spotify',
         children: [
           { label: 'Mis Canciones', key: 'music.spotify.tracks', href: '/music/spotify/tracks' },
           { label: 'Catálogo', key: 'music.spotify.catalog', href: '/music/spotify/catalog' },

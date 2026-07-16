@@ -35,9 +35,19 @@ const DEFAULT_PATTERN: YoutubePlaylistPattern = {
 const refreshKey = (userId: string) => `yt_refresh:${userId}`;
 const stateKey = (state: string) => `yt_state:${state}`;
 
+/** TTL del caché del detalle de playlists de YouTube (una playlist no cambia
+ * cada minuto; leer todos sus items + duraciones gasta cuota, así que se cachea). */
+const PLAYLIST_DETAIL_TTL_MS = 30 * 60_000;
+
 @Injectable()
 export class YoutubeOAuthService {
   private readonly logger = new Logger(YoutubeOAuthService.name);
+  /** Caché in-memory del detalle por `userId:playlistId` (ahorra cuota en
+   * recargas: los stats y el detalle no re-leen YouTube dentro del TTL). */
+  private readonly detailCache = new Map<
+    string,
+    { data: YoutubePlaylistDetail; exp: number }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -254,7 +264,77 @@ export class YoutubeOAuthService {
   }
 
   /** Detalle de una playlist propia: metadatos + sus videos (paginados). */
+  /** Detalle con caché in-memory por TTL (ver `computePlaylistDetail`). */
   async getPlaylistDetail(
+    userId: string,
+    playlistId: string,
+  ): Promise<YoutubePlaylistDetail> {
+    // El caché guarda SOLO la parte cara (llamadas a la API de YouTube, que
+    // gastan cuota): metadatos + videos + duraciones, SIN el match del catálogo.
+    const key = `${userId}:${playlistId}`;
+    const hit = this.detailCache.get(key);
+    let base: YoutubePlaylistDetail;
+    if (hit && hit.exp > Date.now()) {
+      base = hit.data; // sin llamadas a YouTube (no gasta cuota)
+    } else {
+      base = await this.computePlaylistBase(userId, playlistId);
+      this.detailCache.set(key, {
+        data: base,
+        exp: Date.now() + PLAYLIST_DETAIL_TTL_MS,
+      });
+    }
+    // El match contra el catálogo se recalcula en CADA request (consulta barata a
+    // la base): así las correcciones del catálogo (título/artista, etc.) se ven al
+    // instante, sin volver a gastar cuota de YouTube.
+    const items = await this.enrichWithMatch(base.items, userId);
+    return { ...base, items };
+  }
+
+  /** Añade el match del catálogo (por videoId) a cada video, sin mutar la base. */
+  private async enrichWithMatch(
+    baseItems: YoutubePlaylistVideo[],
+    userId: string,
+  ): Promise<YoutubePlaylistVideo[]> {
+    const byVideoId = await this.tracks.findByYoutubeIds(
+      baseItems.map((v) => v.videoId),
+      userId,
+    );
+    return baseItems.map((v) => {
+      const t = byVideoId.get(v.videoId);
+      return {
+        ...v,
+        match: t
+          ? {
+              trackId: t.id,
+              artist: t.artist,
+              style: t.style,
+              substyles: t.substyles,
+              durationSec: t.durationSec,
+              year: t.year,
+              releaseDate: t.releaseDate ?? null,
+              approvalStatus: t.approvalStatus,
+              inCatalog: t.scope === 'CATALOG',
+              inLibrary: t.inLibrary ?? false,
+              embeddable: t.details?.embeddable ?? null,
+            }
+          : null,
+      };
+    });
+  }
+
+  /** Invalida el caché de detalle de un usuario (todo, o una playlist puntual). */
+  private invalidateDetail(userId: string, playlistId?: string): void {
+    if (playlistId) {
+      this.detailCache.delete(`${userId}:${playlistId}`);
+      return;
+    }
+    for (const k of this.detailCache.keys()) {
+      if (k.startsWith(`${userId}:`)) this.detailCache.delete(k);
+    }
+  }
+
+  /** Trae la playlist desde YouTube (parte cara, gasta cuota), SIN el match. */
+  private async computePlaylistBase(
     userId: string,
     playlistId: string,
   ): Promise<YoutubePlaylistDetail> {
@@ -296,6 +376,7 @@ export class YoutubeOAuthService {
       }
       const json = (await res.json()) as {
         items?: Array<{
+          id?: string;
           snippet?: {
             title?: string;
             position?: number;
@@ -315,6 +396,7 @@ export class YoutubeOAuthService {
         const th = it.snippet?.thumbnails;
         items.push({
           videoId,
+          playlistItemId: it.id ?? '',
           title: it.snippet?.title ?? '(sin título)',
           channelTitle:
             it.snippet?.videoOwnerChannelTitle ?? it.snippet?.channelTitle ?? '',
@@ -335,28 +417,8 @@ export class YoutubeOAuthService {
     );
     for (const v of items) v.durationSec = durations.get(v.videoId) ?? null;
 
-    // Enriquecer con nuestro catálogo: match por videoId.
-    const byVideoId = await this.tracks.findByYoutubeIds(
-      items.map((v) => v.videoId),
-      userId,
-    );
-    for (const v of items) {
-      const t = byVideoId.get(v.videoId);
-      v.match = t
-        ? {
-            trackId: t.id,
-            style: t.style,
-            substyles: t.substyles,
-            durationSec: t.durationSec,
-            year: t.year,
-            approvalStatus: t.approvalStatus,
-            inCatalog: t.scope === 'CATALOG',
-            inLibrary: t.inLibrary ?? false,
-            embeddable: t.details?.embeddable ?? null,
-          }
-        : null;
-    }
-
+    // El match del catálogo NO se guarda acá (se calcula fresco en cada request,
+    // ver enrichWithMatch) para que las correcciones del catálogo se vean al toque.
     return { ...meta, items };
   }
 
@@ -371,6 +433,25 @@ export class YoutubeOAuthService {
     if (!res.ok && res.status !== 404) {
       await this.youtubeFail(res, 'No se pudo eliminar la playlist en YouTube.');
     }
+    this.invalidateDetail(userId, playlistId);
+  }
+
+  /** Quita un video (playlistItem) de una playlist de YouTube del usuario. */
+  async removePlaylistItem(
+    userId: string,
+    playlistId: string,
+    playlistItemId: string,
+  ): Promise<void> {
+    const token = await this.accessToken(userId);
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?id=${encodeURIComponent(playlistItemId)}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+    );
+    // 204 = quitado; 404 = ya no existe (idempotente).
+    if (!res.ok && res.status !== 404) {
+      await this.youtubeFail(res, 'No se pudo quitar el video de la playlist.');
+    }
+    this.invalidateDetail(userId, playlistId);
   }
 
   /** Resumen de una playlist: cuántas en cada lugar + duración total. */
