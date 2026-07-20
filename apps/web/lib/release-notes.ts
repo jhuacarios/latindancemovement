@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.2',
+    date: '2026-07-20',
+    module: 'general',
+    type: 'improvement',
+    title: 'Novedades: solo las últimas 20 y las nuevas resaltadas',
+    description:
+      'La campanita 🔔 muestra las últimas 20 novedades. Las que ves por primera vez salen resaltadas con la etiqueta “• nuevo”; una vez que las viste (el contador vuelve a 0), la próxima vez se muestran normales. Además, el panel ya no queda tapado por el buscador de la página.',
+  },
+  {
     version: '0.9.1',
     date: '2026-07-20',
     module: 'general',

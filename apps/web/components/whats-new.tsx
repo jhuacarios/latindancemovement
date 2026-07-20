@@ -25,6 +25,9 @@ export function WhatsNew() {
   const perms = usePermissions();
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState<string>('');
+  // Cuántas remarcar como "nuevas" en la apertura actual (se fija al abrir, antes
+  // de marcarlas como vistas; así siguen resaltadas esta vez y normales la próxima).
+  const [highlightCount, setHighlightCount] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
   const storageKey = user ? `bl_seen_release:${user.id}` : null;
@@ -67,7 +70,11 @@ export function WhatsNew() {
 
   function toggle() {
     setOpen((o) => {
-      if (!o) markSeen();
+      if (!o) {
+        // Al abrir: fija cuáles son nuevas (para remarcarlas) y márcalas vistas.
+        setHighlightCount(unseenCount);
+        markSeen();
+      }
       return !o;
     });
   }
@@ -97,29 +104,42 @@ export function WhatsNew() {
             </p>
           ) : (
             <div className="space-y-2">
-              {visible.map((n, i) => (
-                <div
-                  key={`${n.version}-${i}`}
-                  className="rounded-lg bg-neutral-800/40 p-2"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] ${TYPE_META[n.type].cls}`}
-                    >
-                      {TYPE_META[n.type].label}
-                    </span>
-                    <span className="text-xs font-medium">{n.title}</span>
+              {visible.slice(0, 20).map((n, i) => {
+                const isNew = i < highlightCount;
+                return (
+                  <div
+                    key={`${n.version}-${i}`}
+                    className={
+                      isNew
+                        ? 'rounded-lg border border-brand/50 bg-brand/10 p-2'
+                        : 'rounded-lg bg-neutral-800/40 p-2'
+                    }
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] ${TYPE_META[n.type].cls}`}
+                      >
+                        {TYPE_META[n.type].label}
+                      </span>
+                      <span className="text-xs font-medium">{n.title}</span>
+                      {isNew && (
+                        <span className="ml-auto flex shrink-0 items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-brand">
+                          <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                          nuevo
+                        </span>
+                      )}
+                    </div>
+                    {n.description && (
+                      <p className="mt-1 text-xs text-neutral-400">
+                        {n.description}
+                      </p>
+                    )}
+                    <div className="mt-1 text-[10px] text-neutral-600">
+                      v{n.version} · {n.date}
+                    </div>
                   </div>
-                  {n.description && (
-                    <p className="mt-1 text-xs text-neutral-400">
-                      {n.description}
-                    </p>
-                  )}
-                  <div className="mt-1 text-[10px] text-neutral-600">
-                    v{n.version} · {n.date}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

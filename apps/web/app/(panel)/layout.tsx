@@ -249,8 +249,8 @@ export default function PanelLayout({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-3 lg:px-6">
-          <div className="flex items-center gap-2">
+        <header className="relative z-30 flex items-center justify-between border-b border-neutral-800 px-2 py-1.5 lg:px-6 lg:py-3">
+          <div className="flex items-center gap-2 max-lg:origin-left max-lg:scale-90">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -279,7 +279,7 @@ export default function PanelLayout({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs max-lg:origin-right max-lg:scale-90">
             {isSuperAdmin && (
               <ViewAsControl
                 viewAsRole={viewAsRole}
