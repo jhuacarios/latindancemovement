@@ -181,7 +181,7 @@ export default function PanelLayout({
                 <Link
                   href={m.href}
                   className={clsx(
-                    'flex items-center justify-between rounded-lg px-3 py-2 text-xs transition',
+                    'flex items-center justify-between rounded-lg px-3 py-2 text-[11px] transition',
                     isActive
                       ? 'bg-brand/15 text-brand'
                       : 'text-neutral-300 hover:bg-neutral-800',
@@ -208,7 +208,7 @@ export default function PanelLayout({
                         if (visible.length === 0) return null;
                         return (
                           <div key={c.key} className="mt-1">
-                            <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-neutral-500">
+                            <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-neutral-500">
                               {c.brandIcon === 'youtube' && (
                                 <YoutubeIcon className="h-3.5 w-3.5 shrink-0 text-[#FF0000]" />
                               )}
@@ -426,7 +426,7 @@ function SubNavLink({
     <Link
       href={child.href}
       className={clsx(
-        'rounded-md px-2 py-1 text-xs transition',
+        'rounded-md px-2 py-1 text-[11px] transition',
         active ? 'text-brand' : 'text-neutral-400 hover:text-neutral-200',
       )}
     >
@@ -448,7 +448,7 @@ function NavLink({
     <Link
       href={href}
       className={clsx(
-        'rounded-lg px-3 py-2 text-xs transition',
+        'rounded-lg px-3 py-2 text-[11px] transition',
         active ? 'bg-brand/15 text-brand' : 'text-neutral-300 hover:bg-neutral-800',
       )}
     >
