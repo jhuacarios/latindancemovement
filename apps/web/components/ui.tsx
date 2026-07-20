@@ -5,19 +5,26 @@ import { clsx } from './clsx';
 export function Button({
   className,
   variant = 'primary',
+  size = 'md',
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'ghost' | 'danger';
+  size?: 'sm' | 'md';
 }) {
   const variants = {
     primary: 'bg-brand hover:bg-brand-dark text-white disabled:opacity-50',
     ghost: 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100',
     danger: 'bg-red-600 hover:bg-red-700 text-white',
   } as const;
+  const sizes = {
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2 text-sm',
+  } as const;
   return (
     <button
       className={clsx(
-        'rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed',
+        'rounded-lg font-medium transition disabled:cursor-not-allowed',
+        sizes[size],
         variants[variant],
         className,
       )}

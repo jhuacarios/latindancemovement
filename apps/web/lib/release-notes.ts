@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.1',
+    date: '2026-07-20',
+    module: 'general',
+    type: 'improvement',
+    title: 'Menú y barra superior más compactos',
+    description:
+      'El menú lateral tiene textos y márgenes más ajustados; la barra superior (Ver como, novedades, perfil) es más compacta y el botón de salir ahora es un ícono de puerta. En el celular, el título de la sección muestra solo su ícono.',
+  },
+  {
     version: '0.9.0',
     date: '2026-07-20',
     module: 'music.discover',

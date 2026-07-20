@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { USER_ROLES, type UserRole } from '@baile-latino/types';
 import { useAuth } from '@/lib/auth';
-import { Button, Card, Select, Spinner } from '@/components/ui';
+import { Card, Select, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 import { moduleForPath, permKeyForPath, type ModuleChild } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
@@ -269,10 +269,17 @@ export default function PanelLayout({
               </svg>
             </button>
             <div className="text-sm text-neutral-400">
-              {activeModule ? `${activeModule.icon} ${activeModule.title}` : 'Panel'}
+              {activeModule ? (
+                <>
+                  {activeModule.icon}
+                  <span className="hidden lg:inline"> {activeModule.title}</span>
+                </>
+              ) : (
+                'Panel'
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-2 text-xs">
             {isSuperAdmin && (
               <ViewAsControl
                 viewAsRole={viewAsRole}
@@ -284,13 +291,31 @@ export default function PanelLayout({
               href="/profile"
               title={`Mi perfil — ${user.name}`}
               aria-label="Mi perfil"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white transition hover:bg-brand-dark"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white transition hover:bg-brand-dark"
             >
               {user.name?.trim()?.charAt(0).toUpperCase() || '👤'}
             </Link>
-            <Button variant="ghost" onClick={logout}>
-              Salir
-            </Button>
+            <button
+              type="button"
+              onClick={logout}
+              title="Salir"
+              aria-label="Salir"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-neutral-800 hover:text-red-300"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-[18px] w-[18px]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
           </div>
         </header>
 
