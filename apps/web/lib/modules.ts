@@ -42,6 +42,8 @@ export const MODULES: AppModule[] = [
     status: 'ready',
     children: [
       { label: 'Resumen', key: 'music.resumen', href: '/music' },
+      { label: 'Descubre', key: 'music.discover', href: '/music/discover' },
+      { label: 'Artistas', key: 'music.artists', href: '/music/artists' },
       {
         label: 'YouTube',
         key: 'music.youtube',

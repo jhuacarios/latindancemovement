@@ -620,8 +620,8 @@ export function MusicCatalogView({
       {error && <p className="text-sm text-red-300">No se pudo cargar el catálogo.</p>}
 
       {data && (
-        <Card className="p-0">
-          <table className="w-full text-sm">
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="border-b border-neutral-800 text-left text-neutral-400">
               <tr>
                 {selectMode && (
@@ -675,7 +675,7 @@ export function MusicCatalogView({
                 {cols.added && (
                   <SortTh label="Agregado" col="createdAt" primary="desc" sort={sort} onSort={onSort} />
                 )}
-                <th className="px-4 py-2 text-right">
+                <th className="w-px px-4 py-2 text-right">
                   <div className="relative inline-block" ref={colMenuRef}>
                     <button
                       type="button"
@@ -809,7 +809,7 @@ export function MusicCatalogView({
                     </td>
                   )}
                   <td
-                    className="px-4 py-3 text-right"
+                    className="w-px whitespace-nowrap px-4 py-3 text-right"
                     onClick={() => setActiveRowId(t.id)}
                   >
                     <div className="flex items-center justify-end gap-2">

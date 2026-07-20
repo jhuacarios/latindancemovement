@@ -81,6 +81,49 @@ export class TracksController {
     return this.spotify.getTrackByLink(link);
   }
 
+  /** Directorio de artistas del catálogo, ordenados por nombre. */
+  @Get('artists')
+  artists() {
+    return this.tracks.listArtists();
+  }
+
+  /** Feed "Nuevo y sonando": lanzamientos recientes por estilo, rankeados. */
+  @Get('discover')
+  discover(@Query('months') months?: string) {
+    const n = Math.min(24, Math.max(1, Number(months) || 6));
+    return this.tracks.discover(n);
+  }
+
+  /**
+   * Candidatos: lanzamientos recientes en Spotify de artistas que ya están en el
+   * catálogo, que aún NO están en el catálogo (para curar). Pesado; cacheado.
+   */
+  @Get('discover-candidates')
+  @Roles('SUPER_ADMIN')
+  discoverCandidates(
+    @Query('months') months?: string,
+    @Query('artists') artists?: string,
+  ) {
+    const m = Math.min(24, Math.max(1, Number(months) || 6));
+    const a = Math.min(80, Math.max(5, Number(artists) || 30));
+    return this.tracks.discoverCandidates(m, a);
+  }
+
+  /**
+   * Candidatos por YouTube: subidas recientes de los canales de tus artistas del
+   * catálogo, que aún NO están en el catálogo, con estilo propuesto (a confirmar).
+   */
+  @Get('discover-youtube')
+  @Roles('SUPER_ADMIN')
+  discoverYoutube(
+    @Query('months') months?: string,
+    @Query('channels') channels?: string,
+  ) {
+    const m = Math.min(24, Math.max(1, Number(months) || 3));
+    const c = Math.min(80, Math.max(5, Number(channels) || 40));
+    return this.tracks.discoverYoutube(m, c);
+  }
+
   /** sourceIds de YouTube ya en el catálogo (para ignorar al cargar playlists). */
   @Get('catalog-youtube-ids')
   @Roles('SUPER_ADMIN')

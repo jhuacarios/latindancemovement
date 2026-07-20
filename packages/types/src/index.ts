@@ -132,6 +132,74 @@ export interface Track {
   spotifyPlayable?: boolean | null;
 }
 
+/** Resumen de un artista del catálogo (agregado por nombre). */
+export interface ArtistSummary {
+  name: string;
+  /** Cuántas canciones del catálogo lo acreditan. */
+  trackCount: number;
+  /** Estilos en los que aparece (BACHATA / SALSA). */
+  styles: DanceStyle[];
+}
+
+/**
+ * Feed de descubrimiento "Nuevo y sonando": lanzamientos recientes del catálogo
+ * (YouTube + Spotify fusionados), ordenados por popularidad/momentum, separados
+ * por estilo. Cada lista viene ya rankeada por el backend.
+ */
+export interface DiscoverFeed {
+  bachata: Track[];
+  salsa: Track[];
+}
+
+/**
+ * Candidato de descubrimiento: un lanzamiento reciente en Spotify de un artista
+ * que ya está en el catálogo, que AÚN no está en el catálogo. Es una sugerencia
+ * para curar/agregar (no entra solo).
+ */
+export interface DiscoverCandidate {
+  /** id del track en Spotify (para agregar al catálogo / preview). */
+  spotifyTrackId: string;
+  title: string;
+  artist: string;
+  /** "YYYY-MM-DD" | "YYYY-MM" | "YYYY" (del álbum). */
+  releaseDate: string;
+  coverUrl: string | null;
+  /** URL del track en Spotify. */
+  url: string;
+  /** Preview de 30s (puede ser null). */
+  previewUrl: string | null;
+  /** Estilo heredado del artista semilla en nuestro catálogo. */
+  style: DanceStyle;
+  /** El artista de nuestro catálogo que lo trajo. */
+  seedArtist: string;
+  /** single | album | compilation. */
+  albumType: string;
+}
+
+/**
+ * Candidato de descubrimiento por YouTube: una subida reciente del CANAL de un
+ * artista del catálogo, que aún no está en el catálogo. Trae un estilo
+ * PROPUESTO (por el texto o heredado del canal) para que un humano confirme.
+ */
+export interface YoutubeDiscoverCandidate {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  /** Fecha de publicación del video (ISO). */
+  publishedAt: string;
+  thumbnailUrl: string | null;
+  /** URL del video en YouTube. */
+  url: string;
+  /** Estilo propuesto (BACHATA | SALSA); null = por revisar. */
+  proposedStyle: DanceStyle | null;
+  /** Confianza de la clasificación. */
+  confidence: 'alta' | 'media' | 'baja';
+  /** Por qué se clasificó así (texto o canal). */
+  reason: string;
+  /** Artista del catálogo cuyo canal trajo el candidato. */
+  seedArtist: string;
+}
+
 export interface PlaylistItem {
   id: string;
   playlistId: string;

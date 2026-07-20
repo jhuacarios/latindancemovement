@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/api';
 import { Button, Card, Input } from '@/components/ui';
 import { BrandLogo, Wordmark } from '@/components/brand';
+import { GoogleIcon } from '@/components/google-icon';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (user) router.replace('/');
+    if (user) router.replace('/inicio');
   }, [user, router]);
 
   async function onSubmit(e: React.FormEvent) {
@@ -25,7 +26,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
-      router.replace('/');
+      router.replace('/inicio');
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'No se pudo iniciar sesión',
@@ -97,7 +98,10 @@ export default function LoginPage() {
             window.location.href = `${api}/auth/google`;
           }}
         >
-          <span className="mr-2">🅖</span> Entrar con Google
+          <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white">
+            <GoogleIcon className="h-3.5 w-3.5" />
+          </span>
+          Entrar con Google
         </Button>
       </Card>
     </main>

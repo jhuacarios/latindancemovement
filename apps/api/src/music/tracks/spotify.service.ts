@@ -59,6 +59,18 @@ export interface SpotifyMatch {
   year: number | null;
 }
 
+/** Lanzamiento (track) hallado en Spotify para el descubrimiento de novedades. */
+export interface SpotifyRelease {
+  trackId: string;
+  title: string;
+  artist: string;
+  releaseDate: string;
+  coverUrl: string | null;
+  url: string;
+  previewUrl: string | null;
+  albumType: string;
+}
+
 /**
  * Cliente liviano de la Spotify Web API (flujo client-credentials).
  * Se usa como fuente autoritativa de género: busca el track por
@@ -421,6 +433,64 @@ export class SpotifyService {
         playable: typeof t.isPlayable === 'boolean' ? t.isPlayable : null,
       }))
       .filter((t) => t.title);
+  }
+
+  /**
+   * Novedades de un artista vía **búsqueda de tracks** (`"nombre" year:a-b`).
+   * Se usa search porque los endpoints de artista/álbum están restringidos para
+   * apps en modo desarrollo (404). Filtra a los tracks cuyo artista realmente
+   * coincide con la semilla y con `album.release_date >= sinceStr`. Solo lee
+   * metadata pública (no descarga audio).
+   */
+  async searchNewTracksByArtist(
+    name: string,
+    sinceStr: string,
+    yearStart: number,
+    yearEnd: number,
+  ): Promise<SpotifyRelease[]> {
+    try {
+      const token = await this.getToken();
+      // Filtro `artist:"..."` (forma documentada; el texto libre multi-palabra
+      // + year: da 400). Reintenta una vez ante 400/429 (el anti-abuso de
+      // Spotify responde 400 a ráfagas).
+      const q = `artist:"${name}" year:${yearStart}-${yearEnd}`;
+      const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=30`;
+      let res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if ((res.status === 400 || res.status === 429) ) {
+        await new Promise((r) => setTimeout(r, 600));
+        res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      }
+      if (!res.ok) {
+        if (res.status === 401) this.token = null;
+        return [];
+      }
+      const json = (await res.json()) as any;
+      const items: any[] = json?.tracks?.items ?? [];
+      // Match EXACTO del nombre normalizado: evita falsos positivos como
+      // "Jensen McRae" para la semilla "Jensen".
+      const target = normArtist(name);
+      return items
+        .filter((t) =>
+          (t.artists ?? []).some((a: any) => normArtist(a.name) === target),
+        )
+        .filter((t) => String(t.album?.release_date ?? '') >= sinceStr)
+        .map((t) => ({
+          trackId: String(t.id),
+          title: String(t.name ?? ''),
+          artist: (t.artists ?? []).map((x: any) => x.name).join(', '),
+          releaseDate: String(t.album?.release_date ?? ''),
+          coverUrl: t.album?.images?.[0]?.url ?? null,
+          url:
+            t.external_urls?.spotify ??
+            `https://open.spotify.com/track/${t.id}`,
+          previewUrl: t.preview_url ?? null,
+          albumType: String(t.album?.album_type ?? 'single'),
+        }));
+    } catch {
+      return [];
+    }
   }
 
   private async genresForArtist(artistId: string, token: string): Promise<string[]> {

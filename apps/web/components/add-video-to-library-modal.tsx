@@ -32,6 +32,7 @@ export function AddVideoToLibraryModal({
   video,
   source = 'YOUTUBE',
   startInCatalog = false,
+  defaultStyle,
   onClose,
   onAdded,
 }: {
@@ -40,6 +41,8 @@ export function AddVideoToLibraryModal({
   source?: TrackSource;
   /** Abre el modal con el destino "Catálogo" preseleccionado (solo super admin). */
   startInCatalog?: boolean;
+  /** Estilo pre-seleccionado (ej. el propuesto por el descubrimiento). */
+  defaultStyle?: DanceStyle;
   onClose: () => void;
   onAdded: (destination: Destination) => void;
 }) {
@@ -48,7 +51,7 @@ export function AddVideoToLibraryModal({
 
   const [title, setTitle] = useState(video.title);
   const [artist, setArtist] = useState(video.channelTitle);
-  const [style, setStyle] = useState<DanceStyle | ''>('');
+  const [style, setStyle] = useState<DanceStyle | ''>(defaultStyle ?? '');
   const [substyles, setSubstyles] = useState<string[]>([]);
   const [destination, setDestination] = useState<Destination>(
     startInCatalog && isSuperAdmin ? 'catalog' : 'library',

@@ -55,6 +55,16 @@ const NOISE = [
   'live',
 ];
 
+/** Subida reciente de un canal (para el descubrimiento por YouTube). */
+export interface YoutubeUpload {
+  videoId: string;
+  title: string;
+  description: string;
+  publishedAt: string;
+  channelTitle: string;
+  thumbnailUrl: string | null;
+}
+
 @Injectable()
 export class YoutubeMetadataService {
   private readonly logger = new Logger(YoutubeMetadataService.name);
@@ -63,6 +73,55 @@ export class YoutubeMetadataService {
     private readonly spotify: SpotifyService,
     private readonly discogs: DiscogsService,
   ) {}
+
+  /**
+   * Subidas recientes de un canal (>= `publishedAfter` ISO). Usa la playlist de
+   * uploads del canal (UC… → UU…) con `playlistItems.list` = 1 unidad de cuota.
+   * Trae título + descripción (para clasificar el estilo) sin descargar audio.
+   */
+  async channelRecentUploads(
+    channelId: string,
+    publishedAfter: string,
+    max = 15,
+  ): Promise<YoutubeUpload[]> {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey || !channelId?.startsWith('UC')) return [];
+    const uploads = `UU${channelId.slice(2)}`;
+    const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=${Math.min(50, max)}&key=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const json = (await res.json()) as {
+      items?: Array<{
+        snippet?: {
+          title?: string;
+          description?: string;
+          channelTitle?: string;
+          publishedAt?: string;
+          thumbnails?: Record<string, { url?: string }>;
+          resourceId?: { videoId?: string };
+        };
+        contentDetails?: { videoId?: string; videoPublishedAt?: string };
+      }>;
+    };
+    const out: YoutubeUpload[] = [];
+    for (const it of json.items ?? []) {
+      const videoId =
+        it.contentDetails?.videoId ?? it.snippet?.resourceId?.videoId ?? '';
+      const publishedAt =
+        it.contentDetails?.videoPublishedAt ?? it.snippet?.publishedAt ?? '';
+      if (!videoId || !publishedAt || publishedAt < publishedAfter) continue;
+      const th = it.snippet?.thumbnails;
+      out.push({
+        videoId,
+        title: it.snippet?.title ?? '',
+        description: it.snippet?.description ?? '',
+        publishedAt,
+        channelTitle: it.snippet?.channelTitle ?? '',
+        thumbnailUrl: th?.medium?.url ?? th?.default?.url ?? null,
+      });
+    }
+    return out;
+  }
 
   async extract(link: string): Promise<ExtractedTrackMetadata> {
     const parsed = parseTrackLink(link);

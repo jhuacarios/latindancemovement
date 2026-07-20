@@ -4,10 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, Track as PrismaTrack } from '@prisma/client';
 import { DANCE_STYLES } from '@baile-latino/types';
 import type {
+  ArtistSummary,
   DanceStyle,
+  DiscoverCandidate,
+  DiscoverFeed,
   DuplicateGroup,
   ExtractedTrackMetadata,
   ImportResult,
@@ -15,6 +18,7 @@ import type {
   PlaylistImportResult,
   Track,
   TrackSource,
+  YoutubeDiscoverCandidate,
 } from '@baile-latino/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseTrackLink } from '../track-url.util';
@@ -43,6 +47,56 @@ function normForDup(s: string | null | undefined): string {
     .trim();
 }
 
+/** Minúsculas sin acentos (para detectar palabras de género en texto libre). */
+function lowerNoAccents(s: string): string {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
+/** Título autogenerado de livestream/estado ("23 de junio de 2026") o vacío. */
+function isJunkTitle(title: string): boolean {
+  const s = (title ?? '').trim();
+  if (s.length < 3) return true;
+  return /^\d{1,2}\s+de\s+[a-záéíóú]+\s+de\s+\d{4}$/i.test(s);
+}
+
+/** Clasifica el estilo de un video por su texto; si no, hereda del canal. */
+function classifyStyle(
+  title: string,
+  description: string,
+  baseStyle: DanceStyle,
+  channelName: string,
+): { style: DanceStyle | null; confidence: 'alta' | 'media' | 'baja'; reason: string } {
+  const text = lowerNoAccents(`${title} ${description}`);
+  const hasBachata = /\bbachata\b/.test(text);
+  const hasSalsa = /\bsalsa\b/.test(text);
+  if (hasBachata && !hasSalsa)
+    return { style: 'BACHATA', confidence: 'alta', reason: 'menciona "bachata" en el texto' };
+  if (hasSalsa && !hasBachata)
+    return { style: 'SALSA', confidence: 'alta', reason: 'menciona "salsa" en el texto' };
+  if (hasBachata && hasSalsa)
+    return { style: null, confidence: 'baja', reason: 'menciona bachata y salsa — revisar' };
+  return { style: baseStyle, confidence: 'media', reason: `heredado del canal (${channelName})` };
+}
+
+/** Separa "A, B & C" en nombres sueltos de artista (para semillas de búsqueda). */
+function splitArtistNames(raw: string | null | undefined): string[] {
+  return (raw ?? '')
+    .split(/,|&|\/| feat\.?| ft\.?| featuring |\bvs\.?\b| x /i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Parsea "YYYY-MM-DD" | "YYYY-MM" | "YYYY" a Date (día/mes faltante → 1). */
+function parseReleaseDate(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(s);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, m[3] ? Number(m[3]) : 1);
+  if (/^\d{4}$/.test(s)) return new Date(Number(s), 0, 1);
+  return null;
+}
+
 @Injectable()
 export class TracksService {
   constructor(
@@ -50,6 +104,20 @@ export class TracksService {
     private readonly spotify: SpotifyService,
     private readonly youtube: YoutubeMetadataService,
   ) {}
+
+  /** Caché del descubrimiento de candidatos (es pesado: muchas llamadas a Spotify). */
+  private candidatesCache: {
+    key: string;
+    exp: number;
+    data: DiscoverCandidate[];
+  } | null = null;
+
+  /** Caché del descubrimiento por YouTube (muchas llamadas a la API de YouTube). */
+  private ytCandidatesCache: {
+    key: string;
+    exp: number;
+    data: YoutubeDiscoverCandidate[];
+  } | null = null;
 
   /**
    * Rellena la duración faltante de canciones de YouTube consultando la YouTube
@@ -324,6 +392,347 @@ export class TracksService {
     }
 
     return { data, total, page, pageSize };
+  }
+
+  /**
+   * Feed "Nuevo y sonando": lanzamientos recientes del catálogo (últimos
+   * `months` meses), fusionando YouTube + Spotify (mismo tema aparece una vez),
+   * ordenados por popularidad/momentum, separados por estilo (bachata/salsa).
+   * - YouTube: reproducciones/día (momentum real).
+   * - Spotify (sin reproducciones): índice `popularity`.
+   * Se normaliza por estilo a 0..1 para poder mezclar ambas señales.
+   */
+  async discover(months = 6): Promise<DiscoverFeed> {
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
+    const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+
+    const rows = await this.prisma.track.findMany({
+      where: {
+        scope: 'CATALOG',
+        approvalStatus: 'APROBADA',
+        // Comparación lexicográfica sobre "YYYY-MM[-DD]": deja fuera lo antiguo y
+        // lo de solo-año (sin mes no se puede ubicar como reciente).
+        releaseDate: { gte: cutoffStr },
+        OR: [{ style: { startsWith: 'BACHATA' } }, { style: { startsWith: 'SALSA' } }],
+      },
+    });
+
+    const nowMs = now.getTime();
+    const build = (family: 'BACHATA' | 'SALSA'): Track[] => {
+      const inFamily = rows.filter((r) => (r.style ?? '').startsWith(family));
+      const vpdOf = (r: PrismaTrack): number | null => {
+        if (r.source !== 'YOUTUBE' || r.viewCount == null || !r.releaseDate) {
+          return null;
+        }
+        const d = parseReleaseDate(r.releaseDate);
+        if (!d) return null;
+        const days = Math.max(1, (nowMs - d.getTime()) / 86_400_000);
+        return Number(r.viewCount) / days;
+      };
+      const maxVpd = Math.max(
+        1,
+        ...inFamily.map((r) => vpdOf(r) ?? 0),
+      );
+      const scoreOf = (r: PrismaTrack): number => {
+        const vpd = vpdOf(r);
+        return vpd != null ? vpd / maxVpd : (r.popularity ?? 0) / 100;
+      };
+      // Deduplica el mismo tema entre plataformas por título+artista normalizados;
+      // conserva el de mayor score.
+      const best = new Map<string, PrismaTrack>();
+      for (const r of inFamily) {
+        const key = `${normForDup(r.title)}|${normForDup(r.artist)}`;
+        const prev = best.get(key);
+        if (!prev || scoreOf(r) > scoreOf(prev)) best.set(key, r);
+      }
+      return [...best.values()]
+        .sort((a, b) => scoreOf(b) - scoreOf(a))
+        .slice(0, 30)
+        .map(toPublicTrack);
+    };
+
+    return { bachata: build('BACHATA'), salsa: build('SALSA') };
+  }
+
+  /**
+   * Directorio de artistas del catálogo (bachata/salsa), agregados por nombre,
+   * ordenados alfabéticamente. Cada artista con su nº de canciones y estilos.
+   */
+  async listArtists(): Promise<ArtistSummary[]> {
+    const rows = await this.prisma.track.findMany({
+      where: {
+        scope: 'CATALOG',
+        OR: [{ style: { startsWith: 'BACHATA' } }, { style: { startsWith: 'SALSA' } }],
+      },
+      select: { artist: true, style: true },
+    });
+    const map = new Map<
+      string,
+      { name: string; count: number; bachata: boolean; salsa: boolean }
+    >();
+    for (const r of rows) {
+      const isSalsa = (r.style ?? '').startsWith('SALSA');
+      for (const a of splitArtistNames(r.artist)) {
+        const k = normForDup(a);
+        if (!k) continue;
+        const cur = map.get(k) ?? {
+          name: a,
+          count: 0,
+          bachata: false,
+          salsa: false,
+        };
+        cur.count += 1;
+        if (isSalsa) cur.salsa = true;
+        else cur.bachata = true;
+        map.set(k, cur);
+      }
+    }
+    return [...map.values()]
+      .map((a) => ({
+        name: a.name,
+        trackCount: a.count,
+        styles: [
+          ...(a.bachata ? (['BACHATA'] as DanceStyle[]) : []),
+          ...(a.salsa ? (['SALSA'] as DanceStyle[]) : []),
+        ],
+      }))
+      .sort((x, y) =>
+        x.name.localeCompare(y.name, 'es', { sensitivity: 'base' }),
+      );
+  }
+
+  /**
+   * "Descubrir novedades fuera del catálogo": toma los artistas que YA tienes en
+   * el catálogo (bachata/salsa) como semilla, busca en Spotify sus lanzamientos
+   * recientes (álbumes/singles) y devuelve los que AÚN no están en el catálogo,
+   * como candidatos para curar. Solo lee metadata pública (no descarga audio).
+   * Es pesado (muchas llamadas a Spotify) → cacheado 6 h.
+   */
+  async discoverCandidates(
+    months = 6,
+    maxArtists = 30,
+  ): Promise<DiscoverCandidate[]> {
+    const key = `${months}:${maxArtists}`;
+    if (
+      this.candidatesCache &&
+      this.candidatesCache.key === key &&
+      this.candidatesCache.exp > Date.now()
+    ) {
+      return this.candidatesCache.data;
+    }
+
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
+    const sinceStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+    const yearStart = cutoff.getFullYear();
+    const yearEnd = now.getFullYear();
+
+    const rows = await this.prisma.track.findMany({
+      where: {
+        scope: 'CATALOG',
+        OR: [{ style: { startsWith: 'BACHATA' } }, { style: { startsWith: 'SALSA' } }],
+      },
+      select: { title: true, artist: true, style: true },
+    });
+
+    // Claves de lo que YA tenemos (para descartar) + conteo de artistas semilla.
+    const catalogKeys = new Set<string>();
+    const tally = new Map<
+      string,
+      { name: string; count: number; bachata: number; salsa: number }
+    >();
+    for (const r of rows) {
+      catalogKeys.add(`${normForDup(r.title)}|${normForDup(r.artist)}`);
+      const isSalsa = (r.style ?? '').startsWith('SALSA');
+      for (const a of splitArtistNames(r.artist)) {
+        const k = normForDup(a);
+        if (!k) continue;
+        const cur = tally.get(k) ?? { name: a, count: 0, bachata: 0, salsa: 0 };
+        cur.count += 1;
+        if (isSalsa) cur.salsa += 1;
+        else cur.bachata += 1;
+        tally.set(k, cur);
+      }
+    }
+    const seeds = [...tally.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, maxArtists);
+
+    const out: DiscoverCandidate[] = [];
+    const seenTrack = new Set<string>();
+    const seenKey = new Set<string>();
+    for (const seed of seeds) {
+      const releases = await this.spotify.searchNewTracksByArtist(
+        seed.name,
+        sinceStr,
+        yearStart,
+        yearEnd,
+      );
+      const style: DanceStyle = seed.salsa > seed.bachata ? 'SALSA' : 'BACHATA';
+      for (const rel of releases) {
+        if (seenTrack.has(rel.trackId)) continue;
+        const dupKey = `${normForDup(rel.title)}|${normForDup(rel.artist)}`;
+        if (catalogKeys.has(dupKey)) continue; // ya está en el catálogo
+        if (seenKey.has(dupKey)) continue; // mismo tema traído por otra semilla
+        seenTrack.add(rel.trackId);
+        seenKey.add(dupKey);
+        out.push({
+          spotifyTrackId: rel.trackId,
+          title: rel.title,
+          artist: rel.artist,
+          releaseDate: rel.releaseDate,
+          coverUrl: rel.coverUrl,
+          url: rel.url,
+          previewUrl: rel.previewUrl,
+          style,
+          seedArtist: seed.name,
+          albumType: rel.albumType,
+        });
+      }
+      // Pausa entre artistas para no gatillar el anti-abuso de Spotify (responde
+      // 400 a ráfagas). Con ~500ms se mantiene estable.
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    out.sort((a, b) => b.releaseDate.localeCompare(a.releaseDate));
+    this.candidatesCache = {
+      key,
+      exp: Date.now() + 6 * 60 * 60 * 1000,
+      data: out,
+    };
+    return out;
+  }
+
+  /**
+   * "Descubrir novedades por YouTube": toma los CANALES de tus artistas del
+   * catálogo (de `ytMetadata.channelId`) como semilla, trae sus subidas
+   * recientes y devuelve las que aún NO están en el catálogo, con un estilo
+   * PROPUESTO (por el texto o heredado del canal) para que confirmes. Solo lee
+   * metadata pública. Pesado (API de YouTube) → cacheado 6 h.
+   */
+  async discoverYoutube(
+    months = 3,
+    maxChannels = 40,
+  ): Promise<YoutubeDiscoverCandidate[]> {
+    const key = `${months}:${maxChannels}`;
+    if (
+      this.ytCandidatesCache &&
+      this.ytCandidatesCache.key === key &&
+      this.ytCandidatesCache.exp > Date.now()
+    ) {
+      return this.ytCandidatesCache.data;
+    }
+
+    const now = new Date();
+    const cutoff = new Date(
+      now.getFullYear(),
+      now.getMonth() - months,
+      now.getDate(),
+    );
+    const cutoffISO = cutoff.toISOString();
+
+    const rows = await this.prisma.track.findMany({
+      where: {
+        scope: 'CATALOG',
+        source: 'YOUTUBE',
+        OR: [{ style: { startsWith: 'BACHATA' } }, { style: { startsWith: 'SALSA' } }],
+      },
+      select: { artist: true, style: true, sourceId: true, ytMetadata: true },
+    });
+    const catalogVideoIds = new Set(rows.map((r) => r.sourceId));
+
+    // Semilla: canales (channelId) de los tracks de YouTube del catálogo.
+    const channels = new Map<
+      string,
+      {
+        channelId: string;
+        channelTitle: string;
+        bachata: number;
+        salsa: number;
+        artist: string;
+      }
+    >();
+    for (const r of rows) {
+      let channelId: string | undefined;
+      let channelTitle = '';
+      if (r.ytMetadata) {
+        try {
+          const m = JSON.parse(r.ytMetadata) as {
+            channelId?: string;
+            channelTitle?: string;
+          };
+          channelId = m.channelId;
+          channelTitle = m.channelTitle ?? '';
+        } catch {
+          /* metadata inválida: se ignora */
+        }
+      }
+      if (!channelId?.startsWith('UC')) continue;
+      const cur = channels.get(channelId) ?? {
+        channelId,
+        channelTitle,
+        bachata: 0,
+        salsa: 0,
+        artist: r.artist,
+      };
+      if ((r.style ?? '').startsWith('SALSA')) cur.salsa += 1;
+      else cur.bachata += 1;
+      if (!cur.channelTitle && channelTitle) cur.channelTitle = channelTitle;
+      channels.set(channelId, cur);
+    }
+    const seeds = [...channels.values()]
+      .sort((a, b) => b.bachata + b.salsa - (a.bachata + a.salsa))
+      .slice(0, maxChannels);
+
+    const out: YoutubeDiscoverCandidate[] = [];
+    const seen = new Set<string>();
+    for (const ch of seeds) {
+      const uploads = await this.youtube.channelRecentUploads(
+        ch.channelId,
+        cutoffISO,
+        15,
+      );
+      const baseStyle: DanceStyle = ch.salsa > ch.bachata ? 'SALSA' : 'BACHATA';
+      for (const up of uploads) {
+        if (catalogVideoIds.has(up.videoId) || seen.has(up.videoId)) continue;
+        if (isJunkTitle(up.title)) continue;
+        // Los Shorts suelen ser promos/estados, no canciones.
+        if (/#shorts?\b/i.test(`${up.title} ${up.description}`)) continue;
+        seen.add(up.videoId);
+        const cls = classifyStyle(
+          up.title,
+          up.description,
+          baseStyle,
+          ch.channelTitle || ch.artist,
+        );
+        out.push({
+          videoId: up.videoId,
+          title: up.title,
+          channelTitle: up.channelTitle,
+          publishedAt: up.publishedAt,
+          thumbnailUrl: up.thumbnailUrl,
+          url: `https://www.youtube.com/watch?v=${up.videoId}`,
+          proposedStyle: cls.style,
+          confidence: cls.confidence,
+          reason: cls.reason,
+          seedArtist: ch.artist,
+        });
+      }
+    }
+    // Primero las de confianza alta, luego media, luego baja; dentro de cada
+    // nivel, lo más nuevo primero.
+    const confRank = { alta: 0, media: 1, baja: 2 } as const;
+    out.sort(
+      (a, b) =>
+        confRank[a.confidence] - confRank[b.confidence] ||
+        b.publishedAt.localeCompare(a.publishedAt),
+    );
+    this.ytCandidatesCache = {
+      key,
+      exp: Date.now() + 6 * 60 * 60 * 1000,
+      data: out,
+    };
+    return out;
   }
 
   /**

@@ -24,6 +24,42 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.0',
+    date: '2026-07-20',
+    module: 'music.discover',
+    type: 'feature',
+    title: 'Descubre: lo nuevo que está sonando',
+    description:
+      'Nueva sección “Descubre” con los últimos lanzamientos de bachata y salsa, ordenados por lo que más suena ahora (reproducciones/día en YouTube; popularidad en Spotify), fusionando ambas plataformas. Cada canción con su artista al frente y las píldoras ✨ Nueva / 🔥 Épica.',
+  },
+  {
+    version: '0.9.0',
+    date: '2026-07-20',
+    module: 'music.artists',
+    type: 'feature',
+    title: 'Artistas: el directorio de la escena',
+    description:
+      'Nueva sección “Artistas” con todos los artistas de bachata y salsa del catálogo, ordenados por nombre y con buscador instantáneo (sin acentos ni mayúsculas). Cada uno con su estilo (B/S) y cuántos temas tiene.',
+  },
+  {
+    version: '0.9.0',
+    date: '2026-07-20',
+    module: 'general',
+    type: 'improvement',
+    title: 'La app ahora funciona bien en el celular',
+    description:
+      'Modo responsive: en el celular el menú lateral se vuelve un cajón que se abre con el botón ☰ de arriba, las tablas anchas hacen scroll dentro de su tarjeta y las barras de botones se acomodan. En escritorio todo queda igual.',
+  },
+  {
+    version: '0.9.0',
+    date: '2026-07-20',
+    module: 'music',
+    type: 'feature',
+    title: 'Novedades: descubre estrenos fuera del catálogo',
+    description:
+      'Desde “Descubre” puedes ver estrenos recientes de tus artistas que aún no están en el catálogo — desde YouTube (por canal) y Spotify. Se proponen con su estilo (por el texto del video o el artista) y tú decides cuáles agregar; nada entra solo.',
+  },
+  {
     version: '0.8.0',
     date: '2026-07-16',
     module: 'music.youtube.ytplaylists',

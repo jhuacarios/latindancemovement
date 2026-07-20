@@ -422,8 +422,8 @@ export default function PlaylistDetailPage() {
       {data && (
         <div className="flex items-start gap-4">
           <div className="min-w-0 flex-1 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="min-w-0">
               <h1 className="flex items-center gap-2 text-2xl font-bold">
                 <PlatformIcon
                   source={data.source}
@@ -496,7 +496,7 @@ export default function PlaylistDetailPage() {
                   );
                 })()}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex w-full flex-wrap justify-end gap-2">
               {items.length > 1 &&
                 (() => {
                   const n = data.bachatasPerBlock ?? 0;
@@ -595,8 +595,8 @@ export default function PlaylistDetailPage() {
             </p>
           )}
 
-          <Card className="p-0">
-            <table className="w-full text-sm">
+          <Card className="overflow-x-auto p-0">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="border-b border-neutral-800 text-left text-neutral-400">
                 <tr>
                   <th className="px-4 py-3 w-12">#</th>

@@ -34,7 +34,7 @@ export default function GoogleCallbackPage() {
         );
         setTokens(res.tokens);
         // Recarga completa: el AuthProvider tomará la sesión desde el token.
-        window.location.replace('/');
+        window.location.replace('/inicio');
       } catch (e) {
         if (active) {
           setError(

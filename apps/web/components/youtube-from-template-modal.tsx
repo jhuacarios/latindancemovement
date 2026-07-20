@@ -212,7 +212,7 @@ export function YoutubeFromTemplateModal({
             <a href={result.url} target="_blank" rel="noopener noreferrer">
               <Button>
                 <span className="flex items-center gap-2">
-                  <YoutubeIcon className="h-4 w-4 text-white" />
+                  <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
                   Abrir en YouTube ↗
                 </span>
               </Button>

@@ -15,7 +15,7 @@ export default function ModulePlaceholderPage() {
         <div className="mb-2 text-4xl">🔍</div>
         <h2 className="text-lg font-semibold">Módulo no encontrado</h2>
         <Link
-          href="/"
+          href="/inicio"
           className="mt-4 inline-block text-sm text-brand hover:underline"
         >
           ← Volver al inicio
@@ -41,7 +41,7 @@ export default function ModulePlaceholderPage() {
           rol ya están listos; las pantallas llegan en una próxima entrega.
         </p>
         <Link
-          href="/"
+          href="/inicio"
           className="mt-5 inline-block text-sm text-brand hover:underline"
         >
           ← Volver al inicio

@@ -29,6 +29,7 @@ export default function PanelLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string | null>(null);
   const [viewAsRole, setViewAsRoleState] = useState<UserRole | null>(null);
 
@@ -52,6 +53,11 @@ export default function PanelLayout({
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
+
+  // En móvil, cierra el menú desplegable al navegar a otra ruta.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   if (loading || !user) {
     return (
@@ -80,10 +86,24 @@ export default function PanelLayout({
     >
     <PlayerProvider>
     <div className="flex min-h-screen">
+      {/* Fondo oscuro detrás del menú desplegable (solo móvil). */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden
+        />
+      )}
       <aside
         className={clsx(
-          'flex shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 transition-all',
+          // Desktop (base): barra lateral estática. Solo transiciona `transform`
+          // (para el drawer móvil, fluido en GPU); el cambio de ancho al colapsar
+          // es instantáneo para no re-layoutear toda la página en cada frame.
+          'flex shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 transition-transform',
           collapsed ? 'w-16 p-2' : 'w-64 p-4',
+          // Móvil (< lg): drawer fijo que entra/sale por la izquierda.
+          'max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:w-64 max-lg:p-4 max-lg:bg-neutral-900',
+          mobileOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
         )}
       >
         <div
@@ -107,15 +127,28 @@ export default function PanelLayout({
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? 'Expandir menú' : 'Comprimir menú'}
             aria-label={collapsed ? 'Expandir menú' : 'Comprimir menú'}
-            className="rounded-md px-1.5 py-1 text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200"
+            className="hidden rounded-md px-1.5 py-1 text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 lg:block"
           >
             {collapsed ? '»' : '«'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Cerrar menú"
+            className="rounded-md px-1.5 py-1 text-lg leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 lg:hidden"
+          >
+            ✕
           </button>
         </div>
 
         {collapsed ? (
           <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
-            <IconLink href="/" icon="🏠" title="Inicio" active={pathname === '/'} />
+            <IconLink
+              href="/inicio"
+              icon="🏠"
+              title="Inicio"
+              active={pathname === '/inicio'}
+            />
             {myModules.map((m) => (
               <IconLink
                 key={m.key}
@@ -130,7 +163,11 @@ export default function PanelLayout({
           </nav>
         ) : (
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
-          <NavLink href="/" label="🏠 Inicio" active={pathname === '/'} />
+          <NavLink
+            href="/inicio"
+            label="🏠 Inicio"
+            active={pathname === '/inicio'}
+          />
 
           <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Módulos
@@ -144,7 +181,7 @@ export default function PanelLayout({
                 <Link
                   href={m.href}
                   className={clsx(
-                    'flex items-center justify-between rounded-lg px-3 py-2 text-sm transition',
+                    'flex items-center justify-between rounded-lg px-3 py-2 text-[13px] transition',
                     isActive
                       ? 'bg-brand/15 text-brand'
                       : 'text-neutral-300 hover:bg-neutral-800',
@@ -211,10 +248,29 @@ export default function PanelLayout({
         )}
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-neutral-800 px-6 py-3">
-          <div className="text-sm text-neutral-400">
-            {activeModule ? `${activeModule.icon} ${activeModule.title}` : 'Panel'}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-3 lg:px-6">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Abrir menú"
+              className="-ml-1 rounded-md p-1.5 text-neutral-300 transition hover:bg-neutral-800 lg:hidden"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="text-sm text-neutral-400">
+              {activeModule ? `${activeModule.icon} ${activeModule.title}` : 'Panel'}
+            </div>
           </div>
           <div className="flex items-center gap-3 text-sm">
             {isSuperAdmin && (
@@ -255,7 +311,7 @@ export default function PanelLayout({
         )}
 
         <main
-          className="flex-1 overflow-auto p-6"
+          className="min-w-0 flex-1 overflow-auto p-4 lg:p-6"
           style={{
             paddingBottom: 'calc(1.5rem + var(--player-bar-h, 0px))',
           }}
@@ -278,7 +334,7 @@ export default function PanelLayout({
                 )}
               </p>
               <Link
-                href="/"
+                href="/inicio"
                 className="mt-4 inline-block text-sm text-brand hover:underline"
               >
                 ← Volver al inicio
@@ -370,7 +426,7 @@ function SubNavLink({
     <Link
       href={child.href}
       className={clsx(
-        'rounded-md px-2 py-1 text-sm transition',
+        'rounded-md px-2 py-1 text-[13px] transition',
         active ? 'text-brand' : 'text-neutral-400 hover:text-neutral-200',
       )}
     >
@@ -392,7 +448,7 @@ function NavLink({
     <Link
       href={href}
       className={clsx(
-        'rounded-lg px-3 py-2 text-sm transition',
+        'rounded-lg px-3 py-2 text-[13px] transition',
         active ? 'bg-brand/15 text-brand' : 'text-neutral-300 hover:bg-neutral-800',
       )}
     >
