@@ -181,7 +181,7 @@ export default function PanelLayout({
                 <Link
                   href={m.href}
                   className={clsx(
-                    'flex items-center justify-between rounded-lg px-3 py-2 text-[13px] transition',
+                    'flex items-center justify-between rounded-lg px-3 py-2 text-xs transition',
                     isActive
                       ? 'bg-brand/15 text-brand'
                       : 'text-neutral-300 hover:bg-neutral-800',
@@ -426,7 +426,7 @@ function SubNavLink({
     <Link
       href={child.href}
       className={clsx(
-        'rounded-md px-2 py-1 text-[13px] transition',
+        'rounded-md px-2 py-1 text-xs transition',
         active ? 'text-brand' : 'text-neutral-400 hover:text-neutral-200',
       )}
     >
@@ -448,7 +448,7 @@ function NavLink({
     <Link
       href={href}
       className={clsx(
-        'rounded-lg px-3 py-2 text-[13px] transition',
+        'rounded-lg px-3 py-2 text-xs transition',
         active ? 'bg-brand/15 text-brand' : 'text-neutral-300 hover:bg-neutral-800',
       )}
     >
