@@ -100,9 +100,9 @@ export default function PanelLayout({
           // (para el drawer móvil, fluido en GPU); el cambio de ancho al colapsar
           // es instantáneo para no re-layoutear toda la página en cada frame.
           'flex shrink-0 flex-col border-r border-neutral-800 bg-neutral-900/40 transition-transform',
-          collapsed ? 'w-16 p-2' : 'w-64 p-4',
+          collapsed ? 'w-16 p-2' : 'w-64 px-1 py-4',
           // Móvil (< lg): drawer fijo que entra/sale por la izquierda.
-          'max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:w-64 max-lg:p-4 max-lg:bg-neutral-900',
+          'max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:w-64 max-lg:px-1 max-lg:py-4 max-lg:bg-neutral-900',
           mobileOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
         )}
       >
