@@ -448,7 +448,7 @@ export function MusicLibraryView({
     (!isSpotify && cols.vpd ? 1 : 0);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-2.5 lg:space-y-5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h1 className="flex items-center gap-1.5 text-[13px] font-bold lg:gap-2 lg:text-2xl">
@@ -695,8 +695,8 @@ export function MusicLibraryView({
         </div>
       </Card>
 
-      <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1 space-y-4">
+      <div className="flex items-start gap-2.5 lg:gap-4">
+        <div className="min-w-0 flex-1 space-y-2.5 lg:space-y-4">
           {isLoading && <Spinner />}
           {error && (
             <p className="text-sm text-red-300">
@@ -710,7 +710,7 @@ export function MusicLibraryView({
                 <thead className="border-b border-neutral-800 text-left text-neutral-400">
                   <tr>
                     {selectMode && (
-                      <th className="px-4 py-3 w-10">
+                      <th className="px-2 py-2 lg:px-4 lg:py-3 w-10">
                         <input
                           type="checkbox"
                           className="accent-[var(--color-brand)]"
@@ -720,15 +720,17 @@ export function MusicLibraryView({
                         />
                       </th>
                     )}
-                    <th className="px-4 py-3 w-10 text-right tabular-nums">#</th>
-                    {showThumb && <th className="px-3 py-3 w-20"></th>}
+                    <th className="px-2 py-2 lg:px-4 lg:py-3 w-10 text-right tabular-nums">#</th>
+                    {showThumb && (
+                      <th className="px-2 py-2 lg:px-3 lg:py-3 w-20"></th>
+                    )}
                     <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
                     {cols.artist && (
                       <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                     )}
-                    {cols.style && <th className="px-4 py-3">Estilo</th>}
-                    {cols.origin && <th className="px-4 py-3">Origen</th>}
-                    {cols.duration && <th className="px-4 py-3">Duración</th>}
+                    {cols.style && <th className="px-2 py-2 lg:px-4 lg:py-3">Estilo</th>}
+                    {cols.origin && <th className="px-2 py-2 lg:px-4 lg:py-3">Origen</th>}
+                    {cols.duration && <th className="px-2 py-2 lg:px-4 lg:py-3">Duración</th>}
                     {cols.date && (
                       <SortTh
                         label={isSpotify ? 'Fecha' : 'Fecha subida'}
@@ -740,7 +742,7 @@ export function MusicLibraryView({
                     )}
                     {!isSpotify && cols.vpd && (
                       <th
-                        className="cursor-pointer select-none px-4 py-3 hover:text-neutral-200"
+                        className="cursor-pointer select-none px-2 py-2 lg:px-4 lg:py-3 hover:text-neutral-200"
                         title="Reproducciones por día desde la subida (velocidad)"
                         onClick={() =>
                           setVpdSort((s) =>
@@ -765,7 +767,7 @@ export function MusicLibraryView({
                         </span>
                       </th>
                     )}
-                    <th className="px-4 py-3 text-right">
+                    <th className="px-2 py-2 lg:px-4 lg:py-3 text-right">
                       <div className="relative inline-block" ref={colMenuRef}>
                         <button
                           type="button"
@@ -848,7 +850,7 @@ export function MusicLibraryView({
                       }
                     >
                       {selectMode && (
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2 lg:px-4 lg:py-3">
                           <input
                             type="checkbox"
                             className="accent-[var(--color-brand)]"
@@ -857,7 +859,7 @@ export function MusicLibraryView({
                           />
                         </td>
                       )}
-                      <td className="px-4 py-3 text-right tabular-nums text-neutral-500">
+                      <td className="px-2 py-2 lg:px-4 lg:py-3 text-right tabular-nums text-neutral-500">
                         {(page - 1) * PAGE_SIZE + i + 1}
                       </td>
                       {showThumb && (
@@ -865,16 +867,16 @@ export function MusicLibraryView({
                           <TrackThumb track={t} />
                         </td>
                       )}
-                      <td className="px-4 py-3 font-medium">
+                      <td className="px-2 py-2 lg:px-4 lg:py-3 font-medium">
                         {t.title}
                         {isNewRelease(t.releaseDate) && <NewBadge />}
                         {epicIds.has(t.id) && <EpicBadge />}
                       </td>
                       {cols.artist && (
-                        <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
+                        <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-300">{t.artist}</td>
                       )}
                       {cols.style && (
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2 lg:px-4 lg:py-3">
                           <div className="flex flex-wrap items-center gap-1">
                             <StyleBadge style={t.style} />
                             {t.tags && t.tags.length > 0
@@ -898,7 +900,7 @@ export function MusicLibraryView({
                         </td>
                       )}
                       {cols.origin && (
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2 lg:px-4 lg:py-3">
                           {t.scope === 'PERSONAL' ? (
                             <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300">
                               personal
@@ -911,21 +913,21 @@ export function MusicLibraryView({
                         </td>
                       )}
                       {cols.duration && (
-                        <td className="px-4 py-3 text-neutral-400 tabular-nums">
+                        <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-400 tabular-nums">
                           {formatDuration(t.durationSec)}
                         </td>
                       )}
                       {cols.date && (
-                        <td className="px-4 py-3 whitespace-nowrap text-neutral-400">
+                        <td className="px-2 py-2 lg:px-4 lg:py-3 whitespace-nowrap text-neutral-400">
                           {formatReleaseDate(t.releaseDate, t.year)}
                         </td>
                       )}
                       {!isSpotify && cols.vpd && (
-                        <td className="px-4 py-3 tabular-nums text-neutral-400">
+                        <td className="px-2 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
                           {formatViewsPerDay(t.details?.viewCount, t.releaseDate)}
                         </td>
                       )}
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-2 py-2 lg:px-4 lg:py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <PlayButtons track={t} />
                           {isSpotify && (

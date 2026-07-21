@@ -336,7 +336,7 @@ export default function PanelLayout({
         )}
 
         <main
-          className="min-w-0 flex-1 overflow-auto p-4 lg:p-6"
+          className="min-w-0 flex-1 overflow-auto px-2 py-3 lg:p-6"
           style={{
             paddingBottom: 'calc(1.5rem + var(--player-bar-h, 0px))',
           }}
