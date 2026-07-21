@@ -169,7 +169,7 @@ export default function PanelLayout({
             active={pathname === '/inicio'}
           />
 
-          <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          <div className="mt-4 mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-neutral-500 lg:text-[13px]">
             Módulos
           </div>
 
@@ -181,7 +181,7 @@ export default function PanelLayout({
                 <Link
                   href={m.href}
                   className={clsx(
-                    'flex items-center justify-between rounded-lg px-3 py-2 text-[11px] transition',
+                    'flex items-center justify-between rounded-lg px-3 py-2 text-[11px] transition lg:text-sm',
                     isActive
                       ? 'bg-brand/15 text-brand'
                       : 'text-neutral-300 hover:bg-neutral-800',
@@ -191,7 +191,7 @@ export default function PanelLayout({
                     {m.icon} {m.title}
                   </span>
                   {m.status === 'soon' && (
-                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">
+                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 lg:text-xs">
                       pronto
                     </span>
                   )}
@@ -208,7 +208,7 @@ export default function PanelLayout({
                         if (visible.length === 0) return null;
                         return (
                           <div key={c.key} className="mt-1">
-                            <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-neutral-500">
+                            <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-neutral-500 lg:text-sm">
                               {c.brandIcon === 'youtube' && (
                                 <YoutubeIcon className="h-3.5 w-3.5 shrink-0 text-[#FF0000]" />
                               )}
@@ -451,7 +451,7 @@ function SubNavLink({
     <Link
       href={child.href}
       className={clsx(
-        'rounded-md px-2 py-1 text-[11px] transition',
+        'rounded-md px-2 py-1 text-[11px] transition lg:text-sm',
         active ? 'text-brand' : 'text-neutral-400 hover:text-neutral-200',
       )}
     >
@@ -473,7 +473,7 @@ function NavLink({
     <Link
       href={href}
       className={clsx(
-        'rounded-lg px-3 py-2 text-[11px] transition',
+        'rounded-lg px-3 py-2 text-[11px] transition lg:text-sm',
         active ? 'bg-brand/15 text-brand' : 'text-neutral-300 hover:bg-neutral-800',
       )}
     >

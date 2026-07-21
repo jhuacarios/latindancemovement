@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.3',
+    date: '2026-07-21',
+    module: 'general',
+    type: 'improvement',
+    title: 'Celular: menú más legible y Mis Canciones más compacto',
+    description:
+      'En escritorio la letra del menú es más grande. En el celular, el encabezado de Mis Canciones, los contadores de Bachatas/Salsas y todos los filtros (buscar, estilo, meses, novedades, épicas, playlists) son más pequeños para aprovechar la pantalla. Además se quitó el botón “Seleccionar” de Mis Canciones por ahora.',
+  },
+  {
     version: '0.9.2',
     date: '2026-07-20',
     module: 'general',

@@ -449,71 +449,71 @@ export function MusicLibraryView({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <PlatformIcon source={source} className="h-6 w-6 shrink-0" /> Mis
-            Canciones
-            <span className="text-sm font-normal text-neutral-500">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-1.5 text-[13px] font-bold lg:gap-2 lg:text-2xl">
+            <PlatformIcon
+              source={source}
+              className="h-3.5 w-3.5 shrink-0 lg:h-6 lg:w-6"
+            />{' '}
+            Mis Canciones
+            <span className="hidden text-[11px] font-normal text-neutral-500 lg:inline lg:text-sm">
               ({isSpotify ? 'Spotify' : 'YouTube'})
             </span>
           </h1>
-          <p className="text-sm text-neutral-400">
+          <p className="text-[11px] text-neutral-400 lg:text-sm">
             {data ? `${data.total} en tu selección` : ' '} ·{' '}
             <Link href={catalogHref} className="text-brand hover:underline">
               elegir del catálogo →
             </Link>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-1.5 lg:gap-2">
           {!isSpotify && (
             <Button
               variant="ghost"
-              className="inline-flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 max-lg:gap-1 max-lg:px-2 max-lg:py-1 max-lg:text-[11px]"
               onClick={() => setShowYtPlaylist(true)}
             >
-              <YoutubeIcon className="h-4 w-4 shrink-0 text-[#FF0000]" /> Crear
-              playlist rápida
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-            >
-              {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
+              <YoutubeIcon className="h-4 w-4 shrink-0 text-[#FF0000] max-lg:h-3 max-lg:w-3" />{' '}
+              Crear playlist rápida
             </Button>
           )}
           {!isSpotify && canEdit && (
             <Button
               variant="ghost"
-              className="inline-flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 max-lg:gap-1 max-lg:px-2 max-lg:py-1 max-lg:text-[11px]"
               onClick={() => setShowImportPlaylist(true)}
             >
-              <YoutubeIcon className="h-4 w-4 shrink-0 text-[#FF0000]" /> Cargar
-              playlist
+              <YoutubeIcon className="h-4 w-4 shrink-0 text-[#FF0000] max-lg:h-3 max-lg:w-3" />{' '}
+              Cargar playlist
             </Button>
           )}
           {canEdit && (
-            <Button onClick={() => setShowForm((s) => !s)}>
+            <Button
+              className="max-lg:px-2 max-lg:py-1 max-lg:text-[11px]"
+              onClick={() => setShowForm((s) => !s)}
+            >
               {showForm ? 'Cerrar' : '+ Agregar mi música'}
             </Button>
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
-          <span className="text-2xl font-bold text-amber-300">
+      <div className="flex flex-wrap gap-2 lg:gap-3">
+        <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 lg:gap-2 lg:px-4 lg:py-2">
+          <span className="text-base font-bold text-amber-300 lg:text-2xl">
             {summary?.bachata ?? '—'}
           </span>
-          <span className="text-sm text-neutral-300">Bachatas</span>
+          <span className="text-[11px] text-neutral-300 lg:text-sm">
+            Bachatas
+          </span>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2">
-          <span className="text-2xl font-bold text-red-300">
+        <div className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 lg:gap-2 lg:px-4 lg:py-2">
+          <span className="text-base font-bold text-red-300 lg:text-2xl">
             {summary?.salsa ?? '—'}
           </span>
-          <span className="text-sm text-neutral-300">Salsas</span>
+          <span className="text-[11px] text-neutral-300 lg:text-sm">Salsas</span>
         </div>
       </div>
 
@@ -564,9 +564,9 @@ export function MusicLibraryView({
         />
       )}
 
-      <Card className="flex flex-wrap items-end gap-3">
+      <Card className="flex flex-wrap items-end gap-2 max-lg:p-3 lg:gap-3">
         <div className="grow">
-          <label className="mb-1 block text-xs text-neutral-400">Buscar</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Buscar</label>
           <SearchInput
             placeholder="Título o artista…"
             value={search}
@@ -577,7 +577,7 @@ export function MusicLibraryView({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Estilo</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Estilo</label>
           <StyleFilter
             value={style}
             onChange={(v) => {
@@ -589,7 +589,7 @@ export function MusicLibraryView({
         </div>
         {style && (
           <div>
-            <label className="mb-1 block text-xs text-neutral-400">
+            <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">
               Sub-estilo
             </label>
             <SubstyleFilterMultiSelect
@@ -603,10 +603,10 @@ export function MusicLibraryView({
           </div>
         )}
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">
+          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">
             Últimos meses
           </label>
-          <div className="flex items-center gap-1 rounded-lg border border-neutral-700 px-2 py-1.5 focus-within:border-brand">
+          <div className="flex items-center gap-1 rounded-lg border border-neutral-700 px-1.5 py-1 focus-within:border-brand lg:px-2 lg:py-1.5">
             <input
               type="text"
               inputMode="numeric"
@@ -617,9 +617,9 @@ export function MusicLibraryView({
                 setLastMonths(e.target.value.replace(/[^0-9]/g, '').slice(0, 3));
                 setPage(1);
               }}
-              className="w-10 bg-transparent text-sm text-neutral-200 [appearance:textfield] focus:outline-none"
+              className="w-8 bg-transparent text-xs text-neutral-200 [appearance:textfield] focus:outline-none lg:w-10 lg:text-sm"
             />
-            <span className="text-xs text-neutral-500">meses</span>
+            <span className="text-[10px] text-neutral-500 lg:text-xs">meses</span>
             {lastMonths && (
               <button
                 type="button"
@@ -636,7 +636,7 @@ export function MusicLibraryView({
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Novedades</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Novedades</label>
           <button
             type="button"
             onClick={() => {
@@ -645,7 +645,7 @@ export function MusicLibraryView({
             }}
             title="Mostrar solo canciones lanzadas hace 2 meses o menos"
             className={
-              'rounded-lg border px-3 py-2 text-sm transition ' +
+              'rounded-lg border px-2 py-1.5 text-xs transition lg:px-3 lg:py-2 lg:text-sm ' +
               (onlyNew
                 ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
                 : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
@@ -655,7 +655,7 @@ export function MusicLibraryView({
           </button>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Top</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Top</label>
           <button
             type="button"
             onClick={() => {
@@ -668,7 +668,7 @@ export function MusicLibraryView({
                 : 'Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo'
             }
             className={
-              'rounded-lg border px-3 py-2 text-sm transition ' +
+              'rounded-lg border px-2 py-1.5 text-xs transition lg:px-3 lg:py-2 lg:text-sm ' +
               (onlyEpic
                 ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
                 : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
@@ -678,13 +678,13 @@ export function MusicLibraryView({
           </button>
         </div>
         <div className="ml-auto">
-          <label className="mb-1 block text-xs text-neutral-400">&nbsp;</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">&nbsp;</label>
           <button
             type="button"
             onClick={() => setPanelOpen((o) => !o)}
             title="Ver mis playlists internas"
             className={
-              'rounded-lg border px-3 py-2 text-sm transition ' +
+              'rounded-lg border px-2 py-1.5 text-xs transition lg:px-3 lg:py-2 lg:text-sm ' +
               (panelOpen
                 ? 'border-brand bg-brand/15 text-brand'
                 : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')

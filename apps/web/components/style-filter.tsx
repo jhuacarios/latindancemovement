@@ -24,7 +24,7 @@ export function StyleFilter({
           type="button"
           onClick={() => onChange(o.value)}
           className={clsx(
-            'rounded-md px-5 py-2 text-sm font-semibold transition',
+            'rounded-md px-3 py-1.5 text-xs font-semibold transition lg:px-5 lg:py-2 lg:text-sm',
             value === o.value ? o.active : 'text-neutral-300 hover:bg-neutral-800',
           )}
         >

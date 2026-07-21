@@ -15,7 +15,7 @@ export function SearchInput({
   return (
     <div className="relative">
       <Input
-        className="pr-9"
+        className="pr-9 max-lg:py-1.5 max-lg:text-xs"
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
