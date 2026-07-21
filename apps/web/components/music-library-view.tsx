@@ -448,10 +448,10 @@ export function MusicLibraryView({
     (!isSpotify && cols.vpd ? 1 : 0);
 
   return (
-    <div className="space-y-2.5 lg:space-y-5">
+    <div className="space-y-1.5 lg:space-y-5">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="flex items-center gap-1.5 text-[13px] font-bold lg:gap-2 lg:text-2xl">
+        <div className="shrink-0">
+          <h1 className="flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold lg:gap-2 lg:text-2xl">
             <PlatformIcon
               source={source}
               className="h-3.5 w-3.5 shrink-0 lg:h-6 lg:w-6"
@@ -461,12 +461,6 @@ export function MusicLibraryView({
               ({isSpotify ? 'Spotify' : 'YouTube'})
             </span>
           </h1>
-          <p className="text-[11px] text-neutral-400 lg:text-sm">
-            {data ? `${data.total} en tu selección` : ' '} ·{' '}
-            <Link href={catalogHref} className="text-brand hover:underline">
-              elegir del catálogo →
-            </Link>
-          </p>
         </div>
         <div className="flex flex-wrap justify-end gap-1.5 lg:gap-2">
           {!isSpotify && (
@@ -500,7 +494,7 @@ export function MusicLibraryView({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 lg:gap-3">
+      <div className="flex flex-wrap gap-1.5 lg:gap-3">
         <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 lg:gap-2 lg:px-4 lg:py-2">
           <span className="text-base font-bold text-amber-300 lg:text-2xl">
             {summary?.bachata ?? '—'}
@@ -564,9 +558,11 @@ export function MusicLibraryView({
         />
       )}
 
-      <Card className="flex flex-wrap items-end gap-2 max-lg:p-3 lg:gap-3">
+      <Card className="flex flex-wrap items-end gap-1.5 max-lg:p-2.5 lg:gap-3">
         <div className="grow">
-          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Buscar</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Buscar
+          </label>
           <SearchInput
             placeholder="Título o artista…"
             value={search}
@@ -577,7 +573,9 @@ export function MusicLibraryView({
           />
         </div>
         <div>
-          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Estilo</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Estilo
+          </label>
           <StyleFilter
             value={style}
             onChange={(v) => {
@@ -589,7 +587,7 @@ export function MusicLibraryView({
         </div>
         {style && (
           <div>
-            <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">
+            <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
               Sub-estilo
             </label>
             <SubstyleFilterMultiSelect
@@ -636,7 +634,9 @@ export function MusicLibraryView({
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Novedades</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Novedades
+          </label>
           <button
             type="button"
             onClick={() => {
@@ -655,7 +655,9 @@ export function MusicLibraryView({
           </button>
         </div>
         <div>
-          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">Top</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Top
+          </label>
           <button
             type="button"
             onClick={() => {
@@ -678,7 +680,9 @@ export function MusicLibraryView({
           </button>
         </div>
         <div className="ml-auto">
-          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">&nbsp;</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            &nbsp;
+          </label>
           <button
             type="button"
             onClick={() => setPanelOpen((o) => !o)}
@@ -695,8 +699,8 @@ export function MusicLibraryView({
         </div>
       </Card>
 
-      <div className="flex items-start gap-2.5 lg:gap-4">
-        <div className="min-w-0 flex-1 space-y-2.5 lg:space-y-4">
+      <div className="flex items-start gap-1.5 lg:gap-4">
+        <div className="min-w-0 flex-1 space-y-1.5 lg:space-y-4">
           {isLoading && <Spinner />}
           {error && (
             <p className="text-sm text-red-300">
