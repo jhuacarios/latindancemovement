@@ -24,6 +24,51 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.4',
+    date: '2026-07-22',
+    module: 'general',
+    type: 'feature',
+    title: '¿Bachata o salsa? Ahora la app te conoce',
+    description:
+      'La primera vez que entras te preguntamos qué bailas. Si eliges salsa, en “Descubre” esa sección aparece primero y en “Mis Canciones” el filtro arranca en Salsa. Puedes cambiarlo cuando quieras desde tu perfil, en “Qué bailas”.',
+  },
+  {
+    version: '0.9.4',
+    date: '2026-07-22',
+    module: 'music.discover',
+    type: 'improvement',
+    title: 'Descubre: solo lo que de verdad suena',
+    description:
+      'Ahora la lista se arma con las reproducciones reales de YouTube, así que ya no aparecen temas de los que no sabemos cuánto suenan. Se suman las 🔥 Épicas (las de más momentum, sin importar su fecha) junto a los estrenos, y las canciones repetidas se muestran una sola vez. En pantalla grande, bachata y salsa quedan lado a lado.',
+  },
+  {
+    version: '0.9.4',
+    date: '2026-07-22',
+    module: 'general',
+    type: 'improvement',
+    title: 'El menú ahora se despliega',
+    description:
+      'Al tocar un módulo como “Música y DJs” se abre su submenú en vez de llevarte a otra página. El módulo de la sección en la que estás se despliega solo.',
+  },
+  {
+    version: '0.9.4',
+    date: '2026-07-22',
+    module: 'music',
+    type: 'improvement',
+    title: 'Mis Canciones, pensado para el celular',
+    description:
+      'En el teléfono la tabla arranca con lo esencial (título, artista y estilo como B/S) y todo lo demás — fecha, duración, reproducciones/día y los botones de video, tags y abrir en YouTube — lo enciendes desde el engranaje ⚙️ cuando lo necesites. Textos y espacios más ajustados para que entre más en pantalla.',
+  },
+  {
+    version: '0.9.4',
+    date: '2026-07-22',
+    module: 'general',
+    type: 'fix',
+    title: 'El reproductor ya no se corta en el celular',
+    description:
+      'La barra de abajo pasa a dos filas en pantallas chicas, con la barra de progreso completa, y deja de tapar las últimas filas de la lista. Además, el botón de eliminar es ahora una ✕ roja en toda la app.',
+  },
+  {
     version: '0.9.3',
     date: '2026-07-21',
     module: 'general',
