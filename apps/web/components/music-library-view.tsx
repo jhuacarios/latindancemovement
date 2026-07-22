@@ -117,6 +117,16 @@ export function MusicLibraryView({
     { id: number; message: string; type: 'success' | 'error' }[]
   >([]);
   const toastId = useRef(0);
+
+  // Solo si prefiere salsa se arranca con ese filtro; en el resto de los casos
+  // (bachata, "me da igual" o sin elegir) queda "Todos", como siempre. Se aplica
+  // una sola vez al llegar el usuario: después manda lo que él elija.
+  const prefApplied = useRef(false);
+  useEffect(() => {
+    if (prefApplied.current || !user) return;
+    prefApplied.current = true;
+    if (user.stylePreference === 'SALSA') setStyle('SALSA');
+  }, [user]);
   function pushToast(message: string, type: 'success' | 'error') {
     const id = ++toastId.current;
     setToasts((t) => [...t, { id, message, type }]);
@@ -558,7 +568,7 @@ export function MusicLibraryView({
         />
       )}
 
-      <Card className="flex flex-wrap items-end gap-1.5 max-lg:p-2.5 lg:gap-3">
+      <Card className="flex flex-wrap items-end gap-1.5 px-2 py-1.5 lg:gap-3 lg:px-3 lg:py-2">
         <div className="grow">
           <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
             Buscar
@@ -711,7 +721,10 @@ export function MusicLibraryView({
           {data && (
             <Card className="overflow-x-auto p-0">
               <table className="w-full text-sm">
-                <thead className="border-b border-neutral-800 text-left text-neutral-400">
+                {/* `whitespace-nowrap` (se hereda a los th) evita que un título
+                    como "Fecha subida" se parta en dos líneas y duplique el alto
+                    de la fila; `[&_th]` baja el padding solo del encabezado. */}
+                <thead className="whitespace-nowrap border-b border-neutral-800 text-left text-neutral-400 [&_th]:py-1 lg:[&_th]:py-1">
                   <tr>
                     {selectMode && (
                       <th className="px-2 py-2 lg:px-4 lg:py-3 w-10">
@@ -779,7 +792,7 @@ export function MusicLibraryView({
                           title="Mostrar u ocultar columnas"
                           aria-label="Configurar columnas"
                           aria-expanded={colMenuOpen}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-xs font-normal text-neutral-300 transition hover:bg-neutral-800"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-0.5 text-xs font-normal text-neutral-300 transition hover:bg-neutral-800"
                         >
                           ⚙️ <span className="hidden sm:inline">Columnas</span>
                         </button>

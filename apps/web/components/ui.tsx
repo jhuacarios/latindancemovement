@@ -75,10 +75,17 @@ export function Card({
   className?: string;
   children: React.ReactNode;
 }) {
+  // `clsx` solo concatena: no resuelve conflictos de Tailwind. Como `p-0` y `p-5`
+  // tienen la misma especificidad, ganaba la que el CSS emitiera última (`p-5`),
+  // así que un `<Card className="p-0">` seguía con padding. Si quien lo usa ya
+  // define su propio `p-*`, no agregamos el nuestro. (`px-*`/`py-*` no cuentan:
+  // ésos sí ganan por el orden de Tailwind y se usan para ajustar un solo eje.)
+  const overridesPadding = /(^|\s)p-\S/.test(className ?? '');
   return (
     <div
       className={clsx(
-        'rounded-xl border border-neutral-800 bg-neutral-900/60 p-5',
+        'rounded-xl border border-neutral-800 bg-neutral-900/60',
+        !overridesPadding && 'p-5',
         className,
       )}
     >
