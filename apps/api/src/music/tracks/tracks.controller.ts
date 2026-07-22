@@ -81,6 +81,12 @@ export class TracksController {
     return this.spotify.getTrackByLink(link);
   }
 
+  /** Conteo del catálogo por estilo, para los contadores de la vista. */
+  @Get('summary')
+  summary(@Query('source') source?: 'YOUTUBE' | 'SPOTIFY') {
+    return this.tracks.summary(source);
+  }
+
   /** Directorio de artistas del catálogo, ordenados por nombre. */
   @Get('artists')
   artists() {

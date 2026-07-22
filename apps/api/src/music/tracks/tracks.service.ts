@@ -11,6 +11,7 @@ import type {
   DanceStyle,
   DiscoverCandidate,
   DiscoverFeed,
+  LibrarySummary,
   DuplicateGroup,
   ExtractedTrackMetadata,
   ImportResult,
@@ -515,6 +516,17 @@ export class TracksService {
       salsa: build('SALSA'),
       epicIds: [...epicIds],
     };
+  }
+
+  /** Cuenta el catálogo por estilo (opcionalmente filtrado por fuente). */
+  async summary(source?: 'YOUTUBE' | 'SPOTIFY'): Promise<LibrarySummary> {
+    const base: Prisma.TrackWhereInput = { scope: 'CATALOG' };
+    if (source) base.source = source;
+    const [bachata, salsa] = await this.prisma.$transaction([
+      this.prisma.track.count({ where: { ...base, style: 'BACHATA' } }),
+      this.prisma.track.count({ where: { ...base, style: 'SALSA' } }),
+    ]);
+    return { bachata, salsa, total: bachata + salsa };
   }
 
   /**

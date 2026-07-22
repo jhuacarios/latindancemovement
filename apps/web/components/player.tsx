@@ -155,16 +155,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-      {audio && (
-        <AudioBar
-          key={`${audio.source}:${audio.sourceId}`}
-          track={audio}
-          volume={volume}
-          setVolume={setVolume}
-          onClose={() => setAudio(null)}
-          onBlocked={reportBlocked}
-        />
-      )}
+      {/* Siempre montado (y sin `key` por canción): su iframe debe existir antes
+          de que el usuario toque play, o el navegador móvil no lo deja sonar. */}
+      <AudioBar
+        track={audio}
+        volume={volume}
+        setVolume={setVolume}
+        onClose={() => setAudio(null)}
+        onBlocked={reportBlocked}
+      />
       {video && (
         <VideoModal
           key={`${video.source}:${video.sourceId}`}
@@ -186,6 +185,16 @@ export function usePlayer(): PlayerContextValue {
 }
 
 // --- Mini reproductor de audio con controles y progreso --------------------
+/**
+ * Barra de audio del pie.
+ *
+ * El <iframe> de YouTube se crea UNA sola vez, al cargar la página, y después se
+ * reutiliza con `loadVideoById`. Es a propósito: los navegadores móviles solo le
+ * dan permiso de reproducir a los frames que YA existían cuando el usuario tocó
+ * la pantalla. Si el iframe se creara recién al elegir la canción, nacería sin
+ * ese permiso y quedaría en pausa (en escritorio no se nota, y la emulación de
+ * Chrome tampoco aplica esa política).
+ */
 function AudioBar({
   track,
   volume,
@@ -193,33 +202,46 @@ function AudioBar({
   onClose,
   onBlocked,
 }: {
-  track: Track;
+  /** `null` mientras no hay nada sonando: la barra se esconde, el iframe queda. */
+  track: Track | null;
   volume: number;
   setVolume: (v: number) => void;
   onClose: () => void;
   onBlocked: (track: Track) => void;
 }) {
-  const id = ytId(track);
+  const id = track ? ytId(track) : null;
   const holderRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
-  // Ref al volumen para aplicarlo en onReady sin recrear el player.
+  // Refs para leer lo último dentro de los callbacks del player sin recrearlo.
   const volumeRef = useRef(volume);
   volumeRef.current = volume;
+  const trackRef = useRef(track);
+  trackRef.current = track;
+  const onBlockedRef = useRef(onBlocked);
+  onBlockedRef.current = onBlocked;
+
   const [ready, setReady] = useState(false);
-  const [playing, setPlaying] = useState(true);
+  // Arranca en false: antes decía "reproduciendo" antes de que sonara nada, y el
+  // ícono de la fila quedaba en ⏸ mientras la barra seguía en ▶.
+  const [playing, setPlaying] = useState(false);
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
   const [seeking, setSeeking] = useState(false);
+  const seekingRef = useRef(seeking);
+  seekingRef.current = seeking;
   const [blocked, setBlocked] = useState(false);
 
   // Reserva espacio al final del contenido para que la barra no tape las últimas
   // filas. Se publica el alto REAL (no uno fijo) porque cambia según el ancho:
   // en móvil la barra usa dos filas.
   useEffect(() => {
-    const el = barRef.current;
-    if (!el) return;
     const root = document.documentElement;
+    const el = barRef.current;
+    if (!el || !track) {
+      root.style.setProperty('--player-bar-h', '0px');
+      return;
+    }
     const apply = () =>
       root.style.setProperty('--player-bar-h', `${el.offsetHeight}px`);
     apply();
@@ -229,57 +251,68 @@ function AudioBar({
       ro.disconnect();
       root.style.setProperty('--player-bar-h', '0px');
     };
-  }, []);
+  }, [track]);
 
+  // Crea el reproductor una sola vez, todavía sin video (ver comentario arriba).
   useEffect(() => {
-    if (!id) return;
     let destroyed = false;
-    const interval = setInterval(() => {
-      const p = playerRef.current;
-      if (p?.getCurrentTime) {
-        if (!seeking) setCur(p.getCurrentTime() || 0);
-        const d = p.getDuration?.() || 0;
-        if (d) setDur(d);
-      }
-    }, 400);
-
-    loadYTApi().then(() => {
-      if (destroyed || !holderRef.current) return;
+    void loadYTApi().then(() => {
+      if (destroyed || !holderRef.current || playerRef.current) return;
       playerRef.current = new window.YT.Player(holderRef.current, {
-        videoId: id,
-        playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1 },
+        playerVars: { controls: 0, disablekb: 1, playsinline: 1 },
         events: {
           onReady: (e: any) => {
-            setReady(true);
-            setDur(e.target.getDuration() || 0);
             e.target.setVolume(volumeRef.current); // mantiene el último volumen
-            e.target.playVideo();
+            setReady(true);
           },
           onStateChange: (e: any) => {
-            const YT = window.YT;
-            setPlaying(e.data === YT.PlayerState.PLAYING);
+            setPlaying(e.data === window.YT.PlayerState.PLAYING);
+            const d = e.target.getDuration?.() || 0;
+            if (d) setDur(d);
           },
           onError: (e: any) => {
             if (EMBED_BLOCKED_CODES.includes(e.data)) {
               setBlocked(true);
-              onBlocked(track);
+              if (trackRef.current) onBlockedRef.current(trackRef.current);
             }
           },
         },
       });
     });
-
     return () => {
       destroyed = true;
-      clearInterval(interval);
       try {
         playerRef.current?.destroy?.();
       } catch {
         /* noop */
       }
+      playerRef.current = null;
     };
-    // seeking intencionalmente fuera: el intervalo lee la ref, no recrea el player
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Al elegir canción se reutiliza el mismo iframe.
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!ready || !p || !id) return;
+    setBlocked(false);
+    setCur(0);
+    setDur(0);
+    p.setVolume(volumeRef.current);
+    p.loadVideoById(id);
+  }, [id, ready]);
+
+  // Progreso mientras suena.
+  useEffect(() => {
+    if (!id) return;
+    const interval = setInterval(() => {
+      const p = playerRef.current;
+      if (p?.getCurrentTime) {
+        if (!seekingRef.current) setCur(p.getCurrentTime() || 0);
+        const d = p.getDuration?.() || 0;
+        if (d) setDur(d);
+      }
+    }, 400);
+    return () => clearInterval(interval);
   }, [id]);
 
   const toggle = () => {
@@ -290,10 +323,29 @@ function AudioBar({
   };
 
   return (
-    <div
-      ref={barRef}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900/95 px-2 py-2 backdrop-blur lg:px-4 lg:py-3"
-    >
+    <>
+      {/* El player vive fuera de la barra y SIEMPRE montado: suena el audio sin
+          mostrar el video, y así el iframe ya existe cuando llega el toque. */}
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          width: 1,
+          height: 1,
+          left: -9999,
+          top: 0,
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        <div ref={holderRef} />
+      </div>
+
+      {track && (
+        <div
+          ref={barRef}
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900/95 px-2 py-2 backdrop-blur lg:px-4 lg:py-3"
+        >
       {/* En móvil la fila envuelve y la barra de progreso baja a una 2ª línea. */}
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 lg:flex-nowrap lg:gap-4">
         <span className="text-lg text-brand max-lg:hidden">♪</span>
@@ -392,22 +444,10 @@ function AudioBar({
         >
           ⏹<span className="max-lg:hidden"> Detener</span>
         </button>
-      </div>
-
-      {/* player oculto: suena el audio sin mostrar el video */}
-      <div
-        style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          left: -9999,
-          opacity: 0,
-          pointerEvents: 'none',
-        }}
-      >
-        <div ref={holderRef} />
-      </div>
-    </div>
+        </div>
+        </div>
+      )}
+    </>
   );
 }
 

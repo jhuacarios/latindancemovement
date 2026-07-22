@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type DanceStyle,
   type ExcelImportResult,
+  type LibrarySummary,
   type Paginated,
   type Track,
 } from '@baile-latino/types';
@@ -228,6 +229,13 @@ export function MusicCatalogView({
     setSelected(new Set());
   }
 
+  // Conteo por estilo de TODO el catálogo (no depende de los filtros de la vista).
+  const { data: summary } = useQuery({
+    queryKey: ['catalog-summary', source],
+    queryFn: () =>
+      api<LibrarySummary>(`/music/tracks/summary?source=${source}`),
+  });
+
   const { data, isLoading, error } = useQuery({
     // Búsqueda/estilo/orden en el server (cubren TODO el catálogo); los
     // sub-estilos/nuevas/épicas/meses se filtran en cliente sobre lo cargado.
@@ -416,27 +424,38 @@ export function MusicCatalogView({
     (cols.added ? 1 : 0);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <PlatformIcon source={source} className="h-6 w-6 shrink-0" /> Catálogo
-            <span className="text-sm font-normal text-neutral-500">
+    <div className="space-y-2.5 lg:space-y-5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="shrink-0">
+          <h1 className="flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold lg:gap-2 lg:text-2xl">
+            <PlatformIcon
+              source={source}
+              className="h-3.5 w-3.5 shrink-0 lg:h-6 lg:w-6"
+            />{' '}
+            Catálogo
+            <span className="hidden text-sm font-normal text-neutral-500 lg:inline">
               ({isSpotify ? 'Spotify' : 'YouTube'})
             </span>
           </h1>
-          <p className="text-sm text-neutral-400">
-            {data ? `${data.total} canciones en la base` : ' '}
-            {!isAdmin && ' · agrégalas a Mis Canciones'}
-          </p>
+          {!isAdmin && (
+            <p className="text-[11px] text-neutral-400 lg:text-sm">
+              Agrégalas a Mis Canciones
+            </p>
+          )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-1.5 max-lg:[&_button]:px-2 max-lg:[&_button]:py-1 max-lg:[&_button]:text-[11px] lg:gap-2">
           {canEdit && (
             <Button
               variant="ghost"
               onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
             >
-              {selectMode ? 'Cancelar selección' : '☑ Seleccionar'}
+              {selectMode ? (
+                'Cancelar selección'
+              ) : (
+                <>
+                  <span className="max-lg:hidden">☑ </span>Seleccionar
+                </>
+              )}
             </Button>
           )}
           {isAdmin && (
@@ -444,6 +463,23 @@ export function MusicCatalogView({
               {showForm ? 'Cerrar' : '+ Nueva canción al catálogo'}
             </Button>
           )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 lg:gap-3">
+        <div className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 lg:gap-2 lg:px-4 lg:py-2">
+          <span className="text-base font-bold text-amber-300 lg:text-2xl">
+            {summary?.bachata ?? '—'}
+          </span>
+          <span className="text-[11px] text-neutral-300 lg:text-sm">
+            Bachatas
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 lg:gap-2 lg:px-4 lg:py-2">
+          <span className="text-base font-bold text-red-300 lg:text-2xl">
+            {summary?.salsa ?? '—'}
+          </span>
+          <span className="text-[11px] text-neutral-300 lg:text-sm">Salsas</span>
         </div>
       </div>
 
@@ -493,7 +529,7 @@ export function MusicCatalogView({
                 </span>
               </Button>
               <Button variant="ghost" onClick={() => setShowDates(true)}>
-                🗓 Actualizar fechas
+                <span className="max-lg:hidden">🗓 </span>Actualizar fechas
               </Button>
               <span className="text-xs text-neutral-500">
                 o agrega una por “+ Nueva canción al catálogo” con su link.
@@ -1040,16 +1076,20 @@ function AdminImportExport() {
   }
 
   return (
-    <Card>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-2 text-sm font-semibold">Gestión del catálogo:</span>
+    <Card className="max-lg:p-2.5">
+      {/* La variante apunta a los botones de adentro: en móvil van chicos sin
+          repetir las clases en cada uno. */}
+      <div className="flex flex-wrap items-center gap-1.5 max-lg:[&_button]:px-2 max-lg:[&_button]:py-1 max-lg:[&_button]:text-[11px] lg:gap-2">
+        <span className="mr-2 text-[11px] font-semibold lg:text-sm">
+          Gestión<span className="max-lg:hidden"> del catálogo</span>:
+        </span>
         <Button
           variant="ghost"
           onClick={() =>
             downloadFile('/music/tracks/template.xlsx', 'plantilla-canciones.xlsx')
           }
         >
-          ⬇ Plantilla
+          <span className="max-lg:hidden">⬇ </span>Plantilla
         </Button>
         <input
           ref={inputRef}
@@ -1063,13 +1103,19 @@ function AdminImportExport() {
           }}
         />
         <Button disabled={uploading} onClick={() => inputRef.current?.click()}>
-          {uploading ? 'Importando…' : '⬆ Importar Excel'}
+          {uploading ? (
+            'Importando…'
+          ) : (
+            <>
+              <span className="max-lg:hidden">⬆ </span>Importar Excel
+            </>
+          )}
         </Button>
         <Button
           variant="ghost"
           onClick={() => downloadFile('/music/tracks/export.xlsx', 'canciones.xlsx')}
         >
-          ⬇ Exportar
+          <span className="max-lg:hidden">⬇ </span>Exportar
         </Button>
         <Button
           variant="ghost"
@@ -1077,23 +1123,29 @@ function AdminImportExport() {
           onClick={onBackfill}
           title="Completa la duración faltante de las canciones del catálogo desde YouTube"
         >
-          {backfilling ? 'Completando…' : '⏱ Completar duraciones'}
+          {backfilling ? (
+            'Completando…'
+          ) : (
+            <>
+              <span className="max-lg:hidden">⏱ </span>Completar duraciones
+            </>
+          )}
         </Button>
         <Button variant="ghost" onClick={() => setShowDates(true)}>
           🗓 Actualizar fechas
         </Button>
         <Button variant="ghost" onClick={() => setShowDuplicates(true)}>
-          🔎 Buscar duplicados
+          <span className="max-lg:hidden">🔎 </span>Buscar duplicados
         </Button>
         <Button onClick={() => setShowPlaylist(true)}>
           <span className="flex items-center gap-2">
-            <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
+            <YoutubeIcon className="h-4 w-4 text-[#FF0000] max-lg:hidden" />
             Importar playlist YouTube
           </span>
         </Button>
         <Button onClick={() => setShowSpotify(true)}>
           <span className="flex items-center gap-2">
-            <SpotifyIcon className="h-4 w-4" />
+            <SpotifyIcon className="h-4 w-4 max-lg:hidden" />
             Importar playlist Spotify
           </span>
         </Button>
