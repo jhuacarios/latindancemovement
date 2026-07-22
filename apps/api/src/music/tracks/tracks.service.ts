@@ -47,6 +47,15 @@ function normForDup(s: string | null | undefined): string {
     .trim();
 }
 
+/**
+ * Dos nombres de artista (ya normalizados) que son el mismo: idénticos o uno
+ * prefijo del otro ("fresto" / "fresto music"). Solo se usa comparando temas con
+ * el MISMO título, donde un prefijo así es el mismo artista con otro credit.
+ */
+function sameArtist(a: string, b: string): boolean {
+  return a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `);
+}
+
 /** Minúsculas sin acentos (para detectar palabras de género en texto libre). */
 function lowerNoAccents(s: string): string {
   return (s ?? '')
@@ -402,57 +411,110 @@ export class TracksService {
    * - Spotify (sin reproducciones): índice `popularity`.
    * Se normaliza por estilo a 0..1 para poder mezclar ambas señales.
    */
-  async discover(months = 6): Promise<DiscoverFeed> {
+  async discover(months = 5): Promise<DiscoverFeed> {
     const now = new Date();
-    const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
-    const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+    /** Corte "YYYY-MM" de hace N meses (0 = sin tope). */
+    const monthsAgo = (m: number): string | null => {
+      if (m <= 0) return null;
+      const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    };
+    // Ventana de estrenos por estilo: bachata tiene mucho más lanzamiento nuevo,
+    // así que se acota a 3 meses; salsa es escasa y usa la ventana general.
+    const recentMonthsFor = (family: 'BACHATA' | 'SALSA') =>
+      family === 'BACHATA' ? Math.min(3, months) : months;
 
     const rows = await this.prisma.track.findMany({
       where: {
         scope: 'CATALOG',
         approvalStatus: 'APROBADA',
-        // Comparación lexicográfica sobre "YYYY-MM[-DD]": deja fuera lo antiguo y
-        // lo de solo-año (sin mes no se puede ubicar como reciente).
-        releaseDate: { gte: cutoffStr },
+        // Solo YouTube: es la única fuente con reproducciones reales. La
+        // popularidad de Spotify (0-100) no es comparable y dejaba arriba temas
+        // sin ningún dato de cuánto suenan.
+        source: 'YOUTUBE',
+        viewCount: { not: null },
         OR: [{ style: { startsWith: 'BACHATA' } }, { style: { startsWith: 'SALSA' } }],
       },
     });
 
+    // Reproducciones por día desde su publicación (momentum), precalculadas.
     const nowMs = now.getTime();
+    const vpd = new Map<string, number>();
+    for (const r of rows) {
+      const d = r.releaseDate ? parseReleaseDate(r.releaseDate) : null;
+      const days = d ? Math.max(1, (nowMs - d.getTime()) / 86_400_000) : null;
+      vpd.set(r.id, days ? Number(r.viewCount) / days : 0);
+    }
+    const vpdOf = (r: PrismaTrack) => vpd.get(r.id) ?? 0;
+    // Comparación lexicográfica sobre "YYYY-MM[-DD]": lo de solo-año queda fuera
+    // (sin mes no se puede ubicar en el tiempo).
+    const since = (r: PrismaTrack, cutoff: string | null) =>
+      cutoff == null || (r.releaseDate ?? '') >= cutoff;
+
+    // Ids de las que salen marcadas como épicas (para la insignia 🔥 del cliente).
+    const epicIds = new Set<string>();
+
     const build = (family: 'BACHATA' | 'SALSA'): Track[] => {
-      const inFamily = rows.filter((r) => (r.style ?? '').startsWith(family));
-      const vpdOf = (r: PrismaTrack): number | null => {
-        if (r.source !== 'YOUTUBE' || r.viewCount == null || !r.releaseDate) {
-          return null;
-        }
-        const d = parseReleaseDate(r.releaseDate);
-        if (!d) return null;
-        const days = Math.max(1, (nowMs - d.getTime()) / 86_400_000);
-        return Number(r.viewCount) / days;
-      };
-      const maxVpd = Math.max(
-        1,
-        ...inFamily.map((r) => vpdOf(r) ?? 0),
+      const inFamily = rows.filter(
+        (r) => (r.style ?? '').startsWith(family) && vpdOf(r) > 0,
       );
-      const scoreOf = (r: PrismaTrack): number => {
-        const vpd = vpdOf(r);
-        return vpd != null ? vpd / maxVpd : (r.popularity ?? 0) / 100;
-      };
-      // Deduplica el mismo tema entre plataformas por título+artista normalizados;
-      // conserva el de mayor score.
-      const best = new Map<string, PrismaTrack>();
-      for (const r of inFamily) {
-        const key = `${normForDup(r.title)}|${normForDup(r.artist)}`;
-        const prev = best.get(key);
-        if (!prev || scoreOf(r) > scoreOf(prev)) best.set(key, r);
+
+      // Épicas: mismas que la insignia 🔥 del catálogo — top 50 por momentum,
+      // bachata dentro de 24 meses y salsa sin tope de fecha.
+      const epicCutoff = monthsAgo(family === 'SALSA' ? 0 : 24);
+      const epics = new Set(
+        inFamily
+          .filter((r) => since(r, epicCutoff))
+          .sort((a, b) => vpdOf(b) - vpdOf(a))
+          .slice(0, 50)
+          .map((r) => r.id),
+      );
+
+      // La lista: los estrenos de la ventana del estilo MÁS las épicas, sin
+      // importar su fecha.
+      const recentCutoff = monthsAgo(recentMonthsFor(family));
+      const picked = inFamily.filter(
+        (r) => since(r, recentCutoff) || epics.has(r.id),
+      );
+
+      // Deduplica el mismo tema subido más de una vez. No alcanza con
+      // título+artista: el listado de artistas difiere entre uploads ("Romeo
+      // Santos" vs "Romeo Santos, Prince Royce"). Se agrupa por título y se
+      // funden las que comparten al menos un artista — comparar solo el título
+      // juntaría temas distintos que se llaman igual. Como se recorre de mayor a
+      // menor momentum, la primera de cada grupo es la que queda.
+      const groups: { artists: Set<string>; best: PrismaTrack }[] = [];
+      const byTitle = new Map<string, typeof groups>();
+      for (const r of [...picked].sort((a, b) => vpdOf(b) - vpdOf(a))) {
+        const title = normForDup(r.title);
+        const artists = new Set(
+          splitArtistNames(r.artist).map(normForDup).filter(Boolean),
+        );
+        const sameTitle = byTitle.get(title) ?? [];
+        const hit = sameTitle.find((g) =>
+          [...artists].some((a) => [...g.artists].some((b) => sameArtist(a, b))),
+        );
+        if (hit) {
+          // Es la misma canción con otro listado de artistas: se descarta y se
+          // enriquece el grupo para poder reconocer futuras variantes.
+          for (const a of artists) hit.artists.add(a);
+          continue;
+        }
+        const g = { artists, best: r };
+        sameTitle.push(g);
+        byTitle.set(title, sameTitle);
+        groups.push(g);
       }
-      return [...best.values()]
-        .sort((a, b) => scoreOf(b) - scoreOf(a))
-        .slice(0, 30)
-        .map(toPublicTrack);
+      const top = groups.map((g) => g.best).slice(0, 25);
+      for (const r of top) if (epics.has(r.id)) epicIds.add(r.id);
+      return top.map(toPublicTrack);
     };
 
-    return { bachata: build('BACHATA'), salsa: build('SALSA') };
+    return {
+      bachata: build('BACHATA'),
+      salsa: build('SALSA'),
+      epicIds: [...epicIds],
+    };
   }
 
   /**

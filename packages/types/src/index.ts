@@ -142,13 +142,16 @@ export interface ArtistSummary {
 }
 
 /**
- * Feed de descubrimiento "Nuevo y sonando": lanzamientos recientes del catálogo
- * (YouTube + Spotify fusionados), ordenados por popularidad/momentum, separados
- * por estilo. Cada lista viene ya rankeada por el backend.
+ * Feed de descubrimiento "Nuevo y sonando": lo que más suena del catálogo de
+ * YouTube (única fuente con reproducciones reales), separado por estilo. Cada
+ * lista mezcla los estrenos recientes con las "épicas" (mayor momentum, sin
+ * importar su fecha) y viene ya rankeada por el backend.
  */
 export interface DiscoverFeed {
   bachata: Track[];
   salsa: Track[];
+  /** Ids de las canciones que son "épicas", para mostrar la insignia 🔥. */
+  epicIds: string[];
 }
 
 /**

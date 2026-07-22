@@ -138,14 +138,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [qc],
   );
 
-  // Reserva espacio al final del contenido cuando la barra de audio está visible,
-  // para que no tape las últimas filas (en cualquier sección de la app).
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--player-bar-h', audio ? '5.5rem' : '0px');
-    return () => root.style.setProperty('--player-bar-h', '0px');
-  }, [audio]);
-
   const cur = audio ?? video;
   const playingKey = cur ? `${cur.source}:${cur.sourceId}` : null;
   const audioKey = audio ? `${audio.source}:${audio.sourceId}` : null;
@@ -209,6 +201,7 @@ function AudioBar({
 }) {
   const id = ytId(track);
   const holderRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   // Ref al volumen para aplicarlo en onReady sin recrear el player.
   const volumeRef = useRef(volume);
@@ -219,6 +212,24 @@ function AudioBar({
   const [dur, setDur] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const [blocked, setBlocked] = useState(false);
+
+  // Reserva espacio al final del contenido para que la barra no tape las últimas
+  // filas. Se publica el alto REAL (no uno fijo) porque cambia según el ancho:
+  // en móvil la barra usa dos filas.
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const apply = () =>
+      root.style.setProperty('--player-bar-h', `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty('--player-bar-h', '0px');
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -279,10 +290,14 @@ function AudioBar({
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900/95 px-4 py-3 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center gap-4">
-        <span className="text-lg text-brand">♪</span>
-        <div className="min-w-0 w-48 shrink-0">
+    <div
+      ref={barRef}
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900/95 px-2 py-2 backdrop-blur lg:px-4 lg:py-3"
+    >
+      {/* En móvil la fila envuelve y la barra de progreso baja a una 2ª línea. */}
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 lg:flex-nowrap lg:gap-4">
+        <span className="text-lg text-brand max-lg:hidden">♪</span>
+        <div className="min-w-0 flex-1 lg:w-48 lg:flex-none lg:shrink-0">
           <div className="truncate text-sm font-medium">{track.title}</div>
           <div className="truncate text-xs text-neutral-400">{track.artist}</div>
         </div>
@@ -312,37 +327,42 @@ function AudioBar({
               {playing ? '⏸' : '▶'}
             </button>
 
-            <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
-              {fmt(cur)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={dur || 0}
-              step={1}
-              value={Math.min(cur, dur || 0)}
-              disabled={!ready || !dur}
-              onMouseDown={() => setSeeking(true)}
-              onTouchStart={() => setSeeking(true)}
-              onChange={(e) => setCur(Number(e.target.value))}
-              onMouseUp={(e) => {
-                const v = Number((e.target as HTMLInputElement).value);
-                playerRef.current?.seekTo?.(v, true);
-                setSeeking(false);
-              }}
-              onTouchEnd={(e) => {
-                const v = Number((e.target as HTMLInputElement).value);
-                playerRef.current?.seekTo?.(v, true);
-                setSeeking(false);
-              }}
-              className="h-1 flex-1 cursor-pointer accent-[var(--color-brand)]"
-            />
-            <span className="w-10 text-xs tabular-nums text-neutral-400">
-              {fmt(dur)}
-            </span>
+            {/* `lg:contents` disuelve este contenedor en escritorio: la fila
+                queda exactamente igual que antes. En móvil es la 2ª línea. */}
+            <div className="flex w-full items-center gap-2 max-lg:order-last lg:contents">
+              <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
+                {fmt(cur)}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={dur || 0}
+                step={1}
+                value={Math.min(cur, dur || 0)}
+                disabled={!ready || !dur}
+                onMouseDown={() => setSeeking(true)}
+                onTouchStart={() => setSeeking(true)}
+                onChange={(e) => setCur(Number(e.target.value))}
+                onMouseUp={(e) => {
+                  const v = Number((e.target as HTMLInputElement).value);
+                  playerRef.current?.seekTo?.(v, true);
+                  setSeeking(false);
+                }}
+                onTouchEnd={(e) => {
+                  const v = Number((e.target as HTMLInputElement).value);
+                  playerRef.current?.seekTo?.(v, true);
+                  setSeeking(false);
+                }}
+                className="h-1 flex-1 cursor-pointer accent-[var(--color-brand)]"
+              />
+              <span className="w-10 text-xs tabular-nums text-neutral-400">
+                {fmt(dur)}
+              </span>
+            </div>
 
+            {/* El volumen se maneja con los botones del teléfono. */}
             <div
-              className="flex shrink-0 items-center gap-1"
+              className="flex shrink-0 items-center gap-1 max-lg:hidden"
               title={`Volumen: ${volume}%`}
             >
               <span className="text-sm text-neutral-400">
@@ -367,9 +387,10 @@ function AudioBar({
 
         <button
           onClick={onClose}
-          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm hover:bg-neutral-700"
+          title="Detener"
+          className="shrink-0 rounded-lg bg-neutral-800 px-3 py-1.5 text-sm hover:bg-neutral-700"
         >
-          ⏹ Detener
+          ⏹<span className="max-lg:hidden"> Detener</span>
         </button>
       </div>
 

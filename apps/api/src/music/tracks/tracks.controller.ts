@@ -90,7 +90,7 @@ export class TracksController {
   /** Feed "Nuevo y sonando": lanzamientos recientes por estilo, rankeados. */
   @Get('discover')
   discover(@Query('months') months?: string) {
-    const n = Math.min(24, Math.max(1, Number(months) || 6));
+    const n = Math.min(24, Math.max(1, Number(months) || 5));
     return this.tracks.discover(n);
   }
 
