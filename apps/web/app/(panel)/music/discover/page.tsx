@@ -2,7 +2,11 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import type { DiscoverFeed, Track } from '@baile-latino/types';
+import type {
+  DiscoverFeed,
+  StylePreference,
+  Track,
+} from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Card, Spinner, StyleBadge } from '@/components/ui';
@@ -62,24 +66,46 @@ export default function DiscoverPage() {
         </Card>
       )}
 
+      {/* Móvil: un solo bloque, una lista debajo de la otra. Desde lg: dos
+          columnas a mitad y mitad (la preferida queda a la izquierda). */}
       {data && (
-        <>
-          <DiscoverSection
-            title="Bachata — nuevo y sonando"
-            accent="text-amber-300"
-            tracks={data.bachata}
-            epicIds={new Set(data.epicIds)}
-          />
-          <DiscoverSection
-            title="Salsa — nuevo y sonando"
-            accent="text-red-300"
-            tracks={data.salsa}
-            epicIds={new Set(data.epicIds)}
-          />
-        </>
+        <div className="grid gap-2.5 lg:grid-cols-2 lg:items-start lg:gap-6">
+          {orderedSections(data, user?.stylePreference ?? null).map((s) => (
+            <DiscoverSection
+              key={s.key}
+              title={s.title}
+              accent={s.accent}
+              tracks={s.tracks}
+              epicIds={new Set(data.epicIds)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
+}
+
+/**
+ * Las dos secciones, ordenadas según la preferencia del usuario: solo si eligió
+ * salsa va esa primero. En el resto de los casos (bachata, "me da igual" o
+ * todavía sin elegir) manda bachata, que es lo que más se mueve.
+ */
+function orderedSections(data: DiscoverFeed, pref: StylePreference | null) {
+  const sections = [
+    {
+      key: 'bachata',
+      title: 'Bachata — nuevo y sonando',
+      accent: 'text-amber-300',
+      tracks: data.bachata,
+    },
+    {
+      key: 'salsa',
+      title: 'Salsa — nuevo y sonando',
+      accent: 'text-red-300',
+      tracks: data.salsa,
+    },
+  ];
+  return pref === 'SALSA' ? sections.reverse() : sections;
 }
 
 function DiscoverSection({
@@ -94,7 +120,9 @@ function DiscoverSection({
   epicIds: Set<string>;
 }) {
   return (
-    <section className="space-y-1 lg:space-y-2">
+    // `min-w-0`: sin esto, como item de grid no puede achicarse por debajo del
+    // ancho de su contenido y desborda la pantalla en móvil.
+    <section className="min-w-0 space-y-1 lg:space-y-2">
       <h2 className={`text-lg font-semibold ${accent}`}>{title}</h2>
       {tracks.length === 0 ? (
         <p className="text-sm text-neutral-500">
@@ -144,7 +172,7 @@ function DiscoverRow({
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-sm font-medium">{t.title}</span>
           {isNewRelease(t.releaseDate) && <NewBadge />}
           {epic && <EpicBadge />}
