@@ -58,7 +58,17 @@ const LOAD_SIZE = 1000;
 
 /** Columnas que se pueden mostrar/ocultar desde el engranaje. Título, "#" y
  * acciones siempre visibles; la miniatura tiene su propio toggle. */
-type ColKey = 'artist' | 'style' | 'origin' | 'duration' | 'date' | 'vpd';
+type ColKey =
+  | 'artist'
+  | 'style'
+  | 'origin'
+  | 'duration'
+  | 'date'
+  | 'vpd'
+  // Botones de la columna de acciones (se guardan junto a las columnas).
+  | 'video'
+  | 'tags'
+  | 'source';
 type ColVis = Record<ColKey, boolean>;
 
 const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
@@ -70,6 +80,14 @@ const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
   { key: 'vpd', label: 'Repr./día', youtubeOnly: true },
 ];
 
+/** Botones de la columna de acciones que se pueden mostrar u ocultar. Reproducir
+ *  y quitar no entran acá: son las acciones principales y van siempre. */
+const ACTION_DEFS: { key: ColKey; label: string }[] = [
+  { key: 'video', label: 'Ver video' },
+  { key: 'tags', label: 'Editar tags' },
+  { key: 'source', label: 'Abrir en la plataforma' },
+];
+
 const ALL_COLS_VISIBLE: ColVis = {
   artist: true,
   style: true,
@@ -77,6 +95,9 @@ const ALL_COLS_VISIBLE: ColVis = {
   duration: true,
   date: true,
   vpd: true,
+  video: true,
+  tags: true,
+  source: true,
 };
 
 /** En celular no entran todas: se arranca con lo mínimo útil (título va siempre)
@@ -88,6 +109,9 @@ const MOBILE_COLS_VISIBLE: ColVis = {
   duration: false,
   date: false,
   vpd: false,
+  video: false,
+  tags: false,
+  source: false,
 };
 
 /**
@@ -854,6 +878,26 @@ export function MusicLibraryView({
                                   : c.label}
                               </label>
                             ))}
+
+                            <p className="mt-1 border-t border-neutral-800 px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                              Acciones
+                            </p>
+                            {ACTION_DEFS.map((a) => (
+                              <label
+                                key={a.key}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={cols[a.key]}
+                                  onChange={() => toggleCol(a.key)}
+                                  className="accent-[var(--color-brand)]"
+                                />
+                                {a.key === 'source'
+                                  ? `Abrir en ${isSpotify ? 'Spotify' : 'YouTube'}`
+                                  : a.label}
+                              </label>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -974,7 +1018,7 @@ export function MusicLibraryView({
                       )}
                       <td className="px-2 py-2 lg:px-4 lg:py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <PlayButtons track={t} />
+                          <PlayButtons track={t} showVideo={cols.video} />
                           {isSpotify && (
                             <button
                               type="button"
@@ -1006,7 +1050,7 @@ export function MusicLibraryView({
                               {spotifyPlaying?.sourceId === t.sourceId ? '⏸' : '▶'}
                             </button>
                           )}
-                          {canEdit && (
+                          {canEdit && cols.tags && (
                             <button
                               className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
                               title="Editar tags"
@@ -1016,7 +1060,7 @@ export function MusicLibraryView({
                               🏷
                             </button>
                           )}
-                          <SourceLink track={t} />
+                          {cols.source && <SourceLink track={t} />}
                           {canDelete && (
                             <DeleteIconButton
                               onClick={() =>

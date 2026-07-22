@@ -39,7 +39,14 @@ function PlayBtn({
  * reproducir y detener. Si el video no permite reproducción fuera de YouTube
  * (`embeddable === false`), se muestran con una ✕ roja encima y deshabilitados.
  */
-export function PlayButtons({ track }: { track: Track }) {
+export function PlayButtons({
+  track,
+  showVideo = true,
+}: {
+  track: Track;
+  /** El botón 🎬 se puede ocultar (en móvil se esconde por defecto). */
+  showVideo?: boolean;
+}) {
   const player = usePlayer();
   if (!player.canPlay(track)) return null;
 
@@ -74,12 +81,14 @@ export function PlayButtons({ track }: { track: Track }) {
           </span>
         )}
       </button>
-      <PlayBtn
-        icon="🎬"
-        label="Reproducir video"
-        blocked={blocked}
-        onClick={() => player.playVideo(track)}
-      />
+      {showVideo && (
+        <PlayBtn
+          icon="🎬"
+          label="Reproducir video"
+          blocked={blocked}
+          onClick={() => player.playVideo(track)}
+        />
+      )}
     </>
   );
 }
