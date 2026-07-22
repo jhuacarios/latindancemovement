@@ -6,7 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import type { DanceStyle, PublicUser, UserRole } from '@baile-latino/types';
+import type {
+  DanceStyle,
+  PublicUser,
+  StylePreference,
+  UserRole,
+} from '@baile-latino/types';
 import { PrismaService } from '../prisma/prisma.service';
 
 type UserRow = {
@@ -17,6 +22,7 @@ type UserRow = {
   city: string | null;
   instagramHandle: string | null;
   styles: string;
+  stylePreference?: string | null;
   createdAt: Date;
   passwordHash?: string | null;
   googleId?: string | null;
@@ -31,6 +37,7 @@ function toPublicUser(u: UserRow): PublicUser {
     city: u.city,
     instagramHandle: u.instagramHandle,
     styles: u.styles ? (u.styles.split(',').filter(Boolean) as DanceStyle[]) : [],
+    stylePreference: (u.stylePreference as StylePreference) ?? null,
     createdAt: u.createdAt.toISOString(),
     hasPassword: Boolean(u.passwordHash),
     hasGoogle: Boolean(u.googleId),

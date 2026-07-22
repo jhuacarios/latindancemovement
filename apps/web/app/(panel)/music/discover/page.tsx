@@ -35,13 +35,13 @@ export default function DiscoverPage() {
                 href="/music/discover/nuevas"
                 className="rounded-md border border-emerald-700/50 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300 transition hover:border-emerald-500 hover:text-emerald-200 lg:px-2 lg:py-1 lg:text-xs"
               >
-                🆕 Novedades Spotify →
+                Novedades Spotify →
               </Link>
               <Link
                 href="/music/discover/nuevas-youtube"
                 className="rounded-md border border-red-700/50 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300 transition hover:border-red-500 hover:text-red-200 lg:px-2 lg:py-1 lg:text-xs"
               >
-                🆕 Novedades YouTube →
+                Novedades YouTube →
               </Link>
             </>
           )}

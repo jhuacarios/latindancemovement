@@ -15,6 +15,8 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  /** Reemplaza el usuario en memoria (tras editar el perfil, por ejemplo). */
+  updateUser: (user: PublicUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -60,7 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, logout, updateUser: setUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

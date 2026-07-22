@@ -11,6 +11,7 @@ import { moduleForPath, permKeyForPath, type ModuleChild } from '@/lib/modules';
 import { usePermissions } from '@/lib/permissions';
 import { PlayerProvider } from '@/components/player';
 import { WhatsNew } from '@/components/whats-new';
+import { StylePreferenceModal } from '@/components/style-preference-modal';
 import { BrandLogo, Wordmark } from '@/components/brand';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { SpotifyIcon } from '@/components/spotify-icon';
@@ -89,6 +90,8 @@ export default function PanelLayout({
       value={{ collapsed, setCollapsed, activeNavKey, setActiveNavKey }}
     >
     <PlayerProvider>
+    {/* Primera vez que entra: le preguntamos qué baila. */}
+    <StylePreferenceModal />
     <div className="flex min-h-screen">
       {/* Fondo oscuro detrás del menú desplegable (solo móvil). */}
       {mobileOpen && (

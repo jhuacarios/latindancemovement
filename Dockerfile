@@ -19,4 +19,11 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm exec turbo run build --filter=@baile-latino/api
 
 ENV NODE_ENV=production
-CMD ["node", "apps/api/dist/main.js"]
+
+# Al arrancar: sincroniza el schema con la base y recién ahí levanta la API. El
+# proyecto usa `db push` (no hay carpeta de migraciones), así que sin esto un
+# campo nuevo del schema no existiría en la DB de producción.
+#
+# A propósito SIN --accept-data-loss: si un cambio implicara perder datos, el
+# arranque falla y Railway lo marca en rojo, en vez de borrarlos en silencio.
+CMD ["sh", "-c", ": \"${DATABASE_URL:?falta DATABASE_URL}\" && pnpm --filter @baile-latino/api exec prisma db push && node apps/api/dist/main.js"]

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Patch,
   Post,
   Query,
   Res,
@@ -14,6 +15,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { GoogleExchangeDto } from './dto/google-exchange.dto';
+import { StylePreferenceDto } from './dto/style-preference.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthUser } from './auth.types';
@@ -43,6 +45,16 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser) {
     return this.auth.me(user.id);
+  }
+
+  /** Guarda la preferencia de baile (modal de bienvenida y perfil). */
+  @Patch('me/style-preference')
+  @UseGuards(JwtAuthGuard)
+  setStylePreference(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: StylePreferenceDto,
+  ) {
+    return this.auth.setStylePreference(user.id, dto.stylePreference);
   }
 
   // --- Login con Google -----------------------------------------------------

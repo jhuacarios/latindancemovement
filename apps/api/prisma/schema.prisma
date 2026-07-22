@@ -26,6 +26,9 @@ model User {
   city            String?
   instagramHandle String?
   styles          String   @default("") // CSV de DanceStyle
+  // Preferencia de baile: BACHATA | SALSA | AMBOS. null = todavía no la eligió,
+  // y por eso se le pregunta al entrar.
+  stylePreference String?
   refreshTokenHash String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

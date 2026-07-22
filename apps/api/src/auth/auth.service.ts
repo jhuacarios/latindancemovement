@@ -13,6 +13,7 @@ import type {
   DanceStyle,
   JwtPayload,
   PublicUser,
+  StylePreference,
   UserRole,
 } from '@baile-latino/types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,6 +28,7 @@ type UserRecord = {
   city: string | null;
   instagramHandle: string | null;
   styles: string;
+  stylePreference?: string | null;
   createdAt: Date;
   passwordHash?: string | null;
   googleId?: string | null;
@@ -369,9 +371,25 @@ export class AuthService {
       styles: user.styles
         ? (user.styles.split(',').filter(Boolean) as DanceStyle[])
         : [],
+      stylePreference: (user.stylePreference as StylePreference) ?? null,
       createdAt: user.createdAt.toISOString(),
       hasPassword: Boolean(user.passwordHash),
       hasGoogle: Boolean(user.googleId),
     };
+  }
+
+  /**
+   * Guarda la preferencia de baile del usuario (la que se le pregunta al entrar
+   * por primera vez y luego puede cambiar desde su perfil).
+   */
+  async setStylePreference(
+    userId: string,
+    stylePreference: StylePreference,
+  ): Promise<PublicUser> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { stylePreference },
+    });
+    return this.toPublicUser(user);
   }
 }

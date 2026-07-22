@@ -82,6 +82,10 @@ export type SongRequestStatus = (typeof SONG_REQUEST_STATUSES)[number];
 // ---------------------------------------------------------------------------
 // Entidades (forma pública, serializable a JSON)
 // ---------------------------------------------------------------------------
+/** Preferencia de baile del usuario. Se le pregunta la primera vez que entra. */
+export const STYLE_PREFERENCES = ['BACHATA', 'SALSA', 'AMBOS'] as const;
+export type StylePreference = (typeof STYLE_PREFERENCES)[number];
+
 export interface PublicUser {
   id: string;
   email: string;
@@ -90,6 +94,8 @@ export interface PublicUser {
   city: string | null;
   instagramHandle: string | null;
   styles: DanceStyle[];
+  /** Preferencia de baile. `null` = todavía no la eligió (se le pregunta). */
+  stylePreference: StylePreference | null;
   createdAt: string;
   /** Tiene contraseña propia (registro por email). Si es false, es cuenta solo-social. */
   hasPassword: boolean;

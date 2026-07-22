@@ -5,6 +5,10 @@ import type { PublicUser } from '@baile-latino/types';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
+import {
+  StylePreferencePicker,
+  useSaveStylePreference,
+} from '@/components/style-preference';
 
 const SECTIONS = [
   { key: 'perfil', label: '👤 Perfil' },
@@ -73,6 +77,7 @@ export default function ProfilePage() {
 }
 
 function PerfilSection({ user }: { user: PublicUser }) {
+  const { save, saving, error } = useSaveStylePreference();
   return (
     <>
       <SectionHeader
@@ -91,6 +96,20 @@ function PerfilSection({ user }: { user: PublicUser }) {
           value={user.styles?.length ? user.styles.join(', ') : '—'}
         />
       </Card>
+
+      <SectionHeader
+        title="Qué bailas"
+        desc="Tu preferencia. Puedes cambiarla cuando quieras."
+      />
+      <Card>
+        <StylePreferencePicker
+          value={user.stylePreference}
+          onPick={(v) => void save(v)}
+          saving={saving}
+        />
+        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+      </Card>
+
       <p className="text-xs text-neutral-500">
         ✏️ La edición de perfil (foto, bio, estilos) llega pronto.
       </p>
