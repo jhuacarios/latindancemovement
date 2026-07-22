@@ -9,7 +9,7 @@ import type {
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
+import { Button, Card, DeleteIconButton, Spinner, StyleBadge } from '@/components/ui';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
 import { formatDuration } from '@/lib/format';
@@ -210,7 +210,7 @@ export default function SpotifyPlaylistsPage() {
                       })
                     }
                   >
-                    {busy ? 'Quitando…' : `🗑 Quitar (${selected.size})`}
+                    {busy ? 'Quitando…' : `✕ Quitar (${selected.size})`}
                   </Button>
                   <Button variant="ghost" disabled={busy} onClick={exitSelect}>
                     Cancelar
@@ -354,7 +354,7 @@ export default function SpotifyPlaylistsPage() {
                         >
                           <SpotifyIcon className="h-4 w-4" />
                         </button>
-                        <button
+                        <DeleteIconButton
                           type="button"
                           title="Quitar de tu cuenta (dejar de seguir)"
                           disabled={busy}
@@ -363,10 +363,8 @@ export default function SpotifyPlaylistsPage() {
                             e.stopPropagation();
                             deleteOne(p);
                           }}
-                          className="rounded-md bg-neutral-800/80 px-1.5 py-0.5 text-sm text-neutral-400 transition hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
-                        >
-                          🗑
-                        </button>
+                          className="px-1.5 py-0.5"
+                        />
                       </div>
                     )}
                   </Card>

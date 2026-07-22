@@ -8,7 +8,7 @@ import type {
   YoutubeOwnPlaylist,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Card, Spinner } from '@/components/ui';
+import { Button, Card, DeleteIconButton, Spinner } from '@/components/ui';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { YoutubeIcon } from '@/components/youtube-icon';
 import { clsx } from '@/components/clsx';
@@ -154,7 +154,7 @@ export default function YoutubePlaylistsPage() {
                   disabled={selected.size === 0 || busy}
                   onClick={deleteSelected}
                 >
-                  {busy ? 'Eliminando…' : `🗑 Eliminar (${selected.size})`}
+                  {busy ? 'Eliminando…' : `✕ Eliminar (${selected.size})`}
                 </Button>
                 <Button variant="ghost" disabled={busy} onClick={exitSelect}>
                   Cancelar
@@ -282,7 +282,7 @@ export default function YoutubePlaylistsPage() {
                     >
                       <YoutubeIcon className="h-4 w-4" />
                     </button>
-                    <button
+                    <DeleteIconButton
                       type="button"
                       title="Eliminar playlist"
                       disabled={busy}
@@ -291,10 +291,8 @@ export default function YoutubePlaylistsPage() {
                         e.stopPropagation();
                         deleteOne(p);
                       }}
-                      className="rounded-md bg-neutral-800/80 px-1.5 py-0.5 text-sm text-neutral-400 transition hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
-                    >
-                      🗑
-                    </button>
+                      className="px-1.5 py-0.5"
+                    />
                   </div>
                 )}
               </Card>

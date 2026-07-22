@@ -8,7 +8,7 @@ import {
   ConfirmDialog,
   type ConfirmOptions,
 } from '@/components/confirm-dialog';
-import { Button, Card, Input, Spinner } from '@/components/ui';
+import { Button, Card, DeleteIconButton, Input, Spinner } from '@/components/ui';
 
 /** Color del punto indicador por estilo (acorde a los badges del catálogo). */
 const STYLE_DOT: Record<DanceStyle, string> = {
@@ -132,14 +132,11 @@ export default function AdminTagsPage() {
           >
             ✏️
           </button>
-          <button
-            className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
+          <DeleteIconButton
             title="Eliminar"
             aria-label="Eliminar"
             onClick={() => askDelete(t)}
-          >
-            🗑
-          </button>
+          />
         </div>
       </li>
     );

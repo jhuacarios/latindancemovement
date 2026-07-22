@@ -9,7 +9,7 @@ import type {
   PlaylistGenerationResult,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Card, Input, Spinner, StyleBadge } from '@/components/ui';
+import { Button, Card, DeleteIconButton, Input, Spinner, StyleBadge } from '@/components/ui';
 import { PlatformIcon } from '@/components/platform-icon';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
@@ -152,7 +152,7 @@ export function InternalPlaylistsView({
                     disabled={selected.size === 0 || busy}
                     onClick={deleteSelected}
                   >
-                    {busy ? 'Eliminando…' : `🗑 Eliminar (${selected.size})`}
+                    {busy ? 'Eliminando…' : `✕ Eliminar (${selected.size})`}
                   </Button>
                   <Button variant="ghost" disabled={busy} onClick={exitSelect}>
                     Cancelar
@@ -216,7 +216,7 @@ export function InternalPlaylistsView({
                 )}
 
                 {!selectMode && (
-                  <button
+                  <DeleteIconButton
                     type="button"
                     title="Eliminar playlist"
                     disabled={busy}
@@ -225,10 +225,8 @@ export function InternalPlaylistsView({
                       e.stopPropagation();
                       deleteOne(p);
                     }}
-                    className="absolute right-2 top-2 rounded-md bg-neutral-800/80 px-1.5 py-0.5 text-sm text-neutral-400 transition hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
-                  >
-                    🗑
-                  </button>
+                    className="absolute right-2 top-2 px-1.5 py-0.5"
+                  />
                 )}
               </Card>
             );

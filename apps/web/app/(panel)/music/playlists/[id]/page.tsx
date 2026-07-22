@@ -11,7 +11,7 @@ import type {
   Track,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { Button, Card, Input, Spinner, StyleBadge } from '@/components/ui';
+import { Button, Card, DeleteIconButton, Input, Spinner, StyleBadge } from '@/components/ui';
 import { PlayButtons } from '@/components/play-buttons';
 import { TrackThumb } from '@/components/track-thumb';
 import { SourceLink } from '@/components/source-link';
@@ -800,15 +800,12 @@ export default function PlaylistDetailPage() {
                           </button>
                         )}
                         {item.track && <SourceLink track={item.track} />}
-                        <button
-                          className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 transition hover:bg-red-600/20 hover:text-red-300 disabled:opacity-50"
+                        <DeleteIconButton
                           disabled={removeItem.isPending}
                           title="Quitar de la playlist"
                           aria-label="Quitar de la playlist"
                           onClick={() => confirmRemove(item)}
-                        >
-                          🗑
-                        </button>
+                        />
                       </div>
                     </td>
                   </tr>

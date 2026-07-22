@@ -33,6 +33,31 @@ export function Button({
   );
 }
 
+/**
+ * Botón de eliminar/quitar: una ✕ roja. Es el mismo look en toda la app, por eso
+ * vive acá y no repetido en cada vista. Acepta `className` para lo propio de
+ * cada lugar (posicionamiento, `shrink-0`, etc.).
+ */
+export function DeleteIconButton({
+  className,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={clsx(
+        'rounded-md border border-red-700/50 bg-red-500/10 px-2 py-1 text-sm font-bold leading-none',
+        'text-red-400 transition hover:border-red-500 hover:bg-red-500/20 hover:text-red-300',
+        'disabled:opacity-50',
+        className,
+      )}
+    >
+      ✕
+    </button>
+  );
+}
+
 export function Input({
   className,
   ...props

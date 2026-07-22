@@ -48,7 +48,7 @@ import {
 } from '@/components/confirm-dialog';
 import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
-import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
+import { Button, Card, DeleteIconButton, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 50;
 /** Se carga todo lo que matchea búsqueda+estilo y se filtra/pagina en cliente
@@ -720,7 +720,7 @@ export function MusicLibraryView({
 
           {data && (
             <Card className="overflow-x-auto p-0">
-              <table className="w-full text-sm">
+              <table className="w-full text-[11px] lg:text-sm">
                 {/* `whitespace-nowrap` (se hereda a los th) evita que un título
                     como "Fecha subida" se parta en dos líneas y duplique el alto
                     de la fila; `[&_th]` baja el padding solo del encabezado. */}
@@ -737,7 +737,10 @@ export function MusicLibraryView({
                         />
                       </th>
                     )}
-                    <th className="px-2 py-2 lg:px-4 lg:py-3 w-10 text-right tabular-nums">#</th>
+                    {/* Columna de numeración: en móvil casi sin aire lateral. */}
+                    <th className="w-6 px-0.5 py-2 text-right tabular-nums lg:w-10 lg:px-4 lg:py-3">
+                      #
+                    </th>
                     {showThumb && (
                       <th className="px-2 py-2 lg:px-3 lg:py-3 w-20"></th>
                     )}
@@ -876,7 +879,7 @@ export function MusicLibraryView({
                           />
                         </td>
                       )}
-                      <td className="px-2 py-2 lg:px-4 lg:py-3 text-right tabular-nums text-neutral-500">
+                      <td className="px-0.5 py-2 text-right tabular-nums text-neutral-500 lg:px-4 lg:py-3">
                         {(page - 1) * PAGE_SIZE + i + 1}
                       </td>
                       {showThumb && (
@@ -895,7 +898,13 @@ export function MusicLibraryView({
                       {cols.style && (
                         <td className="px-2 py-2 lg:px-4 lg:py-3">
                           <div className="flex flex-wrap items-center gap-1">
-                            <StyleBadge style={t.style} />
+                            {/* En móvil solo la inicial (B/S) para ahorrar ancho. */}
+                            <span className="lg:hidden">
+                              <StyleBadge style={t.style} compact />
+                            </span>
+                            <span className="hidden lg:inline">
+                              <StyleBadge style={t.style} />
+                            </span>
                             {t.tags && t.tags.length > 0
                               ? t.tags.map((tag) => (
                                   <span
@@ -990,8 +999,7 @@ export function MusicLibraryView({
                           )}
                           <SourceLink track={t} />
                           {canDelete && (
-                            <button
-                              className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
+                            <DeleteIconButton
                               onClick={() =>
                                 setConfirm({
                                   title: 'Quitar canción',
@@ -1011,9 +1019,7 @@ export function MusicLibraryView({
                               }
                               title="Quitar de mis canciones"
                               aria-label="Quitar de mis canciones"
-                            >
-                              🗑
-                            </button>
+                            />
                           )}
                         </div>
                       </td>

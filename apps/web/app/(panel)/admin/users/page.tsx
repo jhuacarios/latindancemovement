@@ -9,7 +9,7 @@ import {
   ConfirmDialog,
   type ConfirmOptions,
 } from '@/components/confirm-dialog';
-import { Button, Card, Input, Select, Spinner } from '@/components/ui';
+import { Button, Card, DeleteIconButton, Input, Select, Spinner } from '@/components/ui';
 
 export default function AdminUsersPage() {
   const qc = useQueryClient();
@@ -165,8 +165,7 @@ export default function AdminUsersPage() {
                     <td className="px-4 py-3 text-neutral-400">{u.city ?? '—'}</td>
                     <td className="px-4 py-3 text-right">
                       {!isMe && (
-                        <button
-                          className="rounded-md bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-red-600/20 hover:text-red-300"
+                        <DeleteIconButton
                           title="Eliminar usuario"
                           aria-label="Eliminar usuario"
                           onClick={() =>
@@ -185,9 +184,7 @@ export default function AdminUsersPage() {
                               onConfirm: () => remove.mutate(u.id),
                             })
                           }
-                        >
-                          🗑
-                        </button>
+                        />
                       )}
                     </td>
                   </tr>

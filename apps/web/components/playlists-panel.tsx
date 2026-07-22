@@ -11,6 +11,7 @@ import { areSimilarTracks } from '@/lib/similarity';
 import { trackThumbUrl } from './track-thumb';
 import { usePlayer } from './player';
 import { clsx } from './clsx';
+import { DeleteIconButton } from '@/components/ui';
 
 /**
  * Panel lateral de playlists internas con drill-down:
@@ -543,7 +544,7 @@ export function PlaylistsPanel({
                       </div>
                     </div>
                     {t && <StyleBadge style={t.style} compact />}
-                    <button
+                    <DeleteIconButton
                       type="button"
                       title="Quitar de la playlist"
                       aria-label="Quitar de la playlist"
@@ -552,10 +553,8 @@ export function PlaylistsPanel({
                         setOptimistic(songs.filter((s) => s.id !== it.id));
                         removeMut.mutate(it.id);
                       }}
-                      className="shrink-0 rounded-md px-1.5 py-1 text-[11px] text-neutral-500 opacity-70 transition hover:bg-red-600/20 hover:text-red-300 hover:opacity-100"
-                    >
-                      🗑
-                    </button>
+                      className="shrink-0 px-1.5 py-0.5 text-[11px]"
+                    />
                   </div>
                 );
               })}
