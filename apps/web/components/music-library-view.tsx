@@ -79,6 +79,17 @@ const ALL_COLS_VISIBLE: ColVis = {
   vpd: true,
 };
 
+/** En celular no entran todas: se arranca con lo mínimo útil (título va siempre)
+ *  y el resto se muestra desde el engranaje, como en escritorio. */
+const MOBILE_COLS_VISIBLE: ColVis = {
+  artist: true,
+  style: true,
+  origin: false,
+  duration: false,
+  date: false,
+  vpd: false,
+};
+
 /**
  * "Mis Canciones" reutilizable para una fuente (YouTube o Spotify). La biblioteca
  * y las playlists internas son las mismas; solo cambia el filtro por fuente, los
@@ -154,9 +165,17 @@ export function MusicLibraryView({
   useEffect(() => {
     try {
       const raw = localStorage.getItem(colsStorageKey);
-      if (raw) setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
+      if (raw) {
+        setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
+        return;
+      }
     } catch {
-      /* preferencia inválida: usa defaults */
+      /* preferencia inválida: sigue y usa los defaults */
+    }
+    // Sin nada guardado: en celular arranca con menos columnas. Apenas toque el
+    // engranaje se guarda su elección y manda esa.
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      setCols(MOBILE_COLS_VISIBLE);
     }
   }, [colsStorageKey]);
 
