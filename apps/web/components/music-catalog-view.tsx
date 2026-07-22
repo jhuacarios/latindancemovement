@@ -68,7 +68,11 @@ type ColKey =
   | 'year'
   | 'views'
   | 'vpd'
-  | 'added';
+  | 'added'
+  // Botones de la columna de acciones (se guardan junto a las columnas).
+  | 'video'
+  | 'source'
+  | 'edit';
 type ColVis = Record<ColKey, boolean>;
 
 const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
@@ -81,6 +85,14 @@ const COLUMN_DEFS: { key: ColKey; label: string; youtubeOnly?: boolean }[] = [
   { key: 'added', label: 'Agregado' },
 ];
 
+/** Botones de la columna de acciones que se pueden mostrar u ocultar. Reproducir,
+ *  eliminar y "agregar a mis canciones" no entran: son las acciones principales. */
+const ACTION_DEFS: { key: ColKey; label: string; adminOnly?: boolean }[] = [
+  { key: 'video', label: 'Ver video' },
+  { key: 'source', label: 'Abrir en la plataforma' },
+  { key: 'edit', label: 'Editar canción', adminOnly: true },
+];
+
 const ALL_COLS_VISIBLE: ColVis = {
   artist: true,
   style: true,
@@ -89,6 +101,24 @@ const ALL_COLS_VISIBLE: ColVis = {
   views: true,
   vpd: true,
   added: true,
+  video: true,
+  source: true,
+  edit: true,
+};
+
+/** En celular no entran todas: se arranca con lo minimo util (titulo va siempre)
+ *  y el resto se muestra desde el engranaje, como en escritorio. */
+const MOBILE_COLS_VISIBLE: ColVis = {
+  artist: true,
+  style: true,
+  duration: false,
+  year: false,
+  views: false,
+  vpd: false,
+  added: false,
+  video: false,
+  source: false,
+  edit: false,
 };
 
 /**
@@ -139,9 +169,17 @@ export function MusicCatalogView({
   useEffect(() => {
     try {
       const raw = localStorage.getItem(colsStorageKey);
-      if (raw) setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
+      if (raw) {
+        setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
+        return;
+      }
     } catch {
-      /* preferencia inválida: usa defaults */
+      /* preferencia inválida: sigue y usa los defaults */
+    }
+    // Sin nada guardado: en celular arranca con menos columnas. Apenas toque el
+    // engranaje se guarda su elección y manda esa.
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      setCols(MOBILE_COLS_VISIBLE);
     }
   }, [colsStorageKey]);
 
@@ -546,9 +584,11 @@ export function MusicCatalogView({
           <AdminImportExport />
         ))}
 
-      <Card className="flex flex-wrap items-end gap-3">
+      <Card className="flex flex-wrap items-end gap-1.5 px-2 py-1.5 lg:gap-3 lg:px-3 lg:py-2">
         <div className="grow">
-          <label className="mb-1 block text-xs text-neutral-400">Buscar</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Buscar
+          </label>
           <SearchInput
             placeholder="Título o artista…"
             value={search}
@@ -559,7 +599,9 @@ export function MusicCatalogView({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Estilo</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Estilo
+          </label>
           <StyleFilter
             value={style}
             onChange={(v) => {
@@ -571,7 +613,7 @@ export function MusicCatalogView({
         </div>
         {style && (
           <div>
-            <label className="mb-1 block text-xs text-neutral-400">
+            <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
               Sub-estilo
             </label>
             <SubstyleFilterMultiSelect
@@ -585,10 +627,10 @@ export function MusicCatalogView({
           </div>
         )}
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">
+          <label className="mb-1 block text-[10px] text-neutral-400 lg:text-xs">
             Últimos meses
           </label>
-          <div className="flex items-center gap-1 rounded-lg border border-neutral-700 px-2 py-1.5 focus-within:border-brand">
+          <div className="flex items-center gap-1 rounded-lg border border-neutral-700 px-1.5 py-1 focus-within:border-brand lg:px-2 lg:py-1.5">
             <input
               type="text"
               inputMode="numeric"
@@ -599,9 +641,9 @@ export function MusicCatalogView({
                 setLastMonths(e.target.value.replace(/[^0-9]/g, '').slice(0, 3));
                 setPage(1);
               }}
-              className="w-10 bg-transparent text-sm text-neutral-200 [appearance:textfield] focus:outline-none"
+              className="w-8 bg-transparent text-xs text-neutral-200 [appearance:textfield] focus:outline-none lg:w-10 lg:text-sm"
             />
-            <span className="text-xs text-neutral-500">meses</span>
+            <span className="text-[10px] text-neutral-500 lg:text-xs">meses</span>
             {lastMonths && (
               <button
                 type="button"
@@ -615,13 +657,15 @@ export function MusicCatalogView({
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Novedades</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Novedades
+          </label>
           <button
             type="button"
             onClick={() => setOnlyNew((v) => !v)}
             title="Mostrar solo canciones lanzadas hace 2 meses o menos"
             className={
-              'rounded-lg border px-3 py-2 text-sm transition ' +
+              'rounded-lg border px-2 py-1.5 text-xs transition lg:px-3 lg:py-2 lg:text-sm ' +
               (onlyNew
                 ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
                 : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
@@ -631,7 +675,9 @@ export function MusicCatalogView({
           </button>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Top</label>
+          <label className="mb-1 block text-[10px] text-neutral-400 max-lg:hidden lg:text-xs">
+            Top
+          </label>
           <button
             type="button"
             onClick={() => setOnlyEpic((v) => !v)}
@@ -641,7 +687,7 @@ export function MusicCatalogView({
                 : 'Mostrar solo las Épicas: top 50 por reproducciones/día de cada estilo'
             }
             className={
-              'rounded-lg border px-3 py-2 text-sm transition ' +
+              'rounded-lg border px-2 py-1.5 text-xs transition lg:px-3 lg:py-2 lg:text-sm ' +
               (onlyEpic
                 ? 'border-purple-500/60 bg-purple-500/15 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
                 : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800')
@@ -657,11 +703,13 @@ export function MusicCatalogView({
 
       {data && (
         <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-neutral-800 text-left text-neutral-400">
+          <table className="w-full text-[11px] lg:min-w-[720px] lg:text-sm">
+            {/* `whitespace-nowrap` se hereda a los th: evita que un titulo se parta en
+                dos lineas y duplique el alto; `[&_th]` baja solo el encabezado. */}
+            <thead className="whitespace-nowrap border-b border-neutral-800 text-left text-neutral-400 [&_th]:py-1">
               <tr>
                 {selectMode && (
-                  <th className="px-4 py-2 w-10">
+                  <th className="w-10 px-2 py-2 lg:px-4">
                     <input
                       type="checkbox"
                       className="accent-[var(--color-brand)]"
@@ -671,14 +719,17 @@ export function MusicCatalogView({
                     />
                   </th>
                 )}
-                <th className="px-4 py-2 w-10 text-right tabular-nums">#</th>
-                {showThumb && <th className="px-3 py-2 w-20"></th>}
+                {/* Numeracion: en movil casi sin aire lateral. */}
+                <th className="w-6 px-0.5 py-2 text-right tabular-nums lg:w-10 lg:px-4">
+                  #
+                </th>
+                {showThumb && <th className="w-20 px-2 py-2 lg:px-3"></th>}
                 <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
                 {cols.artist && (
                   <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
                 )}
-                {cols.style && <th className="px-4 py-2">Estilo</th>}
-                {cols.duration && <th className="px-4 py-2">Duración</th>}
+                {cols.style && <th className="px-2 py-2 lg:px-4">Estilo</th>}
+                {cols.duration && <th className="px-2 py-2 lg:px-4">Duración</th>}
                 {cols.year && (
                   <SortTh label={isSpotify ? 'Fecha' : 'Fecha subida'} col="releaseDate" primary="desc" sort={sort} onSort={onSort} />
                 )}
@@ -719,7 +770,7 @@ export function MusicCatalogView({
                       title="Mostrar u ocultar columnas"
                       aria-label="Configurar columnas"
                       aria-expanded={colMenuOpen}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-xs font-normal text-neutral-300 transition hover:bg-neutral-800"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-0.5 text-xs font-normal text-neutral-300 transition hover:bg-neutral-800"
                     >
                       ⚙️ <span className="hidden sm:inline">Columnas</span>
                     </button>
@@ -759,6 +810,28 @@ export function MusicCatalogView({
                               : c.label}
                           </label>
                         ))}
+
+                        <p className="mt-1 border-t border-neutral-800 px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                          Acciones
+                        </p>
+                        {ACTION_DEFS.filter((a) => !a.adminOnly || canEdit).map(
+                          (a) => (
+                            <label
+                              key={a.key}
+                              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={cols[a.key]}
+                                onChange={() => toggleCol(a.key)}
+                                className="accent-[var(--color-brand)]"
+                              />
+                              {a.key === 'source'
+                                ? `Abrir en ${isSpotify ? 'Spotify' : 'YouTube'}`
+                                : a.label}
+                            </label>
+                          ),
+                        )}
                       </div>
                     )}
                   </div>
@@ -779,7 +852,7 @@ export function MusicCatalogView({
                   }
                 >
                   {selectMode && (
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2 lg:px-4 lg:py-3">
                       <input
                         type="checkbox"
                         className="accent-[var(--color-brand)]"
@@ -788,7 +861,7 @@ export function MusicCatalogView({
                       />
                     </td>
                   )}
-                  <td className="px-4 py-3 text-right tabular-nums text-neutral-500">
+                  <td className="px-0.5 py-2 text-right tabular-nums text-neutral-500 lg:px-4 lg:py-3">
                     {(page - 1) * PAGE_SIZE + i + 1}
                   </td>
                   {showThumb && (
@@ -796,18 +869,24 @@ export function MusicCatalogView({
                       <TrackThumb track={t} />
                     </td>
                   )}
-                  <td className="px-4 py-3 font-medium">
+                  <td className="px-2 py-2 lg:px-4 lg:py-3 font-medium">
                     {t.title}
                     {isNewRelease(t.releaseDate) && <NewBadge />}
                     {epicIds.has(t.id) && <EpicBadge />}
                   </td>
                   {cols.artist && (
-                    <td className="px-4 py-3 text-neutral-300">{t.artist}</td>
+                    <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-300">{t.artist}</td>
                   )}
                   {cols.style && (
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-2 lg:px-4 lg:py-3">
                       <div className="flex flex-wrap items-center gap-1">
-                        <StyleBadge style={t.style} />
+                        {/* En movil solo la inicial (B/S) para ahorrar ancho. */}
+                        <span className="lg:hidden">
+                          <StyleBadge style={t.style} compact />
+                        </span>
+                        <span className="hidden lg:inline">
+                          <StyleBadge style={t.style} />
+                        </span>
                         {t.substyles?.map((s) => (
                           <span
                             key={s}
@@ -820,36 +899,36 @@ export function MusicCatalogView({
                     </td>
                   )}
                   {cols.duration && (
-                    <td className="px-4 py-3 text-neutral-400 tabular-nums">
+                    <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-400 tabular-nums">
                       {formatDuration(t.durationSec)}
                     </td>
                   )}
                   {cols.year && (
-                    <td className="px-4 py-3 whitespace-nowrap text-neutral-400">
+                    <td className="px-2 py-2 lg:px-4 lg:py-3 whitespace-nowrap text-neutral-400">
                       {formatReleaseDate(t.releaseDate, t.year)}
                     </td>
                   )}
                   {!isSpotify && cols.views && (
-                    <td className="px-4 py-3 tabular-nums text-neutral-400">
+                    <td className="px-2 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
                       {formatViews(t.details?.viewCount)}
                     </td>
                   )}
                   {!isSpotify && cols.vpd && (
-                    <td className="px-4 py-3 tabular-nums text-neutral-400">
+                    <td className="px-2 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
                       {formatViewsPerDay(t.details?.viewCount, t.releaseDate)}
                     </td>
                   )}
                   {cols.added && (
-                    <td className="px-4 py-3 text-neutral-400">
+                    <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-400">
                       {new Date(t.createdAt).toLocaleDateString('es-CL')}
                     </td>
                   )}
                   <td
-                    className="w-px whitespace-nowrap px-4 py-3 text-right"
+                    className="w-px whitespace-nowrap px-2 py-2 text-right lg:px-4 lg:py-3"
                     onClick={() => setActiveRowId(t.id)}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      <PlayButtons track={t} />
+                      <PlayButtons track={t} showVideo={cols.video} />
                       {isSpotify &&
                         (t.spotifyPlayable === false ? (
                           <button
@@ -892,8 +971,8 @@ export function MusicCatalogView({
                             {spotifyPlaying?.sourceId === t.sourceId ? '⏸' : '▶'}
                           </button>
                         ))}
-                      <SourceLink track={t} />
-                      {canEdit && (
+                      {cols.source && <SourceLink track={t} />}
+                      {canEdit && cols.edit && (
                         <button
                           className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
                           title="Editar canción"
