@@ -31,6 +31,9 @@ export default function PanelLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string | null>(null);
+  // Módulo desplegado en el menú. Al navegar se abre el de la ruta actual; el
+  // usuario puede abrir/cerrar otro con un click, sin navegar.
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [viewAsRole, setViewAsRoleState] = useState<UserRole | null>(null);
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -54,9 +57,10 @@ export default function PanelLayout({
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
 
-  // En móvil, cierra el menú desplegable al navegar a otra ruta.
+  // Al navegar: en móvil cierra el cajón, y despliega el módulo de la ruta.
   useEffect(() => {
     setMobileOpen(false);
+    setOpenKey(moduleForPath(pathname)?.key ?? null);
   }, [pathname]);
 
   if (loading || !user) {
@@ -176,28 +180,59 @@ export default function PanelLayout({
           {myModules.map((m) => {
             const isActive =
               pathname === m.href || pathname.startsWith(`${m.href}/`);
+            const hasChildren = Boolean(m.children?.length);
+            const isOpen = openKey === m.key;
+            const rowClass = clsx(
+              'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] transition lg:text-sm',
+              isActive
+                ? 'bg-brand/15 text-brand'
+                : 'text-neutral-300 hover:bg-neutral-800',
+            );
+            const rowContent = (
+              <>
+                <span>
+                  {m.icon} {m.title}
+                </span>
+                {m.status === 'soon' && (
+                  <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 lg:text-xs">
+                    pronto
+                  </span>
+                )}
+                {hasChildren && (
+                  <span
+                    aria-hidden
+                    className={clsx(
+                      'shrink-0 text-[9px] text-neutral-500 transition-transform',
+                      isOpen && 'rotate-90',
+                    )}
+                  >
+                    ▶
+                  </span>
+                )}
+              </>
+            );
             return (
               <div key={m.key}>
-                <Link
-                  href={m.href}
-                  className={clsx(
-                    'flex items-center justify-between rounded-lg px-3 py-2 text-[11px] transition lg:text-sm',
-                    isActive
-                      ? 'bg-brand/15 text-brand'
-                      : 'text-neutral-300 hover:bg-neutral-800',
-                  )}
-                >
-                  <span>
-                    {m.icon} {m.title}
-                  </span>
-                  {m.status === 'soon' && (
-                    <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 lg:text-xs">
-                      pronto
-                    </span>
-                  )}
-                </Link>
+                {/* Con sub-secciones el click solo despliega: el link del módulo
+                    lleva a "Resumen", que ya aparece en la lista de abajo. */}
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={() =>
+                      setOpenKey((k) => (k === m.key ? null : m.key))
+                    }
+                    className={rowClass}
+                  >
+                    {rowContent}
+                  </button>
+                ) : (
+                  <Link href={m.href} className={rowClass}>
+                    {rowContent}
+                  </Link>
+                )}
 
-                {isActive && m.children && (
+                {isOpen && m.children && (
                   <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-neutral-800 pl-3">
                     {m.children.map((c) => {
                       if (!perms.can(effectiveRole, c.key, 'ver')) return null;
