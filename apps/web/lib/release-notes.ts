@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.11',
+    date: '2026-07-23',
+    module: 'music.youtube.playlists',
+    type: 'feature',
+    title: 'Reordenar canciones desde el celular',
+    description:
+      'En el detalle de una playlist ahora podés reordenar las canciones en el teléfono con los botones ▲▼ de cada fila (el arrastre no funcionaba con el dedo). En computador se sigue reordenando arrastrando, como siempre.',
+  },
+  {
     version: '0.9.10',
     date: '2026-07-23',
     module: 'music.youtube.playlists',

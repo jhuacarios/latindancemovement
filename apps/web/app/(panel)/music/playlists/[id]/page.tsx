@@ -434,6 +434,18 @@ export default function PlaylistDetailPage() {
     reorder.mutate(rest.map((i) => i.id));
   }
 
+  // Reordenar una posición (para móvil, donde el drag táctil no funciona).
+  // Reusa el mismo patrón optimista que el drag.
+  function moveItem(index: number, delta: number) {
+    const to = index + delta;
+    if (to < 0 || to >= items.length) return;
+    const arr = [...items];
+    const [m] = arr.splice(index, 1);
+    arr.splice(to, 0, m);
+    setLocalItems(arr); // optimista
+    reorder.mutate(arr.map((i) => i.id));
+  }
+
   function confirmRemove(item: PlaylistItem) {
     setConfirm({
       title: 'Quitar de la playlist',
@@ -633,7 +645,8 @@ export default function PlaylistDetailPage() {
 
           {items.length > 1 && (
             <p className="text-xs text-neutral-500">
-              Arrastra una fila para reordenar
+              <span className="max-lg:hidden">Arrastra una fila para reordenar</span>
+              <span className="lg:hidden">Usa ▲▼ para reordenar</span>
               {drawerOpen && ', o arrastra canciones desde el panel para agregarlas'}
               .
             </p>
@@ -846,7 +859,30 @@ export default function PlaylistDetailPage() {
                       </td>
                     )}
                     <td className="px-1 py-2 lg:px-4 lg:py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1 lg:gap-2">
+                        {/* Reordenar en móvil (el arrastre táctil no funciona). */}
+                        <div className="flex flex-col lg:hidden">
+                          <button
+                            type="button"
+                            title="Subir"
+                            aria-label="Subir"
+                            disabled={idx === 0 || reorder.isPending}
+                            onClick={() => moveItem(idx, -1)}
+                            className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            title="Bajar"
+                            aria-label="Bajar"
+                            disabled={idx === items.length - 1 || reorder.isPending}
+                            onClick={() => moveItem(idx, 1)}
+                            className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
+                          >
+                            ▼
+                          </button>
+                        </div>
                         {item.track && (
                           <PlayButtons track={item.track} showVideo={cols.video} />
                         )}
