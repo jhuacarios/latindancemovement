@@ -24,6 +24,9 @@ export function SubstyleFilterSelect({
   const { data: vocab } = useQuery({
     queryKey: ['tags-vocab'],
     queryFn: () => api<Tag[]>('/music/tags'),
+    // El vocabulario de sub-estilos casi no cambia: se cachea para que el modal
+    // no lo vuelva a pedir cada vez que se abre.
+    staleTime: 5 * 60 * 1000,
   });
   const names = (vocab ?? [])
     .filter((t) => t.style === style)
@@ -59,6 +62,9 @@ export function SubstyleFilterMultiSelect({
   const { data: vocab } = useQuery({
     queryKey: ['tags-vocab'],
     queryFn: () => api<Tag[]>('/music/tags'),
+    // El vocabulario de sub-estilos casi no cambia: se cachea para que el modal
+    // no lo vuelva a pedir cada vez que se abre.
+    staleTime: 5 * 60 * 1000,
   });
   const names = (vocab ?? [])
     .filter((t) => t.style === style)
@@ -145,6 +151,9 @@ export function SubstyleMultiSelect({
   const { data: vocab } = useQuery({
     queryKey: ['tags-vocab'],
     queryFn: () => api<Tag[]>('/music/tags'),
+    // El vocabulario de sub-estilos casi no cambia: se cachea para que el modal
+    // no lo vuelva a pedir cada vez que se abre.
+    staleTime: 5 * 60 * 1000,
   });
 
   // Sin estilo aún: no se muestran opciones.

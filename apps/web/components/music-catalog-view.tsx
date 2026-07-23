@@ -12,6 +12,8 @@ import {
 import { api, ApiError, downloadFile, uploadFile } from '@/lib/api';
 import { useEffectiveRole } from '@/lib/view-as-role';
 import { usePermissions } from '@/lib/permissions';
+import { useIsMobile } from '@/lib/use-is-mobile';
+import { useDebounced } from '@/lib/use-debounce';
 import { AddTrackForm, type NewTrackBody } from '@/components/add-track-form';
 import { PlayButtons } from '@/components/play-buttons';
 import { SearchInput } from '@/components/search-input';
@@ -53,7 +55,7 @@ import {
 import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
 
 // Sin paginación por ahora: traemos todo el catálogo de una.
-const PAGE_SIZE = 250;
+const PAGE_SIZE = 150;
 /** Se carga todo lo que matchea búsqueda+estilo (server-side) y se filtra/pagina
  * en cliente, para que búsqueda cubra TODO el catálogo y los filtros calculados
  * (nuevas/épicas/meses) cubran todo lo cargado. */
@@ -160,15 +162,22 @@ export function MusicCatalogView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showThumb, toggleThumb] = useThumbs();
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
-  // Columnas visibles (persistidas por fuente) + menú del engranaje.
-  const colsStorageKey = `nectason.catalogCols.${source}`;
+  // Columnas visibles + menú del engranaje. Se guardan por fuente Y por tamaño:
+  // móvil y escritorio tienen su propia configuración (claves separadas).
+  const isMobile = useIsMobile();
+  const colsBaseKey = `nectason.catalogCols.${source}`;
+  const colsStorageKey = `${colsBaseKey}.${isMobile ? 'mobile' : 'desktop'}`;
   const [cols, setCols] = useState<ColVis>(ALL_COLS_VISIBLE);
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const colMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(colsStorageKey);
+      // En escritorio, si aún no hay config nueva, hereda la de la clave vieja
+      // (sin sufijo) para no perder lo que el usuario ya tenía configurado.
+      const raw =
+        localStorage.getItem(colsStorageKey) ??
+        (isMobile ? null : localStorage.getItem(colsBaseKey));
       if (raw) {
         setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
         return;
@@ -177,11 +186,9 @@ export function MusicCatalogView({
       /* preferencia inválida: sigue y usa los defaults */
     }
     // Sin nada guardado: en celular arranca con menos columnas. Apenas toque el
-    // engranaje se guarda su elección y manda esa.
-    if (window.matchMedia('(max-width: 1023px)').matches) {
-      setCols(MOBILE_COLS_VISIBLE);
-    }
-  }, [colsStorageKey]);
+    // engranaje se guarda su elección (en la clave de ese tamaño) y manda esa.
+    setCols(isMobile ? MOBILE_COLS_VISIBLE : ALL_COLS_VISIBLE);
+  }, [colsStorageKey, colsBaseKey, isMobile]);
 
   function toggleCol(key: ColKey) {
     setCols((prev) => {
@@ -274,14 +281,17 @@ export function MusicCatalogView({
       api<LibrarySummary>(`/music/tracks/summary?source=${source}`),
   });
 
+  // La búsqueda se consulta con debounce: el input se ve al instante, pero el
+  // request al servidor (sobre TODO el catálogo) se dispara al dejar de escribir.
+  const debouncedSearch = useDebounced(search, 300);
   const { data, isLoading, error } = useQuery({
     // Búsqueda/estilo/orden en el server (cubren TODO el catálogo); los
     // sub-estilos/nuevas/épicas/meses se filtran en cliente sobre lo cargado.
-    queryKey: ['catalog', source, { search, style, sort }],
+    queryKey: ['catalog', source, { search: debouncedSearch, style, sort }],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('source', source);
-      if (search) p.set('search', search);
+      if (debouncedSearch) p.set('search', debouncedSearch);
       if (style) p.set('style', style);
       if (sort.by) {
         p.set('sortBy', sort.by);
@@ -406,39 +416,57 @@ export function MusicCatalogView({
 
   // Novedades (lanzadas hace ≤ 2 meses): filtro en cliente, consistente con el
   // badge ✨ NUEVO. El catálogo se trae completo, así que no requiere backend.
-  const newCount = data
-    ? data.data.filter((t) => isNewRelease(t.releaseDate)).length
-    : 0;
+  const newCount = useMemo(
+    () =>
+      data ? data.data.filter((t) => isNewRelease(t.releaseDate)).length : 0,
+    [data],
+  );
   const monthsN = Number(lastMonths) || 0;
-  const visibleRows = data
-    ? data.data.filter(
-        (t) =>
-          (!onlyNew || isNewRelease(t.releaseDate)) &&
-          (!onlyEpic || epicIds.has(t.id)) &&
-          (substyles.length === 0 ||
-            substyles.some((s) => t.substyles?.includes(s))) &&
-          isWithinLastMonths(t.releaseDate, t.year, monthsN),
-      )
-    : [];
+  // El pipeline se memoiza para que su resultado sea estable entre renders. Sin
+  // esto, `data.data.filter`/`.slice` creaban un array nuevo en CADA render, así
+  // que cualquier cambio de estado ajeno a la tabla (abrir el menú del engranaje,
+  // un modal, etc.) reconstruía las 250 filas y se sentía el lag.
+  const visibleRows = useMemo(
+    () =>
+      data
+        ? data.data.filter(
+            (t) =>
+              (!onlyNew || isNewRelease(t.releaseDate)) &&
+              (!onlyEpic || epicIds.has(t.id)) &&
+              (substyles.length === 0 ||
+                substyles.some((s) => t.substyles?.includes(s))) &&
+              isWithinLastMonths(t.releaseDate, t.year, monthsN),
+          )
+        : [],
+    [data, onlyNew, onlyEpic, epicIds, substyles, monthsN],
+  );
   // Orden por Repr./día (calculado en cliente); las sin dato van al final.
-  const sortedRows = vpdSort
-    ? [...visibleRows].sort((a, b) => {
-        const va = viewsPerDay(a.details?.viewCount, a.releaseDate) ?? -1;
-        const vb = viewsPerDay(b.details?.viewCount, b.releaseDate) ?? -1;
-        return vpdSort === 'desc' ? vb - va : va - vb;
-      })
-    : visibleRows;
+  const sortedRows = useMemo(
+    () =>
+      vpdSort
+        ? [...visibleRows].sort((a, b) => {
+            const va = viewsPerDay(a.details?.viewCount, a.releaseDate) ?? -1;
+            const vb = viewsPerDay(b.details?.viewCount, b.releaseDate) ?? -1;
+            return vpdSort === 'desc' ? vb - va : va - vb;
+          })
+        : visibleRows,
+    [visibleRows, vpdSort],
+  );
   // Paginación en cliente de a PAGE_SIZE sobre el set filtrado+ordenado.
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
-  const pageRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageRows = useMemo(
+    () => sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [sortedRows, page],
+  );
 
   // Si un filtro/búsqueda deja la página fuera de rango, vuelve a la 1.
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [page, totalPages]);
 
-  const pageIds = pageRows.map((t) => t.id);
-  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const pageIds = useMemo(() => pageRows.map((t) => t.id), [pageRows]);
+  const allSelected =
+    pageIds.length > 0 && pageIds.every((id) => selected.has(id));
   function toggleAll() {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -460,6 +488,224 @@ export function MusicCatalogView({
     (!isSpotify && cols.views ? 1 : 0) +
     (!isSpotify && cols.vpd ? 1 : 0) +
     (cols.added ? 1 : 0);
+
+
+  // Filas memoizadas: como el pipeline (pageRows) ya es estable, esto solo se
+  // reconstruye cuando cambia algo que las filas realmente muestran. Abrir el
+  // menú de columnas, un modal, etc. (estado que las filas no leen) ya no las
+  // reconstruye, así que responde sin lag.
+  const rowsEl = useMemo(
+    () => pageRows.map((t, i) => (
+                <tr
+                  key={t.id}
+                  className={
+                    'border-b border-neutral-800/60 last:border-0 ' +
+                    (activeRowId === t.id
+                      ? 'bg-brand/10'
+                      : selected.has(t.id)
+                        ? 'bg-brand/5'
+                        : '')
+                  }
+                >
+                  {selectMode && (
+                    <td className="px-1 py-2 lg:px-4 lg:py-3">
+                      <input
+                        type="checkbox"
+                        className="accent-[var(--color-brand)]"
+                        checked={selected.has(t.id)}
+                        onChange={() => toggleSel(t.id)}
+                      />
+                    </td>
+                  )}
+                  <td className="px-0.5 py-2 text-right tabular-nums text-neutral-500 lg:px-4 lg:py-3">
+                    {(page - 1) * PAGE_SIZE + i + 1}
+                  </td>
+                  {showThumb && (
+                    <td className="px-3 py-2">
+                      <TrackThumb track={t} />
+                    </td>
+                  )}
+                  <td className="px-1 py-2 lg:px-4 lg:py-3 font-medium">
+                    {t.title}
+                    {isNewRelease(t.releaseDate) && <NewBadge />}
+                    {epicIds.has(t.id) && <EpicBadge />}
+                  </td>
+                  {cols.artist && (
+                    <td className="px-1 py-2 text-neutral-300 max-lg:w-px lg:px-4 lg:py-3">
+                    {t.artist}
+                  </td>
+                  )}
+                  {cols.style && (
+                    <td className="px-2 py-2 max-lg:w-px lg:px-4 lg:py-3">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {/* En movil solo la inicial (B/S) para ahorrar ancho. */}
+                        <span className="lg:hidden">
+                          <StyleBadge style={t.style} compact />
+                        </span>
+                        <span className="hidden lg:inline">
+                          <StyleBadge style={t.style} />
+                        </span>
+                        {t.substyles?.map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 max-lg:hidden"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  )}
+                  {cols.duration && (
+                    <td className="px-1 py-2 lg:px-4 lg:py-3 text-neutral-400 tabular-nums">
+                      {formatDuration(t.durationSec)}
+                    </td>
+                  )}
+                  {cols.year && (
+                    <td className="px-1 py-2 lg:px-4 lg:py-3 whitespace-nowrap text-neutral-400">
+                      {formatReleaseDate(t.releaseDate, t.year)}
+                    </td>
+                  )}
+                  {!isSpotify && cols.views && (
+                    <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
+                      {formatViews(t.details?.viewCount)}
+                    </td>
+                  )}
+                  {!isSpotify && cols.vpd && (
+                    <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
+                      {formatViewsPerDay(t.details?.viewCount, t.releaseDate)}
+                    </td>
+                  )}
+                  {cols.added && (
+                    <td className="px-1 py-2 lg:px-4 lg:py-3 text-neutral-400">
+                      {new Date(t.createdAt).toLocaleDateString('es-CL')}
+                    </td>
+                  )}
+                  <td
+                    className="w-px whitespace-nowrap px-2 py-2 text-right lg:px-4 lg:py-3"
+                    onClick={() => setActiveRowId(t.id)}
+                  >
+                    <div className="flex items-center justify-end gap-1 lg:gap-2">
+                      <PlayButtons track={t} showVideo={cols.video} />
+                      {isSpotify &&
+                        (t.spotifyPlayable === false ? (
+                          <button
+                            type="button"
+                            disabled
+                            title="No disponible en tu región: Spotify restringe esta canción, no se puede reproducir."
+                            aria-label="No disponible en tu región"
+                            className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-full bg-neutral-800/50 text-xs text-neutral-600"
+                          >
+                            🚫
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            title={
+                              spotifyPlaying?.sourceId === t.sourceId
+                                ? 'Detener'
+                                : 'Reproducir (Spotify)'
+                            }
+                            aria-label="Reproducir"
+                            onClick={() =>
+                              setSpotifyPlaying(
+                                spotifyPlaying?.sourceId === t.sourceId
+                                  ? null
+                                  : {
+                                      sourceId: t.sourceId,
+                                      title: t.title,
+                                      artist: t.artist,
+                                      imageUrl: t.coverUrl,
+                                    },
+                              )
+                            }
+                            className={
+                              'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
+                              (spotifyPlaying?.sourceId === t.sourceId
+                                ? 'bg-brand text-white'
+                                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
+                            }
+                          >
+                            {spotifyPlaying?.sourceId === t.sourceId ? '⏸' : '▶'}
+                          </button>
+                        ))}
+                      {cols.source && <SourceLink track={t} />}
+                      {canEdit && cols.edit && (
+                        <button
+                          className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
+                          title="Editar canción"
+                          aria-label="Editar canción"
+                          onClick={() => setEditTrack(t)}
+                        >
+                          ✏️
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          className="rounded-md bg-neutral-800 px-2 py-1 text-base font-bold leading-none text-red-500 transition hover:bg-red-600/20 hover:text-red-400"
+                          title="Eliminar del catálogo"
+                          aria-label="Eliminar del catálogo"
+                          onClick={() =>
+                            setConfirm({
+                              title: 'Eliminar del catálogo',
+                              danger: true,
+                              confirmLabel: 'Eliminar',
+                              message: (
+                                <>
+                                  ¿Eliminar <b>{t.title}</b> del catálogo? Se
+                                  quitará de las bibliotecas y playlists de todos
+                                  los DJs. Esta acción no se puede deshacer.
+                                </>
+                              ),
+                              onConfirm: () => removeTrack.mutate(t.id),
+                            })
+                          }
+                        >
+                          ✕
+                        </button>
+                      )}
+                      {/* Agregar a mi biblioteca: acción personal, disponible
+                          para cualquiera que vea el catálogo (no es editar el
+                          catálogo global). */}
+                      <button
+                        className={
+                          'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300' +
+                          (t.inLibrary ? '' : ' hover:bg-emerald-500/25')
+                        }
+                        disabled={toggle.isPending}
+                        title={
+                          t.inLibrary
+                            ? 'En mis canciones'
+                            : 'Agregar a mis canciones'
+                        }
+                        aria-label={
+                          t.inLibrary
+                            ? 'En mis canciones'
+                            : 'Agregar a mis canciones'
+                        }
+                        onClick={() => toggle.mutate(t)}
+                      >
+                        {/* En móvil solo el símbolo; el texto vuelve en escritorio. */}
+                        {t.inLibrary ? (
+                          <>
+                            ✓<span className="max-lg:hidden"> En mis canciones</span>
+                          </>
+                        ) : (
+                          <>
+                            +<span className="max-lg:hidden"> Agregar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )),
+    // Nota: se depende de `toggle.isPending` (primitivo), NO de `toggle`/
+    // `removeTrack` completos: React Query recrea esos objetos en cada render, lo
+    // que haría recomputar esto siempre. Sus `.mutate` sí son estables.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pageRows, page, cols, showThumb, selectMode, selected, activeRowId, epicIds, isSpotify, spotifyPlaying, canEdit, canDelete, toggle.isPending],
+  );
 
   return (
     <div className="space-y-2.5 lg:space-y-5">
@@ -709,7 +955,7 @@ export function MusicCatalogView({
             <thead className="whitespace-nowrap border-b border-neutral-800 text-left text-neutral-400 [&_th]:py-1">
               <tr>
                 {selectMode && (
-                  <th className="w-10 px-2 py-2 lg:px-4">
+                  <th className="w-10 px-1 py-2 lg:px-4">
                     <input
                       type="checkbox"
                       className="accent-[var(--color-brand)]"
@@ -723,13 +969,33 @@ export function MusicCatalogView({
                 <th className="w-6 px-0.5 py-2 text-right tabular-nums lg:w-10 lg:px-4">
                   #
                 </th>
-                {showThumb && <th className="w-20 px-2 py-2 lg:px-3"></th>}
-                <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
+                {showThumb && <th className="w-20 px-1 py-2 lg:px-3"></th>}
+                {/* `max-lg:w-full`: en móvil Título reclama TODO el ancho sobrante,
+                    dejando a las demás en su mínimo (ver Mis Canciones). */}
+                <SortTh
+                  label="Título"
+                  col="title"
+                  primary="asc"
+                  sort={sort}
+                  onSort={onSort}
+                  className="max-lg:w-full"
+                />
                 {cols.artist && (
-                  <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
+                  <SortTh
+                    label="Artista"
+                    col="artist"
+                    primary="asc"
+                    sort={sort}
+                    onSort={onSort}
+                    className="max-lg:w-px"
+                  />
                 )}
-                {cols.style && <th className="px-2 py-2 lg:px-4">Estilo</th>}
-                {cols.duration && <th className="px-2 py-2 lg:px-4">Duración</th>}
+                {cols.style && (
+                  // `max-lg:w-px`: en móvil la columna ocupa lo mínimo (solo la B/S)
+                  // en vez de llevarse parte del ancho sobrante de la tabla.
+                  <th className="px-2 py-2 max-lg:w-px lg:px-4">Estilo</th>
+                )}
+                {cols.duration && <th className="px-1 py-2 lg:px-4">Duración</th>}
                 {cols.year && (
                   <SortTh label={isSpotify ? 'Fecha' : 'Fecha subida'} col="releaseDate" primary="desc" sort={sort} onSort={onSort} />
                 )}
@@ -839,191 +1105,7 @@ export function MusicCatalogView({
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((t, i) => (
-                <tr
-                  key={t.id}
-                  className={
-                    'border-b border-neutral-800/60 last:border-0 ' +
-                    (activeRowId === t.id
-                      ? 'bg-brand/10'
-                      : selected.has(t.id)
-                        ? 'bg-brand/5'
-                        : '')
-                  }
-                >
-                  {selectMode && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3">
-                      <input
-                        type="checkbox"
-                        className="accent-[var(--color-brand)]"
-                        checked={selected.has(t.id)}
-                        onChange={() => toggleSel(t.id)}
-                      />
-                    </td>
-                  )}
-                  <td className="px-0.5 py-2 text-right tabular-nums text-neutral-500 lg:px-4 lg:py-3">
-                    {(page - 1) * PAGE_SIZE + i + 1}
-                  </td>
-                  {showThumb && (
-                    <td className="px-3 py-2">
-                      <TrackThumb track={t} />
-                    </td>
-                  )}
-                  <td className="px-2 py-2 lg:px-4 lg:py-3 font-medium">
-                    {t.title}
-                    {isNewRelease(t.releaseDate) && <NewBadge />}
-                    {epicIds.has(t.id) && <EpicBadge />}
-                  </td>
-                  {cols.artist && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-300">{t.artist}</td>
-                  )}
-                  {cols.style && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {/* En movil solo la inicial (B/S) para ahorrar ancho. */}
-                        <span className="lg:hidden">
-                          <StyleBadge style={t.style} compact />
-                        </span>
-                        <span className="hidden lg:inline">
-                          <StyleBadge style={t.style} />
-                        </span>
-                        {t.substyles?.map((s) => (
-                          <span
-                            key={s}
-                            className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  )}
-                  {cols.duration && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-400 tabular-nums">
-                      {formatDuration(t.durationSec)}
-                    </td>
-                  )}
-                  {cols.year && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3 whitespace-nowrap text-neutral-400">
-                      {formatReleaseDate(t.releaseDate, t.year)}
-                    </td>
-                  )}
-                  {!isSpotify && cols.views && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
-                      {formatViews(t.details?.viewCount)}
-                    </td>
-                  )}
-                  {!isSpotify && cols.vpd && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
-                      {formatViewsPerDay(t.details?.viewCount, t.releaseDate)}
-                    </td>
-                  )}
-                  {cols.added && (
-                    <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-400">
-                      {new Date(t.createdAt).toLocaleDateString('es-CL')}
-                    </td>
-                  )}
-                  <td
-                    className="w-px whitespace-nowrap px-2 py-2 text-right lg:px-4 lg:py-3"
-                    onClick={() => setActiveRowId(t.id)}
-                  >
-                    <div className="flex items-center justify-end gap-2">
-                      <PlayButtons track={t} showVideo={cols.video} />
-                      {isSpotify &&
-                        (t.spotifyPlayable === false ? (
-                          <button
-                            type="button"
-                            disabled
-                            title="No disponible en tu región: Spotify restringe esta canción, no se puede reproducir."
-                            aria-label="No disponible en tu región"
-                            className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-full bg-neutral-800/50 text-xs text-neutral-600"
-                          >
-                            🚫
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            title={
-                              spotifyPlaying?.sourceId === t.sourceId
-                                ? 'Detener'
-                                : 'Reproducir (Spotify)'
-                            }
-                            aria-label="Reproducir"
-                            onClick={() =>
-                              setSpotifyPlaying(
-                                spotifyPlaying?.sourceId === t.sourceId
-                                  ? null
-                                  : {
-                                      sourceId: t.sourceId,
-                                      title: t.title,
-                                      artist: t.artist,
-                                      imageUrl: t.coverUrl,
-                                    },
-                              )
-                            }
-                            className={
-                              'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
-                              (spotifyPlaying?.sourceId === t.sourceId
-                                ? 'bg-brand text-white'
-                                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
-                            }
-                          >
-                            {spotifyPlaying?.sourceId === t.sourceId ? '⏸' : '▶'}
-                          </button>
-                        ))}
-                      {cols.source && <SourceLink track={t} />}
-                      {canEdit && cols.edit && (
-                        <button
-                          className="rounded-md bg-neutral-800 px-2 py-1 hover:bg-neutral-700"
-                          title="Editar canción"
-                          aria-label="Editar canción"
-                          onClick={() => setEditTrack(t)}
-                        >
-                          ✏️
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          className="rounded-md bg-neutral-800 px-2 py-1 text-base font-bold leading-none text-red-500 transition hover:bg-red-600/20 hover:text-red-400"
-                          title="Eliminar del catálogo"
-                          aria-label="Eliminar del catálogo"
-                          onClick={() =>
-                            setConfirm({
-                              title: 'Eliminar del catálogo',
-                              danger: true,
-                              confirmLabel: 'Eliminar',
-                              message: (
-                                <>
-                                  ¿Eliminar <b>{t.title}</b> del catálogo? Se
-                                  quitará de las bibliotecas y playlists de todos
-                                  los DJs. Esta acción no se puede deshacer.
-                                </>
-                              ),
-                              onConfirm: () => removeTrack.mutate(t.id),
-                            })
-                          }
-                        >
-                          ✕
-                        </button>
-                      )}
-                      {/* Agregar a mi biblioteca: acción personal, disponible
-                          para cualquiera que vea el catálogo (no es editar el
-                          catálogo global). */}
-                      <button
-                        className={
-                          t.inLibrary
-                            ? 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300'
-                            : 'rounded-lg bg-emerald-500/15 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-500/25'
-                        }
-                        disabled={toggle.isPending}
-                        onClick={() => toggle.mutate(t)}
-                      >
-                        {t.inLibrary ? '✓ En mis canciones' : '➕ Agregar'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {rowsEl}
               {visibleRows.length === 0 && (
                 <tr>
                   <td

@@ -48,6 +48,7 @@ import {
 } from '@/components/confirm-dialog';
 import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
+import { useIsMobile } from '@/lib/use-is-mobile';
 import { Button, Card, DeleteIconButton, Spinner, StyleBadge } from '@/components/ui';
 
 const PAGE_SIZE = 50;
@@ -180,15 +181,22 @@ export function MusicLibraryView({
   const [showYtPlaylist, setShowYtPlaylist] = useState(false);
   const [showImportPlaylist, setShowImportPlaylist] = useState(false);
   const [showThumb, toggleThumb] = useThumbs();
-  // Columnas visibles (persistidas por fuente) + menú del engranaje.
-  const colsStorageKey = `nectason.libraryCols.${source}`;
+  // Columnas visibles + menú del engranaje. Se guardan por fuente Y por tamaño:
+  // móvil y escritorio tienen su propia configuración (claves separadas).
+  const isMobile = useIsMobile();
+  const colsBaseKey = `nectason.libraryCols.${source}`;
+  const colsStorageKey = `${colsBaseKey}.${isMobile ? 'mobile' : 'desktop'}`;
   const [cols, setCols] = useState<ColVis>(ALL_COLS_VISIBLE);
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const colMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(colsStorageKey);
+      // En escritorio, si aún no hay config nueva, hereda la de la clave vieja
+      // (sin sufijo) para no perder lo que el usuario ya tenía configurado.
+      const raw =
+        localStorage.getItem(colsStorageKey) ??
+        (isMobile ? null : localStorage.getItem(colsBaseKey));
       if (raw) {
         setCols({ ...ALL_COLS_VISIBLE, ...JSON.parse(raw) });
         return;
@@ -197,11 +205,9 @@ export function MusicLibraryView({
       /* preferencia inválida: sigue y usa los defaults */
     }
     // Sin nada guardado: en celular arranca con menos columnas. Apenas toque el
-    // engranaje se guarda su elección y manda esa.
-    if (window.matchMedia('(max-width: 1023px)').matches) {
-      setCols(MOBILE_COLS_VISIBLE);
-    }
-  }, [colsStorageKey]);
+    // engranaje se guarda su elección (en la clave de ese tamaño) y manda esa.
+    setCols(isMobile ? MOBILE_COLS_VISIBLE : ALL_COLS_VISIBLE);
+  }, [colsStorageKey, colsBaseKey, isMobile]);
 
   function toggleCol(key: ColKey) {
     setCols((prev) => {
@@ -450,26 +456,40 @@ export function MusicLibraryView({
     ? data.data.filter((t) => isNewRelease(t.releaseDate)).length
     : 0;
   const epicCount = epicIds.size;
-  const filteredRows = data
-    ? data.data.filter(
-        (t) =>
-          (!onlyNew || isNewRelease(t.releaseDate)) &&
-          (!onlyEpic || epicIds.has(t.id)) &&
-          (substyles.length === 0 ||
-            substyles.some((s) => t.substyles?.includes(s))) &&
-          isWithinLastMonths(t.releaseDate, t.year, monthsN),
-      )
-    : [];
+  // Pipeline memoizado: antes `data.data.filter`/`.slice` creaban arrays nuevos
+  // en cada render, así que cualquier cambio de estado ajeno a la tabla la hacía
+  // recalcular. Con esto `pageRows` queda estable mientras los filtros no cambien.
+  const filteredRows = useMemo(
+    () =>
+      data
+        ? data.data.filter(
+            (t) =>
+              (!onlyNew || isNewRelease(t.releaseDate)) &&
+              (!onlyEpic || epicIds.has(t.id)) &&
+              (substyles.length === 0 ||
+                substyles.some((s) => t.substyles?.includes(s))) &&
+              isWithinLastMonths(t.releaseDate, t.year, monthsN),
+          )
+        : [],
+    [data, onlyNew, onlyEpic, epicIds, substyles, monthsN],
+  );
   // Orden por Repr./día (client-side); las sin dato van al final.
-  const sortedRows = vpdSort
-    ? [...filteredRows].sort((a, b) => {
-        const va = viewsPerDay(a.details?.viewCount, a.releaseDate) ?? -1;
-        const vb = viewsPerDay(b.details?.viewCount, b.releaseDate) ?? -1;
-        return vpdSort === 'desc' ? vb - va : va - vb;
-      })
-    : filteredRows;
+  const sortedRows = useMemo(
+    () =>
+      vpdSort
+        ? [...filteredRows].sort((a, b) => {
+            const va = viewsPerDay(a.details?.viewCount, a.releaseDate) ?? -1;
+            const vb = viewsPerDay(b.details?.viewCount, b.releaseDate) ?? -1;
+            return vpdSort === 'desc' ? vb - va : va - vb;
+          })
+        : filteredRows,
+    [filteredRows, vpdSort],
+  );
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
-  const pageRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageRows = useMemo(
+    () => sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [sortedRows, page],
+  );
 
   // Si un filtro deja la página actual fuera de rango, vuelve a la 1.
   useEffect(() => {
@@ -770,7 +790,7 @@ export function MusicLibraryView({
                 <thead className="whitespace-nowrap border-b border-neutral-800 text-left text-neutral-400 [&_th]:py-1 lg:[&_th]:py-1">
                   <tr>
                     {selectMode && (
-                      <th className="px-2 py-2 lg:px-4 lg:py-3 w-10">
+                      <th className="px-1 py-2 lg:px-4 lg:py-3 w-10">
                         <input
                           type="checkbox"
                           className="accent-[var(--color-brand)]"
@@ -787,13 +807,37 @@ export function MusicLibraryView({
                     {showThumb && (
                       <th className="px-2 py-2 lg:px-3 lg:py-3 w-20"></th>
                     )}
-                    <SortTh label="Título" col="title" primary="asc" sort={sort} onSort={onSort} />
+                    {/* `max-lg:w-full`: en móvil Título reclama TODO el ancho sobrante, así
+                        las demás columnas quedan en su mínimo. Encogerlas con w-px no
+                        alcanza: el navegador reparte el sobrante igual y la columna de
+                        acciones se quedaba con una parte. */}
+                    <SortTh
+                      label="Título"
+                      col="title"
+                      primary="asc"
+                      sort={sort}
+                      onSort={onSort}
+                      className="max-lg:w-full"
+                    />
                     {cols.artist && (
-                      <SortTh label="Artista" col="artist" primary="asc" sort={sort} onSort={onSort} />
+                      <SortTh
+                        label="Artista"
+                        col="artist"
+                        primary="asc"
+                        sort={sort}
+                        onSort={onSort}
+                        className="max-lg:w-px"
+                      />
                     )}
-                    {cols.style && <th className="px-2 py-2 lg:px-4 lg:py-3">Estilo</th>}
-                    {cols.origin && <th className="px-2 py-2 lg:px-4 lg:py-3">Origen</th>}
-                    {cols.duration && <th className="px-2 py-2 lg:px-4 lg:py-3">Duración</th>}
+                    {cols.style && (
+                      // `max-lg:w-px`: en móvil la columna ocupa lo mínimo (solo la
+                      // B/S) en vez de llevarse parte del ancho sobrante.
+                      <th className="px-2 py-2 max-lg:w-px lg:px-4 lg:py-3">
+                        Estilo
+                      </th>
+                    )}
+                    {cols.origin && <th className="px-1 py-2 lg:px-4 lg:py-3">Origen</th>}
+                    {cols.duration && <th className="px-1 py-2 lg:px-4 lg:py-3">Duración</th>}
                     {cols.date && (
                       <SortTh
                         label={isSpotify ? 'Fecha' : 'Fecha subida'}
@@ -805,7 +849,7 @@ export function MusicLibraryView({
                     )}
                     {!isSpotify && cols.vpd && (
                       <th
-                        className="cursor-pointer select-none px-2 py-2 lg:px-4 lg:py-3 hover:text-neutral-200"
+                        className="cursor-pointer select-none px-1 py-2 lg:px-4 lg:py-3 hover:text-neutral-200"
                         title="Reproducciones por día desde la subida (velocidad)"
                         onClick={() =>
                           setVpdSort((s) =>
@@ -830,7 +874,9 @@ export function MusicLibraryView({
                         </span>
                       </th>
                     )}
-                    <th className="px-2 py-2 lg:px-4 lg:py-3 text-right">
+                    {/* `w-px`: la columna de acciones ocupa lo justo; el ancho
+                        sobrante se lo lleva Título en vez de quedar en blanco. */}
+                    <th className="w-px whitespace-nowrap px-2 py-2 text-right lg:px-4 lg:py-3">
                       <div className="relative inline-block" ref={colMenuRef}>
                         <button
                           type="button"
@@ -933,7 +979,7 @@ export function MusicLibraryView({
                       }
                     >
                       {selectMode && (
-                        <td className="px-2 py-2 lg:px-4 lg:py-3">
+                        <td className="px-1 py-2 lg:px-4 lg:py-3">
                           <input
                             type="checkbox"
                             className="accent-[var(--color-brand)]"
@@ -950,16 +996,18 @@ export function MusicLibraryView({
                           <TrackThumb track={t} />
                         </td>
                       )}
-                      <td className="px-2 py-2 lg:px-4 lg:py-3 font-medium">
+                      <td className="px-1 py-2 lg:px-4 lg:py-3 font-medium">
                         {t.title}
                         {isNewRelease(t.releaseDate) && <NewBadge />}
                         {epicIds.has(t.id) && <EpicBadge />}
                       </td>
                       {cols.artist && (
-                        <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-300">{t.artist}</td>
+                        <td className="px-1 py-2 text-neutral-300 max-lg:w-px lg:px-4 lg:py-3">
+                          {t.artist}
+                        </td>
                       )}
                       {cols.style && (
-                        <td className="px-2 py-2 lg:px-4 lg:py-3">
+                        <td className="px-2 py-2 max-lg:w-px lg:px-4 lg:py-3">
                           <div className="flex flex-wrap items-center gap-1">
                             {/* En móvil solo la inicial (B/S) para ahorrar ancho. */}
                             <span className="lg:hidden">
@@ -972,7 +1020,7 @@ export function MusicLibraryView({
                               ? t.tags.map((tag) => (
                                   <span
                                     key={tag.id}
-                                    className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300"
+                                    className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300 max-lg:hidden"
                                   >
                                     {tag.name}
                                   </span>
@@ -980,7 +1028,7 @@ export function MusicLibraryView({
                               : t.substyles?.map((s) => (
                                   <span
                                     key={s}
-                                    className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                                    className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 max-lg:hidden"
                                   >
                                     {s}
                                   </span>
@@ -989,9 +1037,9 @@ export function MusicLibraryView({
                         </td>
                       )}
                       {cols.origin && (
-                        <td className="px-2 py-2 lg:px-4 lg:py-3">
+                        <td className="px-1 py-2 lg:px-4 lg:py-3">
                           {t.scope === 'PERSONAL' ? (
-                            <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300">
+                            <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300 max-lg:hidden">
                               personal
                             </span>
                           ) : (
@@ -1002,22 +1050,22 @@ export function MusicLibraryView({
                         </td>
                       )}
                       {cols.duration && (
-                        <td className="px-2 py-2 lg:px-4 lg:py-3 text-neutral-400 tabular-nums">
+                        <td className="px-1 py-2 lg:px-4 lg:py-3 text-neutral-400 tabular-nums">
                           {formatDuration(t.durationSec)}
                         </td>
                       )}
                       {cols.date && (
-                        <td className="px-2 py-2 lg:px-4 lg:py-3 whitespace-nowrap text-neutral-400">
+                        <td className="px-1 py-2 lg:px-4 lg:py-3 whitespace-nowrap text-neutral-400">
                           {formatReleaseDate(t.releaseDate, t.year)}
                         </td>
                       )}
                       {!isSpotify && cols.vpd && (
-                        <td className="px-2 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
+                        <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
                           {formatViewsPerDay(t.details?.viewCount, t.releaseDate)}
                         </td>
                       )}
-                      <td className="px-2 py-2 lg:px-4 lg:py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="w-px whitespace-nowrap px-2 py-2 text-right lg:px-4 lg:py-3">
+                        <div className="flex items-center justify-end gap-1 lg:gap-2">
                           <PlayButtons track={t} showVideo={cols.video} />
                           {isSpotify && (
                             <button

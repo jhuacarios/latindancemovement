@@ -47,7 +47,9 @@ export function SortTh({
   return (
     <th
       className={clsx(
-        'cursor-pointer select-none px-4 py-2 hover:text-neutral-200',
+        // Mismo padding que el resto de las celdas: en móvil apretado, en
+        // escritorio el de siempre.
+        'cursor-pointer select-none px-1 py-2 hover:text-neutral-200 lg:px-4',
         className,
       )}
       onClick={() => onSort(col, primary)}

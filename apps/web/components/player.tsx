@@ -5,12 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Track } from '@baile-latino/types';
 import { api } from '@/lib/api';
+import { useIsMobile } from '@/lib/use-is-mobile';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -142,18 +144,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playingKey = cur ? `${cur.source}:${cur.sourceId}` : null;
   const audioKey = audio ? `${audio.source}:${audio.sourceId}` : null;
 
+  // Memoizado: si no, cada render de un ancestro (p. ej. el layout al abrir un
+  // módulo del menú) recreaba este objeto y re-renderizaba a todos los que usan
+  // usePlayer, como los botones ▶ de cada fila de la tabla.
+  const ctxValue = useMemo(
+    () => ({
+      playAudio,
+      playVideo,
+      canPlay,
+      isBlocked,
+      playingKey,
+      audioKey,
+      stopAudio,
+    }),
+    [
+      playAudio,
+      playVideo,
+      canPlay,
+      isBlocked,
+      playingKey,
+      audioKey,
+      stopAudio,
+    ],
+  );
+
   return (
-    <PlayerContext.Provider
-      value={{
-        playAudio,
-        playVideo,
-        canPlay,
-        isBlocked,
-        playingKey,
-        audioKey,
-        stopAudio,
-      }}
-    >
+    <PlayerContext.Provider value={ctxValue}>
       {children}
       {/* Siempre montado (y sin `key` por canción): su iframe debe existir antes
           de que el usuario toque play, o el navegador móvil no lo deja sonar. */}
@@ -210,6 +226,7 @@ function AudioBar({
   onBlocked: (track: Track) => void;
 }) {
   const id = track ? ytId(track) : null;
+  const isMobile = useIsMobile();
   const holderRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -253,8 +270,16 @@ function AudioBar({
     };
   }, [track]);
 
-  // Crea el reproductor una sola vez, todavía sin video (ver comentario arriba).
+  // Cuándo crear el iframe de YouTube:
+  // - Móvil: al montar (aunque no haya nada sonando), porque el navegador solo
+  //   deja reproducir a los frames que ya existían al tocar la pantalla.
+  // - Escritorio: recién cuando hay algo que reproducir. Ahí no hay restricción
+  //   de autoplay, y tener un embed de YouTube corriendo en cada página hacía
+  //   que toda la UI (tablas grandes incluidas) respondiera con lag.
+  const shouldCreatePlayer = isMobile || id != null;
+
   useEffect(() => {
+    if (!shouldCreatePlayer) return;
     let destroyed = false;
     void loadYTApi().then(() => {
       if (destroyed || !holderRef.current || playerRef.current) return;
@@ -287,8 +312,9 @@ function AudioBar({
         /* noop */
       }
       playerRef.current = null;
+      setReady(false);
     };
-  }, []);
+  }, [shouldCreatePlayer]);
 
   // Al elegir canción se reutiliza el mismo iframe.
   useEffect(() => {

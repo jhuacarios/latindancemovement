@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.5',
+    date: '2026-07-23',
+    module: 'general',
+    type: 'improvement',
+    title: 'La app ahora responde más rápido',
+    description:
+      'Sacamos el freno que hacía que abrir el menú lateral, el engranaje de columnas o un modal se sintiera con lag: esas acciones ya no vuelven a dibujar toda la lista. Además, el reproductor de fondo ya no queda corriendo en cada pantalla del computador. Se nota sobre todo con muchas canciones en pantalla.',
+  },
+  {
+    version: '0.9.5',
+    date: '2026-07-23',
+    module: 'music',
+    type: 'improvement',
+    title: 'Catálogo más ágil y con contadores',
+    description:
+      'El buscador ya no consulta en cada tecla: espera a que termines de escribir. Arriba se muestran los contadores de Bachatas y Salsas del catálogo, y cada página trae 150 canciones para que cargue más liviano. En el celular, el catálogo se ve más compacto (encabezado, filtros y tabla), con el estilo como B/S y un botón + / ✓ para agregar a tus canciones.',
+  },
+  {
     version: '0.9.4',
     date: '2026-07-22',
     module: 'general',

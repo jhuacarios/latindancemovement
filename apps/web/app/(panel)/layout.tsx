@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { USER_ROLES, type UserRole } from '@baile-latino/types';
@@ -48,11 +48,23 @@ export default function PanelLayout({
     }
   }, [isSuperAdmin]);
 
-  const setViewAsRole = (r: UserRole | null) => {
+  const setViewAsRole = useCallback((r: UserRole | null) => {
     setViewAsRoleState(r);
     if (r) localStorage.setItem(VIEW_AS_KEY, r);
     else localStorage.removeItem(VIEW_AS_KEY);
-  };
+  }, []);
+
+  // Valores de contexto memoizados: sin esto se recreaban en cada render del
+  // layout (p. ej. al abrir/cerrar un módulo del menú), re-renderizando TODOS
+  // los consumidores —incluida la tabla de 250 filas— y generando lag.
+  const viewAsRoleValue = useMemo(
+    () => ({ viewAsRole, setViewAsRole }),
+    [viewAsRole, setViewAsRole],
+  );
+  const layoutUIValue = useMemo(
+    () => ({ collapsed, setCollapsed, activeNavKey, setActiveNavKey }),
+    [collapsed, activeNavKey],
+  );
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -85,10 +97,8 @@ export default function PanelLayout({
     activeModule && blockKey && !perms.can(effectiveRole, blockKey, 'ver');
 
   return (
-    <ViewAsRoleContext.Provider value={{ viewAsRole, setViewAsRole }}>
-    <LayoutUIContext.Provider
-      value={{ collapsed, setCollapsed, activeNavKey, setActiveNavKey }}
-    >
+    <ViewAsRoleContext.Provider value={viewAsRoleValue}>
+    <LayoutUIContext.Provider value={layoutUIValue}>
     <PlayerProvider>
     {/* Primera vez que entra: le preguntamos qué baila. */}
     <StylePreferenceModal />
