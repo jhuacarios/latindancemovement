@@ -319,7 +319,18 @@ function AudioBar({
   // Al elegir canción se reutiliza el mismo iframe.
   useEffect(() => {
     const p = playerRef.current;
-    if (!ready || !p || !id) return;
+    if (!ready || !p) return;
+    if (!id) {
+      // Se quitó la canción. En móvil el iframe queda montado (no se desmonta ni
+      // destruye), así que hay que detenerlo a mano; si no, la música sigue
+      // sonando aunque la barra desaparezca.
+      try {
+        p.stopVideo?.();
+      } catch {
+        /* noop */
+      }
+      return;
+    }
     setBlocked(false);
     setCur(0);
     setDur(0);

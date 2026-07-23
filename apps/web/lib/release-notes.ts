@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.6',
+    date: '2026-07-23',
+    module: 'general',
+    type: 'fix',
+    title: 'En el celular, pausar ahora sí detiene la música',
+    description:
+      'Se corrigió un problema en el que, al pausar o detener en el teléfono, el reproductor desaparecía pero la canción seguía sonando. Ahora el audio se corta de inmediato.',
+  },
+  {
     version: '0.9.5',
     date: '2026-07-23',
     module: 'general',
