@@ -41,8 +41,29 @@ model User {
   playlists      Playlist[]
   songRequests   SongRequest[]
   requestVotes   RequestVote[]
+  ytAccessRequest YoutubeAccessRequest?
 
   @@index([role])
+}
+
+/**
+ * Solicitud de un usuario para que lo habiliten a conectar su YouTube (agregarlo
+ * como "test user" en Google Cloud). Una por usuario: volver a pedir actualiza el
+ * correo y la vuelve a dejar PENDING. El admin la marca ADDED tras cargar el
+ * correo en la consola de Google (paso manual: Google no tiene API para eso).
+ */
+model YoutubeAccessRequest {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email      String // Gmail con el que el usuario va a autorizar YouTube
+  status     String    @default("PENDING") // PENDING | ADDED | REJECTED
+  note       String? // nota opcional del admin
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  reviewedAt DateTime?
+
+  @@index([status])
 }
 
 model Track {

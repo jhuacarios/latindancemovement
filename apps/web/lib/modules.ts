@@ -186,6 +186,11 @@ export const MODULES: AppModule[] = [
     children: [
       { label: 'Resumen', key: 'admin.resumen', href: '/admin' },
       { label: 'Usuarios', key: 'admin.users', href: '/admin/users' },
+      {
+        label: 'Accesos YouTube',
+        key: 'admin.youtube-access',
+        href: '/admin/youtube-access',
+      },
       { label: 'Roles y permisos', key: 'admin.roles', href: '/admin/roles' },
       { label: 'Estilos y sub-estilos', key: 'admin.tags', href: '/admin/tags' },
       { label: 'Configuración del sitio', key: 'admin.settings', href: '/admin/settings' },

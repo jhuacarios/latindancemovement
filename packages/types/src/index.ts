@@ -395,6 +395,28 @@ export interface YoutubeConnectionStatus {
   connected: boolean;
 }
 
+/** Estados de una solicitud de acceso a YouTube (test user en Google). */
+export const YT_ACCESS_STATUSES = ['PENDING', 'ADDED', 'REJECTED'] as const;
+export type YoutubeAccessStatus = (typeof YT_ACCESS_STATUSES)[number];
+
+/**
+ * Solicitud de un usuario para que lo habiliten a conectar su YouTube. El admin
+ * la revisa y, tras cargar el correo como test user en Google, la marca ADDED.
+ */
+export interface YoutubeAccessRequest {
+  id: string;
+  userId: string;
+  /** Gmail con el que el usuario autorizará (puede diferir del de su login). */
+  email: string;
+  status: YoutubeAccessStatus;
+  note: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  /** Datos del solicitante (solo en la vista de admin). */
+  userName?: string;
+  userLoginEmail?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Spotify — cuenta del usuario (OAuth) y sus playlists
 // ---------------------------------------------------------------------------

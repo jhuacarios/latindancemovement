@@ -11,6 +11,7 @@ import { api, ApiError } from '@/lib/api';
 import { Button, Card, DeleteIconButton, Spinner } from '@/components/ui';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { YoutubeIcon } from '@/components/youtube-icon';
+import { YoutubeAccessRequestCard } from '@/components/youtube-access-request';
 import { clsx } from '@/components/clsx';
 
 const PRIVACY_LABEL: Record<string, string> = {
@@ -69,6 +70,33 @@ export default function YoutubePlaylistsPage() {
     onError: (e) =>
       setErr(e instanceof ApiError ? e.message : 'No se pudo eliminar.'),
   });
+
+  const disconnect = useMutation({
+    mutationFn: () =>
+      api('/music/youtube/connection', { method: 'DELETE' }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['youtube-status'] });
+      qc.removeQueries({ queryKey: ['youtube-playlists'] });
+      setErr(null);
+    },
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo desconectar.'),
+  });
+
+  function disconnectAccount() {
+    setConfirm({
+      title: 'Desconectar cuenta de YouTube',
+      confirmLabel: 'Desconectar',
+      message: (
+        <>
+          Se cerrará la conexión con tu YouTube en Nectason. Tus playlists de
+          YouTube <b>no se tocan</b> — solo dejamos de acceder a ellas. Podrás
+          volver a conectarte cuando quieras.
+        </>
+      ),
+      onConfirm: () => disconnect.mutate(),
+    });
+  }
 
   function deleteOne(p: YoutubeOwnPlaylist) {
     setConfirm({
@@ -138,9 +166,23 @@ export default function YoutubePlaylistsPage() {
           </p>
         </div>
 
-        {connected && items.length > 0 && (
-          <div className="flex items-center gap-2">
-            {!selectMode ? (
+        {connected && (
+          <div className="flex flex-wrap items-center gap-2">
+            {!selectMode && (
+              <Button
+                variant="ghost"
+                disabled={disconnect.isPending}
+                onClick={disconnectAccount}
+                title="Cierra la conexión con tu YouTube (no borra tus playlists)"
+                className="inline-flex items-center gap-1.5 border border-red-700/50 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+              >
+                <YoutubeIcon className="h-4 w-4 shrink-0 text-[#FF0000]" />
+                {disconnect.isPending
+                  ? 'Desconectando…'
+                  : 'Desconectar YouTube'}
+              </Button>
+            )}
+            {items.length === 0 ? null : !selectMode ? (
               <Button variant="ghost" onClick={() => setSelectMode(true)}>
                 ☑️ Seleccionar
               </Button>
@@ -172,12 +214,15 @@ export default function YoutubePlaylistsPage() {
       {status.isLoading && <Spinner label="Comprobando conexión…" />}
 
       {status.data && !connected && (
-        <Card className="space-y-3">
-          <p className="text-sm text-neutral-300">
-            Para ver tus playlists, conecta tu cuenta de YouTube.
-          </p>
-          <Button onClick={connect}>🔗 Conectar cuenta de YouTube</Button>
-        </Card>
+        <>
+          <Card className="space-y-3">
+            <p className="text-sm text-neutral-300">
+              Para ver tus playlists, conecta tu cuenta de YouTube.
+            </p>
+            <Button onClick={connect}>🔗 Conectar cuenta de YouTube</Button>
+          </Card>
+          <YoutubeAccessRequestCard />
+        </>
       )}
 
       {connected && playlists.isLoading && (

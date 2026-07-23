@@ -18,6 +18,7 @@ import { TagsController } from './tags/tags.controller';
 import { TagsService } from './tags/tags.service';
 import { YoutubeController } from './youtube/youtube.controller';
 import { YoutubeOAuthService } from './youtube/youtube-oauth.service';
+import { YoutubeAccessService } from './youtube/youtube-access.service';
 import { SpotifyController } from './spotify/spotify.controller';
 import { SpotifyOAuthService } from './spotify/spotify-oauth.service';
 
@@ -45,6 +46,7 @@ import { SpotifyOAuthService } from './spotify/spotify-oauth.service';
     LibraryService,
     TagsService,
     YoutubeOAuthService,
+    YoutubeAccessService,
     SpotifyOAuthService,
   ],
 })

@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.7',
+    date: '2026-07-23',
+    module: 'music.youtube.ytplaylists',
+    type: 'feature',
+    title: 'Pedí acceso a YouTube (y desconectá tu cuenta)',
+    description:
+      'Si todavía no estás habilitado para conectar tu YouTube, ahora podés solicitar el acceso desde “Playlists YouTube” dejando tu correo de Google — un administrador lo habilita y te aparece el botón para conectar. Además, si ya estás conectado, sumamos un botón para desconectar tu cuenta (no toca tus playlists de YouTube, solo corta la conexión con Nectason).',
+  },
+  {
     version: '0.9.6',
     date: '2026-07-23',
     module: 'general',

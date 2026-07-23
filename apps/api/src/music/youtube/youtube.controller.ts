@@ -2,29 +2,83 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Delete,
   Get,
+  Delete,
   Param,
+  Patch,
   Post,
   Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
+import { IsEmail, IsIn } from 'class-validator';
+import { YT_ACCESS_STATUSES, type YoutubeAccessStatus } from '@baile-latino/types';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../../auth/auth.types';
 import { YoutubeOAuthService } from './youtube-oauth.service';
+import { YoutubeAccessService } from './youtube-access.service';
 import {
   CreateYoutubePlaylistDto,
   YoutubePatternQueryDto,
 } from './dto/create-youtube-playlist.dto';
 
+class AccessRequestDto {
+  @IsEmail({}, { message: 'Ingresa un correo de Google válido.' })
+  email!: string;
+}
+
+class AccessStatusDto {
+  @IsIn(YT_ACCESS_STATUSES)
+  status!: YoutubeAccessStatus;
+}
+
 @Controller('music/youtube')
 export class YoutubeController {
-  constructor(private readonly yt: YoutubeOAuthService) {}
+  constructor(
+    private readonly yt: YoutubeOAuthService,
+    private readonly access: YoutubeAccessService,
+  ) {}
+
+  // --- Solicitudes de acceso (para quien aún no está habilitado) -----------
+
+  /** Solicita acceso a YouTube (queda pendiente de que el admin lo habilite). */
+  @Post('access-request')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  requestAccess(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: AccessRequestDto,
+  ) {
+    return this.access.requestAccess(user.id, dto.email);
+  }
+
+  /** Estado de mi solicitud (null si nunca pedí). */
+  @Get('access-request')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  myRequest(@CurrentUser() user: AuthUser) {
+    return this.access.myRequest(user.id);
+  }
+
+  /** Todas las solicitudes (admin). */
+  @Get('access-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  listRequests() {
+    return this.access.listAll();
+  }
+
+  /** Cambia el estado de una solicitud (admin). */
+  @Patch('access-requests/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  setRequestStatus(@Param('id') id: string, @Body() dto: AccessStatusDto) {
+    return this.access.setStatus(id, dto.status);
+  }
 
   /** ¿La cuenta de YouTube del usuario está conectada? */
   @Get('status')
