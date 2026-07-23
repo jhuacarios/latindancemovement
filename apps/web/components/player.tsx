@@ -409,7 +409,7 @@ function AudioBar({
       {track && (
         <div
           ref={barRef}
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900/95 px-2 py-2 backdrop-blur lg:px-4 lg:py-3"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-900/95 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur lg:px-4 lg:pt-3 lg:pb-3"
         >
       {/* En móvil la fila envuelve y la barra de progreso baja a una 2ª línea. */}
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2 lg:flex-nowrap lg:gap-4">
@@ -438,15 +438,16 @@ function AudioBar({
             <button
               onClick={toggle}
               disabled={!ready}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-base text-white hover:bg-brand-dark disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm text-white hover:bg-brand-dark disabled:opacity-50 lg:h-10 lg:w-10 lg:text-base"
               title={playing ? 'Pausar' : 'Reproducir'}
             >
               {playing ? '⏸' : '▶'}
             </button>
 
             {/* `lg:contents` disuelve este contenedor en escritorio: la fila
-                queda exactamente igual que antes. En móvil es la 2ª línea. */}
-            <div className="flex w-full items-center gap-2 max-lg:order-last lg:contents">
+                queda igual que antes. En móvil es la 1ª línea (progreso arriba,
+                lejos del borde inferior / gesto del sistema). */}
+            <div className="flex w-full items-center gap-2 max-lg:order-first lg:contents">
               <span className="w-10 text-right text-xs tabular-nums text-neutral-400">
                 {fmt(cur)}
               </span>
@@ -505,7 +506,7 @@ function AudioBar({
         <button
           onClick={onClose}
           title="Detener"
-          className="shrink-0 rounded-lg bg-neutral-800 px-3 py-1.5 text-sm hover:bg-neutral-700"
+          className="shrink-0 rounded-lg bg-neutral-800 px-2 py-1 text-xs hover:bg-neutral-700 lg:px-3 lg:py-1.5 lg:text-sm"
         >
           ⏹<span className="max-lg:hidden"> Detener</span>
         </button>

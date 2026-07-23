@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   title: 'Nectason · Panel',
   description:
     'Nectason — plataforma del baile social latino. Panel de música y DJs.',
+};
+
+// `viewportFit: 'cover'` hace que `env(safe-area-inset-*)` devuelva valores
+// reales en iPhone (para no tapar el home indicator con la barra del player).
+export const viewport: Viewport = {
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
