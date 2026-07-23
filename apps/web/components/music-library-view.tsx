@@ -962,8 +962,12 @@ export function MusicLibraryView({
                       className={
                         'border-b border-neutral-800/60 last:border-0 ' +
                         (panelSelectedId ? 'cursor-grab select-none ' : '') +
+                        // Línea verde a la izquierda si ya está en la playlist
+                        // abierta. Se dibuja con un degradado de fondo (no con
+                        // box-shadow): Safari en iOS no renderiza box-shadow en
+                        // <tr>, pero sí el background.
                         (openPlaylistTrackIds.has(t.id)
-                          ? 'shadow-[inset_3px_0_0_0_var(--color-clave)] '
+                          ? 'bg-[linear-gradient(90deg,var(--color-clave)_0_3px,transparent_3px)] '
                           : '') +
                         (player.playingKey === `${t.source}:${t.sourceId}`
                           ? 'bg-brand/10'
