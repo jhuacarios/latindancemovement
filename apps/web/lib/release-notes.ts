@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.10',
+    date: '2026-07-23',
+    module: 'music.youtube.playlists',
+    type: 'improvement',
+    title: 'Detalle de playlist: más cómodo en el celular',
+    description:
+      'La tabla de canciones de una playlist ahora entra bien en el teléfono (títulos con más espacio, estilo como B/S, menos apretado). En el engranaje de columnas se sumó configurar las acciones “Ver video” y “Abrir en YouTube/Spotify”, y la configuración de columnas se guarda por separado para celular y computador.',
+  },
+  {
     version: '0.9.9',
     date: '2026-07-23',
     module: 'music',
