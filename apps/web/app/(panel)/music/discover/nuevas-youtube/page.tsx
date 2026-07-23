@@ -12,6 +12,8 @@ import {
   type VideoToAdd,
 } from '@/components/add-video-to-library-modal';
 import { useLayoutUI } from '@/lib/layout-ui';
+import { useEffectiveRole } from '@/lib/view-as-role';
+import { formatDuration } from '@/lib/format';
 
 const CONF_CLASS: Record<string, string> = {
   alta: 'bg-emerald-500/15 text-emerald-300',
@@ -72,10 +74,18 @@ export default function DiscoverYoutubePage() {
     setAdded((prev) => new Set(prev).add(videoId));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-3 lg:space-y-8">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold">🆕 Novedades en YouTube (por canal)</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold leading-none">
+            <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-rose-500 px-2.5 py-1 text-xs font-extrabold uppercase leading-none tracking-wider text-white shadow-[0_0_14px_rgba(236,72,153,0.75)]">
+              ✨ Nuevo
+            </span>
+            <span className="leading-none">
+              Novedades en YouTube
+              <span className="hidden lg:inline"> (por canal)</span>
+            </span>
+          </h1>
           <Link
             href="/music/discover"
             className="text-sm text-brand hover:underline"
@@ -83,7 +93,7 @@ export default function DiscoverYoutubePage() {
             ← Volver a Descubre
           </Link>
         </div>
-        <p className="mt-1 max-w-3xl text-sm text-neutral-400">
+        <p className="mt-1 max-w-3xl text-sm text-neutral-400 max-lg:hidden">
           Subidas recientes de los canales de tus artistas del catálogo, que{' '}
           <b className="text-neutral-200">aún no están</b> cargadas. El estilo es
           una <b className="text-neutral-200">propuesta</b> (por el texto del
@@ -173,6 +183,7 @@ function CandidateCard({
   onAdded: (videoId: string) => void;
 }) {
   const qc = useQueryClient();
+  const isAdmin = useEffectiveRole() === 'SUPER_ADMIN';
   const [showAdd, setShowAdd] = useState(false);
 
   const videoToAdd: VideoToAdd = {
@@ -218,6 +229,11 @@ function CandidateCard({
           <span className="text-[11px] text-neutral-500">
             · {c.publishedAt.slice(0, 10)}
           </span>
+          {c.durationSec != null && (
+            <span className="text-[11px] text-neutral-500">
+              · {formatDuration(c.durationSec)}
+            </span>
+          )}
         </div>
         <div className="mt-1 truncate text-[11px] text-neutral-500">
           {c.reason}
@@ -228,10 +244,12 @@ function CandidateCard({
           <button
             type="button"
             onClick={() => setShowAdd(true)}
-            title="Agregar al catálogo"
+            title={
+              isAdmin ? 'Agregar al catálogo o a mis canciones' : 'Agregar a mis canciones'
+            }
             className="rounded-md border border-sky-700/60 bg-sky-500/10 px-2 py-1 text-xs text-sky-300 transition hover:border-sky-500 hover:text-sky-200"
           >
-            + Catálogo
+            {isAdmin ? '+ Catálogo' : '+ Mis Canciones'}
           </button>
           <a
             href={c.url}
@@ -248,7 +266,7 @@ function CandidateCard({
         <AddVideoToLibraryModal
           video={videoToAdd}
           source="YOUTUBE"
-          startInCatalog
+          startInCatalog={isAdmin}
           defaultStyle={c.proposedStyle ?? undefined}
           onClose={() => setShowAdd(false)}
           onAdded={() => {

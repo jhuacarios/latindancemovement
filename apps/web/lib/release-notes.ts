@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.8',
+    date: '2026-07-23',
+    module: 'music.discover',
+    type: 'improvement',
+    title: 'Descubre YouTube: abierto a DJs y con mejor calidad',
+    description:
+      'La sección de novedades por canal ahora también está disponible para DJs y organizadores: agregan lo que descubren a sus canciones (solo el super admin puede sumarlo al catálogo). Además, filtramos las bachatas de menos de 2:10 (suelen ser videos promocionales, no la canción), mostramos la duración de cada video, y al agregar una canción el sistema limpia el título automáticamente (saca “Official Video”, hashtags, años, etc.).',
+  },
+  {
+    version: '0.9.8',
+    date: '2026-07-23',
+    module: 'music.youtube.ytplaylists',
+    type: 'fix',
+    title: 'Conectar YouTube te devuelve a tus playlists',
+    description:
+      'Al conectar tu cuenta de YouTube ahora vuelves directo a “Playlists YouTube” (antes te dejaba en Mis Canciones). Y en las secciones de descubrimiento, si un video no permite reproducirse embebido, ahora te avisamos con el enlace para verlo en YouTube en vez de quedar en silencio.',
+  },
+  {
     version: '0.9.7',
     date: '2026-07-23',
     module: 'music.youtube.ytplaylists',

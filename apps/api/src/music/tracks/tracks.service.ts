@@ -790,13 +790,31 @@ export class TracksService {
           confidence: cls.confidence,
           reason: cls.reason,
           seedArtist: ch.artist,
+          durationSec: null,
         });
       }
     }
+
+    // Duración: se pide aparte (la lista de subidas no la trae) y se usa para
+    // descartar teasers/promos. Una bachata de menos de 2:10 casi siempre es un
+    // video promocional, no la canción completa.
+    const MIN_BACHATA_SEC = 130;
+    const metas = await this.youtube.fetchByIds(out.map((c) => c.videoId));
+    const durBy = new Map(metas.map((m) => [m.sourceId, m.durationSec]));
+    for (const c of out) c.durationSec = durBy.get(c.videoId) ?? null;
+    const filtered = out.filter(
+      (c) =>
+        !(
+          c.proposedStyle === 'BACHATA' &&
+          c.durationSec != null &&
+          c.durationSec < MIN_BACHATA_SEC
+        ),
+    );
+
     // Primero las de confianza alta, luego media, luego baja; dentro de cada
     // nivel, lo más nuevo primero.
     const confRank = { alta: 0, media: 1, baja: 2 } as const;
-    out.sort(
+    filtered.sort(
       (a, b) =>
         confRank[a.confidence] - confRank[b.confidence] ||
         b.publishedAt.localeCompare(a.publishedAt),
@@ -804,9 +822,9 @@ export class TracksService {
     this.ytCandidatesCache = {
       key,
       exp: Date.now() + 6 * 60 * 60 * 1000,
-      data: out,
+      data: filtered,
     };
-    return out;
+    return filtered;
   }
 
   /**

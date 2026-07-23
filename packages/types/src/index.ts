@@ -207,6 +207,8 @@ export interface YoutubeDiscoverCandidate {
   reason: string;
   /** Artista del catálogo cuyo canal trajo el candidato. */
   seedArtist: string;
+  /** Duración del video en segundos (null si no se pudo obtener). */
+  durationSec: number | null;
 }
 
 export interface PlaylistItem {

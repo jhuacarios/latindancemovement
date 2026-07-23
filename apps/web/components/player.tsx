@@ -248,6 +248,15 @@ function AudioBar({
   const seekingRef = useRef(seeking);
   seekingRef.current = seeking;
   const [blocked, setBlocked] = useState(false);
+  // Vigía: si un video no arranca en unos segundos (típico de subidas que
+  // prohíben el embed y no disparan onError), se marca como no reproducible.
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearWatchdog = () => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  };
 
   // Reserva espacio al final del contenido para que la barra no tape las últimas
   // filas. Se publica el alto REAL (no uno fijo) porque cambia según el ancho:
@@ -291,7 +300,10 @@ function AudioBar({
             setReady(true);
           },
           onStateChange: (e: any) => {
-            setPlaying(e.data === window.YT.PlayerState.PLAYING);
+            const YT = window.YT.PlayerState;
+            // Empezó a cargar o a sonar: descarta el vigía (no está bloqueado).
+            if (e.data === YT.BUFFERING || e.data === YT.PLAYING) clearWatchdog();
+            setPlaying(e.data === YT.PLAYING);
             const d = e.target.getDuration?.() || 0;
             if (d) setDur(d);
           },
@@ -306,6 +318,7 @@ function AudioBar({
     });
     return () => {
       destroyed = true;
+      clearWatchdog();
       try {
         playerRef.current?.destroy?.();
       } catch {
@@ -320,6 +333,7 @@ function AudioBar({
   useEffect(() => {
     const p = playerRef.current;
     if (!ready || !p) return;
+    clearWatchdog();
     if (!id) {
       // Se quitó la canción. En móvil el iframe queda montado (no se desmonta ni
       // destruye), así que hay que detenerlo a mano; si no, la música sigue
@@ -336,6 +350,20 @@ function AudioBar({
     setDur(0);
     p.setVolume(volumeRef.current);
     p.loadVideoById(id);
+    // Si a los 6 s no arrancó (ni buffering ni playing) y sigue sin duración, es
+    // un video que no se puede reproducir embebido: lo marcamos como bloqueado.
+    watchdogRef.current = setTimeout(() => {
+      const pl = playerRef.current;
+      const state = pl?.getPlayerState?.();
+      const d = pl?.getDuration?.() || 0;
+      const PS = window.YT?.PlayerState;
+      const running =
+        PS && (state === PS.PLAYING || state === PS.BUFFERING || state === PS.PAUSED);
+      if (!running && d === 0) {
+        setBlocked(true);
+        if (trackRef.current) onBlockedRef.current(trackRef.current);
+      }
+    }, 6000);
   }, [id, ready]);
 
   // Progreso mientras suena.

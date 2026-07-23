@@ -7,10 +7,11 @@ import {
   type TrackSource,
 } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { useEffectiveRole } from '@/lib/view-as-role';
 import { Button, Input, Select } from './ui';
 import { clsx } from './clsx';
 import { SubstyleMultiSelect } from './substyle-select';
+import { cleanTrackTitle } from '@/lib/clean-title';
 
 type Destination = 'library' | 'catalog';
 
@@ -46,10 +47,15 @@ export function AddVideoToLibraryModal({
   onClose: () => void;
   onAdded: (destination: Destination) => void;
 }) {
-  const { user } = useAuth();
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  // Rol efectivo: respeta "Ver como" para que el preview sea fiel. La seguridad
+  // real la impone el backend con el rol verdadero.
+  const isSuperAdmin = useEffectiveRole() === 'SUPER_ADMIN';
 
-  const [title, setTitle] = useState(video.title);
+  // El título entra ya limpio (sin adornos/fechas/DJ). Por defecto NO se edita,
+  // pero hay un ✎ para corregir los casos raros que el limpiador no resuelve
+  // (p. ej. el nombre venía dentro de un hashtag y quedó con texto de relleno).
+  const [title, setTitle] = useState(() => cleanTrackTitle(video.title));
+  const [editingTitle, setEditingTitle] = useState(false);
   const [artist, setArtist] = useState(video.channelTitle);
   const [style, setStyle] = useState<DanceStyle | ''>(defaultStyle ?? '');
   const [substyles, setSubstyles] = useState<string[]>([]);
@@ -157,8 +163,31 @@ export function AddVideoToLibraryModal({
             </div>
           )}
           <div>
-            <label className="mb-1 block text-xs text-neutral-400">Título</label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+            <label className="mb-1 block text-xs text-neutral-400">
+              Título{' '}
+              <span className="text-neutral-600">· lo limpia el sistema</span>
+            </label>
+            {editingTitle ? (
+              <Input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1 truncate rounded-lg border border-neutral-800 bg-neutral-800/40 px-3 py-2 text-sm text-neutral-200">
+                  {title}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingTitle(true)}
+                  title="Corregir el título (solo para casos raros)"
+                  className="shrink-0 rounded-lg border border-neutral-700 px-2 py-2 text-xs text-neutral-300 transition hover:bg-neutral-800"
+                >
+                  ✎ Editar
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-400">Artista</label>

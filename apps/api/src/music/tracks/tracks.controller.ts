@@ -105,7 +105,7 @@ export class TracksController {
    * catálogo, que aún NO están en el catálogo (para curar). Pesado; cacheado.
    */
   @Get('discover-candidates')
-  @Roles('SUPER_ADMIN')
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
   discoverCandidates(
     @Query('months') months?: string,
     @Query('artists') artists?: string,
@@ -120,7 +120,7 @@ export class TracksController {
    * catálogo, que aún NO están en el catálogo, con estilo propuesto (a confirmar).
    */
   @Get('discover-youtube')
-  @Roles('SUPER_ADMIN')
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
   discoverYoutube(
     @Query('months') months?: string,
     @Query('channels') channels?: string,

@@ -113,13 +113,14 @@ export class YoutubeController {
       if (error) throw new BadRequestException(error);
       if (!code || !state) throw new BadRequestException('Faltan parámetros.');
       await this.yt.handleCallback(code, state);
+      // Vuelve a la sección desde donde se conecta (Playlists YouTube).
       reply
-        .header('location', `${web}/music/tracks?youtube=connected`)
+        .header('location', `${web}/music/youtube-playlists?youtube=connected`)
         .code(302)
         .send();
     } catch {
       reply
-        .header('location', `${web}/music/tracks?youtube=error`)
+        .header('location', `${web}/music/youtube-playlists?youtube=error`)
         .code(302)
         .send();
     }
