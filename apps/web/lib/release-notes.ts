@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.9',
+    date: '2026-07-23',
+    module: 'music',
+    type: 'improvement',
+    title: 'En el celular, tus playlists se ven arriba',
+    description:
+      'En “Mis Canciones”, al abrir el panel de Playlists Internas desde el teléfono, ahora aparece arriba del listado (a todo el ancho) en vez de apretado al costado. Además, la lista de playlists quedó más compacta.',
+  },
+  {
     version: '0.9.8',
     date: '2026-07-23',
     module: 'music.discover',

@@ -772,7 +772,8 @@ export function MusicLibraryView({
         </div>
       </Card>
 
-      <div className="flex items-start gap-1.5 lg:gap-4">
+      {/* Móvil: apilado (el panel de playlists va arriba). Desde lg: lado a lado. */}
+      <div className="flex flex-col gap-1.5 lg:flex-row lg:items-start lg:gap-4">
         <div className="min-w-0 flex-1 space-y-1.5 lg:space-y-4">
           {isLoading && <Spinner />}
           {error && (

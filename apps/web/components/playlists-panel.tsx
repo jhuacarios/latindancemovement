@@ -320,7 +320,7 @@ export function PlaylistsPanel({
   }, [externalActive]);
 
   return (
-    <aside className="sticky top-0 flex max-h-[calc(100vh-7rem)] w-72 shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60">
+    <aside className="flex max-h-[60vh] w-full shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60 max-lg:order-first lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:w-72">
       <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2">
         <div className="flex min-w-0 items-center gap-1">
           {selected && (
@@ -348,7 +348,7 @@ export function PlaylistsPanel({
         </button>
       </div>
 
-      <div className="border-b border-neutral-800 p-2">
+      <div className="border-b border-neutral-800 p-1.5">
         <Input
           placeholder={selected ? 'Buscar canción…' : 'Buscar playlist…'}
           value={search}
@@ -383,7 +383,7 @@ export function PlaylistsPanel({
                 {q ? 'Sin resultados.' : 'No tienes playlists internas.'}
               </p>
             )}
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-0.5">
               {filteredPlaylists.map((p) => (
                 <button
                   key={p.id}
@@ -392,7 +392,7 @@ export function PlaylistsPanel({
                     onSelectedChange(p.id);
                     setSearch('');
                   }}
-                  className="rounded-lg border border-transparent p-2 text-left transition hover:border-neutral-700 hover:bg-neutral-800/60"
+                  className="rounded-lg border border-transparent px-2 py-1.5 text-left leading-tight transition hover:border-neutral-700 hover:bg-neutral-800/60"
                 >
                   <div className="truncate text-sm font-medium">{p.name}</div>
                   <div className="text-[11px] text-neutral-500">
