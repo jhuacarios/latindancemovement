@@ -11,11 +11,22 @@ export function trackThumbUrl(t: Track): string | null {
   return null;
 }
 
-/** Miniatura del video (16:9, llena el cuadro sin barras ni recorte raro). */
-export function TrackThumb({ track }: { track: Track }) {
+/** Miniatura del video (16:9, llena el cuadro sin barras ni recorte raro).
+ *  `widthClass` permite un tamaño distinto al default (ej: filas más delgadas). */
+export function TrackThumb({
+  track,
+  widthClass = 'w-24',
+}: {
+  track: Track;
+  widthClass?: string;
+}) {
   const url = trackThumbUrl(track);
   if (!url) {
-    return <div className="aspect-video w-24 shrink-0 rounded bg-neutral-800" />;
+    return (
+      <div
+        className={`aspect-video ${widthClass} shrink-0 rounded bg-neutral-800`}
+      />
+    );
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -23,7 +34,7 @@ export function TrackThumb({ track }: { track: Track }) {
       src={url}
       alt=""
       loading="lazy"
-      className="aspect-video w-24 shrink-0 rounded bg-neutral-800 object-cover"
+      className={`aspect-video ${widthClass} shrink-0 rounded bg-neutral-800 object-cover`}
     />
   );
 }

@@ -196,9 +196,9 @@ export function LibraryDrawer({
   );
 
   return (
-    <aside className="sticky top-0 flex max-h-[calc(100vh-7rem)] w-80 shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+    <aside className="flex max-h-[60vh] w-full shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60 max-lg:order-first lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:w-80">
+      <div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1.5 lg:px-3 lg:py-2">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold lg:text-sm">
           <PlatformIcon source={platform} className="h-4 w-4 shrink-0" />
           Agregar de {platform === 'SPOTIFY' ? 'Spotify' : 'YouTube'}
         </h3>
@@ -211,10 +211,10 @@ export function LibraryDrawer({
         </button>
       </div>
 
-      <div className="border-b border-neutral-800 p-2">
+      <div className="border-b border-neutral-800 p-1.5 lg:p-2">
         {/* Fuente: mi biblioteca o el catálogo. Al agregar del catálogo, la
             canción también queda en Mis Canciones. */}
-        <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+        <div className="mb-1.5 grid grid-cols-2 gap-1 rounded-lg bg-neutral-800/60 p-0.5 lg:mb-2">
           {(['mine', 'catalog'] as const).map((s) => (
             <button
               key={s}
@@ -226,7 +226,7 @@ export function LibraryDrawer({
                   : 'Canciones del catálogo que aún no tienes en Mis Canciones. Al agregar una, también se suma a Mis Canciones.'
               }
               className={clsx(
-                'rounded-md py-1 text-xs font-medium transition',
+                'rounded-md py-0.5 text-[11px] font-medium transition lg:py-1 lg:text-xs',
                 source === s
                   ? 'bg-brand text-white'
                   : 'text-neutral-300 hover:bg-neutral-700/60',
@@ -244,7 +244,7 @@ export function LibraryDrawer({
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className={search ? 'pr-8' : undefined}
+            className={clsx('max-lg:py-1 max-lg:text-xs', search && 'pr-8')}
           />
           {search && (
             <button
@@ -260,14 +260,14 @@ export function LibraryDrawer({
         </div>
 
         {/* Switch de estilo: bachata primero. Vuelve a "todos" al re-tocar. */}
-        <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg bg-neutral-800/60 p-0.5">
+        <div className="mt-1.5 grid grid-cols-2 gap-1 rounded-lg bg-neutral-800/60 p-0.5 lg:mt-2">
           {(['BACHATA', 'SALSA'] as const).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => selectStyle(s)}
               className={clsx(
-                'rounded-md py-1 text-xs font-medium transition',
+                'rounded-md py-0.5 text-[11px] font-medium transition lg:py-1 lg:text-xs',
                 style === s
                   ? 'bg-brand text-white'
                   : 'text-neutral-300 hover:bg-neutral-700/60',
@@ -279,13 +279,13 @@ export function LibraryDrawer({
         </div>
 
         {/* Filtros por Nueva / Épica. */}
-        <div className="mt-2 flex gap-1">
+        <div className="mt-1.5 flex gap-1 lg:mt-2">
           <button
             type="button"
             onClick={() => setOnlyNew((v) => !v)}
             title="Solo canciones nuevas (lanzadas hace 2 meses o menos)"
             className={clsx(
-              'flex-1 rounded-md border py-1 text-xs font-medium transition',
+              'flex-1 rounded-md border py-0.5 text-[11px] font-medium transition lg:py-1 lg:text-xs',
               onlyNew
                 ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300'
                 : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800',
@@ -298,7 +298,7 @@ export function LibraryDrawer({
             onClick={() => setOnlyEpic((v) => !v)}
             title="Solo Épicas (top reproducciones/día por estilo)"
             className={clsx(
-              'flex-1 rounded-md border py-1 text-xs font-medium transition',
+              'flex-1 rounded-md border py-0.5 text-[11px] font-medium transition lg:py-1 lg:text-xs',
               onlyEpic
                 ? 'border-purple-500/60 bg-purple-500/15 text-purple-300'
                 : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800',
@@ -395,11 +395,13 @@ export function LibraryDrawer({
                 )}
               >
                 <span className="shrink-0">
-                  <TrackThumb track={t} />
+                  <TrackThumb track={t} widthClass="w-14" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center">
-                    <span className="truncate text-xs font-medium">
+                    {/* `min-w-0 flex-1` para que el título trunque y deje ver las
+                        pills (si no, se estira y las empuja fuera de la vista). */}
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
                       {t.title}
                     </span>
                     {isNewRelease(t.releaseDate) && <NewBadge />}

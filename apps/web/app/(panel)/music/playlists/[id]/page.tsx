@@ -476,8 +476,7 @@ export default function PlaylistDetailPage() {
       {error && <p className="text-sm text-red-300">No se pudo cargar la playlist.</p>}
 
       {data && (
-        <div className="flex items-start gap-4">
-          <div className="min-w-0 flex-1 space-y-4">
+        <div className="space-y-4">
           <div className="flex flex-wrap items-start gap-3">
             <div className="min-w-0">
               <h1 className="flex items-center gap-2 text-2xl font-bold">
@@ -644,7 +643,12 @@ export default function PlaylistDetailPage() {
           {err && <Card className="text-sm text-red-300">{err}</Card>}
 
           {items.length > 1 && (
-            <p className="text-xs text-neutral-500">
+            // Con el drawer abierto se oculta en móvil: ahí no se puede arrastrar.
+            <p
+              className={
+                'text-xs text-neutral-500' + (drawerOpen ? ' max-lg:hidden' : '')
+              }
+            >
               <span className="max-lg:hidden">Arrastra una fila para reordenar</span>
               <span className="lg:hidden">Usa ▲▼ para reordenar</span>
               {drawerOpen && ', o arrastra canciones desde el panel para agregarlas'}
@@ -652,6 +656,10 @@ export default function PlaylistDetailPage() {
             </p>
           )}
 
+          {/* Fila: la tabla y el drawer de agregar. En móvil se apilan (drawer
+              arriba de la lista); header y toolbar quedan fijos arriba de todo. */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+            <div className="min-w-0 flex-1">
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-[11px] lg:min-w-[720px] lg:text-sm">
               <thead className="whitespace-nowrap border-b border-neutral-800 text-left text-neutral-400 [&_th]:py-1">
@@ -956,7 +964,7 @@ export default function PlaylistDetailPage() {
               </tbody>
             </table>
           </Card>
-          </div>
+            </div>
 
           {drawerOpen && (
             <LibraryDrawer
@@ -981,6 +989,7 @@ export default function PlaylistDetailPage() {
               }
             />
           )}
+          </div>
         </div>
       )}
 
