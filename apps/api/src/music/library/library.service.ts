@@ -13,6 +13,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeSearch } from '../search.util';
 import { toPublicTrack } from '../mappers';
 import { TracksService } from '../tracks/tracks.service';
+import {
+  MAX_TRACK_DURATION_SEC,
+  assertImportableDuration,
+} from '../tracks/track-duration';
 import { TagsService } from '../tags/tags.service';
 import { CreateTrackDto } from '../tracks/dto/create-track.dto';
 import { QueryTracksDto } from '../tracks/dto/query-tracks.dto';
@@ -218,6 +222,7 @@ export class LibraryService {
   /** Agrega una canción PERSONAL (privada, no entra al catálogo) a mi biblioteca. */
   async addPersonal(userId: string, dto: CreateTrackDto): Promise<Track> {
     const { source, sourceId } = this.tracks.resolveSource(dto);
+    assertImportableDuration(dto.durationSec); // máx 10 min
 
     let track = await this.prisma.track.findFirst({
       where: { ownerId: userId, scope: 'PERSONAL', source, sourceId },
@@ -293,6 +298,12 @@ export class LibraryService {
         // Sin estilo (no detectado y el usuario no eligió): se omite.
         if (!style) {
           errors.push(`${it.title}: sin estilo, no importada`);
+          continue;
+        }
+
+        // Más de 10 min: no es una canción (mix/set), se omite.
+        if (it.durationSec != null && it.durationSec > MAX_TRACK_DURATION_SEC) {
+          errors.push(`${it.title}: dura más de 10 min, no importada`);
           continue;
         }
 

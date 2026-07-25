@@ -24,6 +24,10 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseTrackLink } from '../track-url.util';
 import { normalizeSearch } from '../search.util';
+import {
+  MAX_TRACK_DURATION_SEC,
+  assertImportableDuration,
+} from './track-duration';
 import { toPublicTrack } from '../mappers';
 import { CreateTrackDto } from './dto/create-track.dto';
 import { UpdateTrackDto } from './dto/update-track.dto';
@@ -299,6 +303,7 @@ export class TracksService {
   /** Crea una canción en el CATÁLOGO global (acción de admin). */
   async create(dto: CreateTrackDto, userId: string): Promise<Track> {
     const { source, sourceId } = this.resolveSource(dto);
+    assertImportableDuration(dto.durationSec); // máx 10 min
 
     const existing = await this.prisma.track.findFirst({
       where: { source, sourceId, scope: 'CATALOG' },
@@ -353,6 +358,15 @@ export class TracksService {
         )?.durationSec ?? null;
     }
 
+    // Si al conocer la duración real supera el máximo, se revierte (no se importa).
+    if (
+      created.durationSec != null &&
+      created.durationSec > MAX_TRACK_DURATION_SEC
+    ) {
+      await this.prisma.track.delete({ where: { id: created.id } });
+      assertImportableDuration(created.durationSec); // lanza 400
+    }
+
     return toPublicTrack(created);
   }
 
@@ -370,6 +384,7 @@ export class TracksService {
     if (q.excludeMine && userId) where.savedBy = { none: { userId } };
     if (q.approvalStatus) where.approvalStatus = q.approvalStatus;
     if (q.isRelease !== undefined) where.isRelease = q.isRelease;
+    if (q.artist) where.artist = { contains: q.artist, mode: 'insensitive' };
     if (q.search) {
       where.OR = [
         { title: { contains: q.search, mode: 'insensitive' } },
@@ -918,6 +933,7 @@ export class TracksService {
     opts?: { fillEmptyOnly?: boolean },
   ): Promise<{ id: string; created: boolean }> {
     const { source, sourceId } = this.resolveSource(dto);
+    assertImportableDuration(dto.durationSec); // máx 10 min
     const existing = await this.prisma.track.findFirst({
       where: { source, sourceId, scope: 'CATALOG' },
     });
@@ -1066,6 +1082,7 @@ export class TracksService {
       const dto = rows[i];
       try {
         const { source, sourceId } = this.resolveSource(dto);
+        assertImportableDuration(dto.durationSec); // máx 10 min (se reporta y salta)
         const existing = await this.prisma.track.findFirst({
           where: { source, sourceId, scope: 'CATALOG' },
         });
