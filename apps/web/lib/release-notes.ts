@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.13',
+    date: '2026-07-25',
+    module: 'music.youtube.playlists',
+    type: 'improvement',
+    title: 'El catálogo del selector ahora muestra todas las canciones',
+    description:
+      'Al agregar canciones a una playlist, la pestaña “Catálogo” ahora muestra todas las canciones, incluso las que ya tenés en Mis Canciones (antes las escondía). Si agregás una que no tenías, de paso se suma a Mis Canciones; si ya la tenías, simplemente se agrega a la playlist.',
+  },
+  {
     version: '0.9.12',
     date: '2026-07-25',
     module: 'music.youtube.playlists',

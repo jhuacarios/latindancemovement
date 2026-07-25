@@ -145,10 +145,10 @@ export function LibraryDrawer({
         if (substyles.length) p.set('substyles', substyles.join(','));
         return api<Paginated<Track>>(`/music/library?${p.toString()}`);
       }
-      // Catálogo global: filtra por sub-estilo del catálogo (uno) y excluye en
-      // el servidor lo que ya está en Mi biblioteca (paginación correcta).
+      // Catálogo global: muestra TODO (incluso lo que ya está en Mi biblioteca).
+      // Al agregar una que no la tenías, de paso se suma a Mis Canciones; si ya
+      // la tenías, ese POST es idempotente (ver addTrack en el detalle).
       if (substyles.length) p.set('substyle', substyles[0]);
-      p.set('excludeMine', 'true');
       return api<Paginated<Track>>(`/music/tracks?${p.toString()}`);
     },
     getNextPageParam: (lastPage, allPages) => {
@@ -159,9 +159,8 @@ export function LibraryDrawer({
     },
   });
 
-  // Ya NO se excluyen las que están en la playlist: se pueden agregar de nuevo
-  // (repetir un tema). En modo catálogo, las que ya están en Mi biblioteca las
-  // filtra el servidor con excludeMine.
+  // Ya NO se excluye nada: en catálogo se muestran todas (incluidas las que ya
+  // están en Mi biblioteca) y una canción puede repetirse en la playlist.
   const items = useMemo(
     () => (data?.pages ?? []).flatMap((pg) => pg.data),
     [data],
