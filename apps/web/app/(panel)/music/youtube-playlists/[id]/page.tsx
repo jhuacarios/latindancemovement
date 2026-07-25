@@ -111,9 +111,9 @@ function normArtist(s: string): string {
 
 /**
  * Fila de un video de la playlist de YouTube, con arrastre para reordenar
- * (dnd-kit) desde un "handle" (⠿). OJO: por ahora el reorden es SOLO VISUAL —
- * no se persiste en YouTube (se pierde al refrescar). Es para probar el arrastre.
- * El id sortable es el playlistItemId (único y estable ante el reordenamiento).
+ * (dnd-kit) desde un "handle" (⠿). El reorden es local (optimista) y se persiste
+ * en YouTube con el botón "Guardar cambios". El id sortable es el playlistItemId
+ * (único y estable ante el reordenamiento).
  */
 function SortableYtRow({
   v,
@@ -149,7 +149,7 @@ function SortableYtRow({
       ref={setNodeRef}
       style={style}
       className={clsx(
-        'flex items-center gap-1 rounded-lg px-2 py-1.5 transition',
+        'flex items-center gap-1 rounded-lg px-2 py-1.5 transition max-lg:gap-0.5 max-lg:px-1 max-lg:py-1',
         isDragging ? 'bg-neutral-800/80 opacity-90' : 'hover:bg-neutral-800/60',
       )}
     >
@@ -158,7 +158,7 @@ function SortableYtRow({
         type="button"
         title="Arrastra para reordenar"
         aria-label="Arrastrar para reordenar"
-        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-700 hover:text-neutral-200 active:cursor-grabbing"
+        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-700 hover:text-neutral-200 active:cursor-grabbing max-lg:h-7 max-lg:w-4"
         {...attributes}
         {...listeners}
       >
@@ -168,9 +168,9 @@ function SortableYtRow({
         href={v.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex min-w-0 flex-1 items-center gap-3"
+        className="flex min-w-0 flex-1 items-center gap-3 max-lg:gap-2"
       >
-        <span className="w-6 shrink-0 text-right text-sm text-neutral-500">
+        <span className="w-6 shrink-0 text-right text-sm text-neutral-500 max-lg:w-4 max-lg:text-xs">
           {i + 1}
         </span>
         {v.thumbnailUrl ? (
@@ -178,16 +178,18 @@ function SortableYtRow({
           <img
             src={v.thumbnailUrl}
             alt=""
-            className="h-10 w-16 shrink-0 rounded object-cover"
+            className="h-10 w-16 shrink-0 rounded object-cover max-lg:h-8 max-lg:w-14"
           />
         ) : (
-          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-neutral-800 text-sm">
+          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-neutral-800 text-sm max-lg:h-8 max-lg:w-14">
             ▶
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{v.title}</div>
-          <div className="truncate text-xs text-neutral-500">
+          <div className="truncate text-sm font-medium max-lg:text-[13px]">
+            {v.title}
+          </div>
+          <div className="truncate text-xs text-neutral-500 max-lg:text-[11px]">
             {[
               v.channelTitle,
               v.durationSec != null ? formatDuration(v.durationSec) : '',
@@ -196,27 +198,32 @@ function SortableYtRow({
               .join(' · ')}
           </div>
           {v.match && (
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <StyleBadge style={v.match.style} />
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 max-lg:mt-0.5 max-lg:gap-1">
+              <span className="lg:hidden">
+                <StyleBadge style={v.match.style} compact />
+              </span>
+              <span className="hidden lg:inline">
+                <StyleBadge style={v.match.style} />
+              </span>
               {isNewRelease(v.match.releaseDate) && <NewBadge />}
               {epicSourceIds.has(v.videoId) && <EpicBadge />}
               {v.match.substyles.map((s) => (
                 <span
                   key={s}
-                  className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300"
+                  className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300 max-lg:px-1 max-lg:py-0 max-lg:text-[9px]"
                 >
                   {s}
                 </span>
               ))}
               {v.match.year != null && (
-                <span className="text-[11px] text-neutral-500">
+                <span className="text-[11px] text-neutral-500 max-lg:text-[10px]">
                   · {v.match.year}
                 </span>
               )}
               {v.match.inCatalog && (
                 <span
                   title="Existe en el catálogo"
-                  className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300"
+                  className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300 max-lg:px-1 max-lg:py-0 max-lg:text-[9px]"
                 >
                   En Catálogo
                 </span>
@@ -224,7 +231,7 @@ function SortableYtRow({
               {v.match.inLibrary && (
                 <span
                   title="En tus Mis Canciones"
-                  className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300"
+                  className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300 max-lg:px-1 max-lg:py-0 max-lg:text-[9px]"
                 >
                   En Mis Canciones
                 </span>
@@ -233,7 +240,7 @@ function SortableYtRow({
           )}
         </div>
         <span
-          className="flex shrink-0 items-center gap-1 text-sm"
+          className="flex shrink-0 items-center gap-1 text-sm max-lg:flex-col max-lg:gap-1"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -249,7 +256,7 @@ function SortableYtRow({
                 if (v.match) onAddExisting(v.match.trackId);
                 else onOpenAdd(v, false);
               }}
-              className="rounded-md border border-neutral-700 bg-neutral-800/60 px-2 py-1 text-xs text-neutral-300 transition hover:border-brand hover:text-brand disabled:opacity-50"
+              className="rounded-md border border-neutral-700 bg-neutral-800/60 px-2 py-1 text-xs text-neutral-300 transition hover:border-brand hover:text-brand disabled:opacity-50 max-lg:px-1.5 max-lg:py-0.5 max-lg:text-[11px]"
             >
               + Mis Canciones
             </button>
@@ -259,7 +266,7 @@ function SortableYtRow({
               type="button"
               title="Agregar al Catálogo (global)"
               onClick={() => onOpenAdd(v, true)}
-              className="rounded-md border border-sky-700/60 bg-sky-500/10 px-2 py-1 text-xs text-sky-300 transition hover:border-sky-500 hover:text-sky-200"
+              className="rounded-md border border-sky-700/60 bg-sky-500/10 px-2 py-1 text-xs text-sky-300 transition hover:border-sky-500 hover:text-sky-200 max-lg:px-1.5 max-lg:py-0.5 max-lg:text-[11px]"
             >
               + Catálogo
             </button>
@@ -270,7 +277,7 @@ function SortableYtRow({
             aria-label="Quitar de la playlist de YouTube"
             disabled={removePending}
             onClick={() => onConfirmRemove(v)}
-            className="rounded-md border border-red-700/50 bg-red-500/10 px-2 py-1 text-sm font-bold leading-none text-red-400 transition hover:border-red-500 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
+            className="rounded-md border border-red-700/50 bg-red-500/10 px-2 py-1 text-sm font-bold leading-none text-red-400 transition hover:border-red-500 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50 max-lg:px-1.5 max-lg:py-0.5 max-lg:text-xs"
           >
             ✕
           </button>

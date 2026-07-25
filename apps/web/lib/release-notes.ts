@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.17',
+    date: '2026-07-25',
+    module: 'music.youtube.ytplaylists',
+    type: 'improvement',
+    title: 'Playlist de YouTube más compacta en el celular',
+    description:
+      'En el detalle de una playlist de YouTube, en el teléfono las filas quedan más compactas (miniatura y textos más chicos, menos espacios) y los botones de cada canción (reproducir, video, quitar) se apilan en columna para ocupar menos ancho y dejar más lugar al título.',
+  },
+  {
     version: '0.9.16',
     date: '2026-07-25',
     module: 'music.youtube.ytplaylists',
