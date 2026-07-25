@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.23',
+    date: '2026-07-25',
+    module: 'music',
+    type: 'improvement',
+    title: 'Límites de duración al importar canciones',
+    description:
+      'Ahora no se pueden importar videos de más de 10 minutos (suelen ser mixes o sets, no una canción) en ningún flujo de la plataforma. Además, en Descubre, las bachatas nuevas de menos de 2:00 (antes 2:10) se filtran por ser normalmente adelantos/teasers.',
+  },
+  {
     version: '0.9.22',
     date: '2026-07-25',
     module: 'music.youtube.playlists',

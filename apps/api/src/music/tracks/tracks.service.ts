@@ -811,9 +811,9 @@ export class TracksService {
     }
 
     // Duración: se pide aparte (la lista de subidas no la trae) y se usa para
-    // descartar teasers/promos. Una bachata de menos de 2:10 casi siempre es un
+    // descartar teasers/promos. Una bachata de menos de 2:00 casi siempre es un
     // video promocional, no la canción completa.
-    const MIN_BACHATA_SEC = 130;
+    const MIN_BACHATA_SEC = 120;
     const metas = await this.youtube.fetchByIds(out.map((c) => c.videoId));
     const durBy = new Map(metas.map((m) => [m.sourceId, m.durationSec]));
     for (const c of out) c.durationSec = durBy.get(c.videoId) ?? null;
