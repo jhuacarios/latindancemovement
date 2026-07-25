@@ -7,7 +7,28 @@
       "Bash(echo \"pnpm: $\\(pnpm -v 2>/dev/null || echo NO\\)\")",
       "Bash(git --version)",
       "Bash(corepack pnpm *)",
-      "Bash(npm config *)"
-    ]
+      "Bash(npm config *)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/v1/health)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/music/catalog)",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/music/tracks)",
+      "Bash(echo \"api: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/v1/health\\) | catalog: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/music/catalog\\) | tracks: $\\(curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/music/tracks\\)\")",
+      "Bash(node \"C:/Users/juanh/AppData/Local/Temp/claude/c--Repositorios/dc055ef4-25bc-42ce-b080-1b5550785c77/scratchpad/verify-bpm.mjs\")",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:/Users/juanh/AppData/Local/Temp/claude/c--Repositorios/dc055ef4-25bc-42ce-b080-1b5550785c77/scratchpad/refold-salsa.mjs\")",
+      "Bash(rm -rf apps/api/src/music/bpm)",
+      "Bash(ls apps/api/src/music/bpm)",
+      "Bash(node -e \"const {DatabaseSync}=require\\('node:sqlite'\\);const db=new DatabaseSync\\('prisma/dev.db'\\);console.log\\('tracks:',db.prepare\\('select count\\(*\\) c from Track'\\).get\\(\\).c,'| users:',db.prepare\\('select count\\(*\\) c from User'\\).get\\(\\).c\\);\")",
+      "Bash(ls prisma/migrations)",
+      "Bash(node -e \"const {DatabaseSync}=require\\('node:sqlite'\\);const db=new DatabaseSync\\('prisma/dev.db'\\);const cols=db.prepare\\('PRAGMA table_info\\(Track\\)'\\).all\\(\\).map\\(c=>c.name\\);console.log\\('columna bpm presente?', cols.includes\\('bpm'\\)\\);console.log\\('tracks:', db.prepare\\('select count\\(*\\) c from Track'\\).get\\(\\).c\\);\")",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "PowerShell($c = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 800 }; if \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\) { \"STILL IN USE\" } else { \"PORT 3000 FREE\" })",
+      "PowerShell($c = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { $c | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 800 }; if \\(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue\\) { \"STILL IN USE\" } else { \"FREE\" })",
+      "Bash(curl -s -D - -o /dev/null http://localhost:3000/api/v1/auth/google)",
+      "Bash(node \"C:/Users/juanh/AppData/Local/Temp/claude/c--Repositorios/dc055ef4-25bc-42ce-b080-1b5550785c77/scratchpad/test-google-auth.mjs\")"
+    ],
+    "defaultMode": "dontAsk"
   }
 }

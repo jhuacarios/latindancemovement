@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { DanceStyle, Paginated, Tag, Track } from '@baile-latino/types';
 import { api } from '@/lib/api';
 import { Input, Spinner, StyleBadge } from './ui';
@@ -19,7 +23,7 @@ import { EpicBadge } from './epic-badge';
  * arrastrar canciones hacia la playlist que se está editando.
  */
 export function LibraryDrawer({
-  excludeTrackIds,
+  inPlaylistCounts,
   onClose,
   onItemDragStart,
   onItemDragEnd,
@@ -28,8 +32,9 @@ export function LibraryDrawer({
   onPlaySpotify,
   playingSpotifyId,
 }: {
-  /** Canciones ya en la playlist (se excluyen de la lista). */
-  excludeTrackIds: Set<string>;
+  /** trackId → cuántas veces ya está en la playlist. NO se excluyen (una canción
+   *  puede repetirse); solo se muestra un contador ×N como aviso. */
+  inPlaylistCounts?: Map<string, number>;
   /** Plataforma de la playlist: solo ofrece canciones de esa fuente. */
   platform?: 'YOUTUBE' | 'SPOTIFY';
   onClose: () => void;
@@ -103,10 +108,19 @@ export function LibraryDrawer({
     );
   }
 
-  // Con los filtros calculados (Nuevas/Épicas) se carga todo el set para que el
-  // filtro cubra el catálogo completo, no solo los primeros resultados.
-  const pageSize = onlyNew || onlyEpic ? 1000 : 50;
-  const { data, isLoading } = useQuery({
+  // Sin filtro calculado: scroll infinito de a PAGE. Con Nuevas/Épicas (que se
+  // filtran en cliente) se trae un set grande de una para que el filtro cubra el
+  // catálogo completo, no solo la primera página.
+  const PAGE = 40;
+  const isFiltering = onlyNew || onlyEpic;
+  const pageSize = isFiltering ? 1000 : PAGE;
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: [
       'library-drawer',
       platform,
@@ -116,9 +130,11 @@ export function LibraryDrawer({
       substyles,
       pageSize,
     ],
-    queryFn: () => {
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) => {
       const p = new URLSearchParams({
         pageSize: String(pageSize),
+        page: String(pageParam),
         sort: 'recent',
       });
       p.set('source', platform);
@@ -135,13 +151,20 @@ export function LibraryDrawer({
       p.set('excludeMine', 'true');
       return api<Paginated<Track>>(`/music/tracks?${p.toString()}`);
     },
+    getNextPageParam: (lastPage, allPages) => {
+      if (isFiltering) return undefined; // el set grande ya cubre todo
+      if (lastPage.data.length < pageSize) return undefined; // última página
+      const loaded = allPages.reduce((n, pg) => n + pg.data.length, 0);
+      return loaded < lastPage.total ? allPages.length + 1 : undefined;
+    },
   });
 
-  // Excluye las que ya están en la playlist. (En modo catálogo, las que ya están
-  // en Mi biblioteca las excluye el servidor con excludeMine.)
+  // Ya NO se excluyen las que están en la playlist: se pueden agregar de nuevo
+  // (repetir un tema). En modo catálogo, las que ya están en Mi biblioteca las
+  // filtra el servidor con excludeMine.
   const items = useMemo(
-    () => (data?.data ?? []).filter((t) => !excludeTrackIds.has(t.id)),
-    [data, excludeTrackIds],
+    () => (data?.pages ?? []).flatMap((pg) => pg.data),
+    [data],
   );
 
   // Épicas: se calculan sobre el catálogo de YouTube (la única fuente con
@@ -195,8 +218,25 @@ export function LibraryDrawer({
     [items, onlyNew, onlyEpic, epicIds],
   );
 
+  // Scroll infinito: al asomar el centinela al final, carga la próxima página.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const root = scrollRef.current;
+    if (!sentinel || !root || !hasNextPage) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isFetchingNextPage) void fetchNextPage();
+      },
+      { root, rootMargin: '250px' },
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, items.length]);
+
   return (
-    <aside className="flex max-h-[60vh] w-full shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60 max-lg:order-first lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:w-80">
+    <aside className="flex max-h-[60vh] w-full shrink-0 flex-col rounded-xl border border-neutral-800 bg-neutral-900/60 max-lg:order-first lg:sticky lg:top-4 lg:max-h-[calc(100vh-5.5rem)] lg:w-80">
       <div className="flex items-center justify-between border-b border-neutral-800 px-2 py-1.5 lg:px-3 lg:py-2">
         <h3 className="flex items-center gap-1.5 text-xs font-semibold lg:text-sm">
           <PlatformIcon source={platform} className="h-4 w-4 shrink-0" />
@@ -344,7 +384,7 @@ export function LibraryDrawer({
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
         {isLoading && <Spinner />}
         {!isLoading && visibleItems.length === 0 && (
           <p className="px-1 py-4 text-center text-xs text-neutral-500">
@@ -392,6 +432,11 @@ export function LibraryDrawer({
                 className={clsx(
                   'flex cursor-pointer select-none items-center gap-2 rounded-lg border border-transparent p-1.5 transition hover:border-neutral-700 hover:bg-neutral-800/60 active:cursor-grabbing',
                   isPlaying && 'bg-brand/15',
+                  // Línea verde a la izquierda si ya está en la playlist. En un
+                  // <div> el box-shadow inset renderiza bien en todos los motores
+                  // (el problema de iOS con box-shadow es solo en <tr>).
+                  (inPlaylistCounts?.get(t.id) ?? 0) > 0 &&
+                    'shadow-[inset_3px_0_0_0_var(--color-clave)]',
                 )}
               >
                 <span className="shrink-0">
@@ -406,6 +451,14 @@ export function LibraryDrawer({
                     </span>
                     {isNewRelease(t.releaseDate) && <NewBadge />}
                     {epicIds.has(t.id) && <EpicBadge />}
+                    {(inPlaylistCounts?.get(t.id) ?? 0) > 1 && (
+                      <span
+                        title="Veces que ya está en esta playlist"
+                        className="ml-1.5 shrink-0 rounded-full bg-neutral-700 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-300"
+                      >
+                        ×{inPlaylistCounts?.get(t.id)}
+                      </span>
+                    )}
                   </div>
                   <div className="truncate text-[11px] text-neutral-500">
                     {t.artist}
@@ -416,6 +469,12 @@ export function LibraryDrawer({
             );
           })}
         </div>
+
+        {/* Centinela + estado de carga del scroll infinito. */}
+        {hasNextPage && <div ref={sentinelRef} className="h-1" />}
+        {isFetchingNextPage && (
+          <p className="py-3 text-center text-xs text-neutral-500">Cargando…</p>
+        )}
       </div>
     </aside>
   );

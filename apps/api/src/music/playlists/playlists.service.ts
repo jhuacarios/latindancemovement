@@ -103,13 +103,8 @@ export class PlaylistsService {
     });
     if (!track) throw new NotFoundException('Canción no encontrada');
 
-    const existing = await this.prisma.playlistItem.findUnique({
-      where: { playlistId_trackId: { playlistId, trackId: dto.trackId } },
-    });
-    if (existing) {
-      throw new ForbiddenException('La canción ya está en la playlist');
-    }
-
+    // A propósito NO se rechaza si la canción ya está: una playlist puede tener
+    // la misma canción varias veces (repetir un temazo en un social).
     const count = await this.prisma.playlistItem.count({ where: { playlistId } });
     const position = dto.position ?? count + 1;
 

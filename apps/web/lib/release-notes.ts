@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.12',
+    date: '2026-07-25',
+    module: 'music.youtube.playlists',
+    type: 'feature',
+    title: 'Repetir canciones en una playlist + selector más completo',
+    description:
+      'Ahora una playlist puede tener la misma canción varias veces (un temazo que se repite 3 o 4 veces en un social). Cuando una canción está más de una vez, se muestra un contador ×N tanto en el selector como en la lista que estás armando. Las canciones ya agregadas se marcan con una línea verde a la izquierda en cualquier pantalla. El panel de “Agregar canciones” ahora llena el alto disponible sin dispararse, y el catálogo se carga de a poco a medida que scrolleás (ya no carga todo de una).',
+  },
+  {
     version: '0.9.11',
     date: '2026-07-23',
     module: 'music.youtube.playlists',

@@ -199,8 +199,11 @@ model PlaylistItem {
   playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
   track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
 
-  @@unique([playlistId, trackId])
+  // Sin unique por (playlistId, trackId) a propósito: una playlist PUEDE tener la
+  // misma canción varias veces (en un social, un tema muy bueno se repite 3-4
+  // veces en una sesión de 4-5 horas). Cada aparición es un PlaylistItem propio.
   @@index([playlistId])
+  @@index([trackId])
 }
 
 model SongRequest {

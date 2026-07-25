@@ -188,10 +188,12 @@ export default function PlaylistDetailPage() {
   const isSpotify = data?.source === 'SPOTIFY';
   const ytCount = items.filter((i) => i.track?.source === 'YOUTUBE').length;
   const spCount = items.filter((i) => i.track?.source === 'SPOTIFY').length;
-  const inPlaylistIds = useMemo(
-    () => new Set(items.map((i) => i.trackId)),
-    [items],
-  );
+  // Cuántas veces está cada canción (puede repetirse) — para el aviso ×N del drawer.
+  const inPlaylistCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of items) m.set(i.trackId, (m.get(i.trackId) ?? 0) + 1);
+    return m;
+  }, [items]);
 
   // Épicas: top 50 rep/día por estilo del catálogo de YouTube; Spotify hereda
   // por título+artista+estilo+duración. Marca las canciones de la playlist.
@@ -799,6 +801,15 @@ export default function PlaylistDetailPage() {
                         <NewBadge />
                       )}
                       {item.track && epicIds.has(item.track.id) && <EpicBadge />}
+                      {item.track &&
+                        (inPlaylistCounts.get(item.trackId) ?? 0) > 1 && (
+                          <span
+                            title="Aparece varias veces en esta playlist"
+                            className="ml-1.5 shrink-0 rounded-full bg-neutral-700 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-300"
+                          >
+                            ×{inPlaylistCounts.get(item.trackId)}
+                          </span>
+                        )}
                       {item.isWarmup && (
                         <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">
                           warmup
@@ -968,7 +979,7 @@ export default function PlaylistDetailPage() {
 
           {drawerOpen && (
             <LibraryDrawer
-              excludeTrackIds={inPlaylistIds}
+              inPlaylistCounts={inPlaylistCounts}
               platform={data.source}
               onClose={() => setDrawerOpen(false)}
               onItemDragStart={(tid, fromCat) => {
