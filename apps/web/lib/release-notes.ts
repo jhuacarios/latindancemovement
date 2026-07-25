@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.18',
+    date: '2026-07-25',
+    module: 'music.youtube.ytplaylists',
+    type: 'fix',
+    title: 'Arrastrar canciones sin parpadeo en el celular',
+    description:
+      'Al reordenar una playlist de YouTube arrastrando en el teléfono, la canción que movés ahora sigue tu dedo de forma fluida (un clon flotante) y la lista abre el hueco donde va a caer, sin el parpadeo que aparecía al decidir dónde soltarla.',
+  },
+  {
     version: '0.9.17',
     date: '2026-07-25',
     module: 'music.youtube.ytplaylists',

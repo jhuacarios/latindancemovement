@@ -34,6 +34,7 @@ import { useLayoutUI } from '@/lib/layout-ui';
 import { clsx } from '@/components/clsx';
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
@@ -41,6 +42,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -150,7 +152,7 @@ function SortableYtRow({
       style={style}
       className={clsx(
         'flex items-center gap-1 rounded-lg px-2 py-1.5 transition max-lg:gap-0.5 max-lg:px-1 max-lg:py-1',
-        isDragging ? 'bg-neutral-800/80 opacity-90' : 'hover:bg-neutral-800/60',
+        isDragging ? 'opacity-30' : 'hover:bg-neutral-800/60',
       )}
     >
       {/* Handle de arrastre (mouse + touch). touch-none: el gesto arrastra, no scrollea. */}
@@ -483,7 +485,18 @@ export default function YoutubePlaylistDetailPage() {
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  // Ítem que se está arrastrando: se muestra en un DragOverlay (clon flotante que
+  // sigue al dedo) para evitar el parpadeo en touch real mientras se decide dónde
+  // soltarlo.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeItem = activeId
+    ? (items.find((v) => v.playlistItemId === activeId) ?? null)
+    : null;
+  function handleSortStart(e: DragStartEvent) {
+    setActiveId(e.active.id as string);
+  }
   function handleSortEnd(e: DragEndEvent) {
+    setActiveId(null);
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     const from = items.findIndex((v) => v.playlistItemId === active.id);
@@ -707,7 +720,9 @@ export default function YoutubePlaylistDetailPage() {
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragStart={handleSortStart}
               onDragEnd={handleSortEnd}
+              onDragCancel={() => setActiveId(null)}
             >
               <SortableContext
                 items={items.map((v) => v.playlistItemId)}
@@ -736,6 +751,29 @@ export default function YoutubePlaylistDetailPage() {
                   />
                 ))}
               </SortableContext>
+              {/* Clon flotante que sigue al dedo/cursor mientras se arrastra. */}
+              <DragOverlay>
+                {activeItem ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-brand/60 bg-neutral-900 px-2 py-1.5 shadow-xl">
+                    <span className="text-neutral-500">⠿</span>
+                    {activeItem.thumbnailUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={activeItem.thumbnailUrl}
+                        alt=""
+                        className="h-8 w-14 shrink-0 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-8 w-14 shrink-0 items-center justify-center rounded bg-neutral-800 text-sm">
+                        ▶
+                      </div>
+                    )}
+                    <span className="truncate text-[13px] font-medium">
+                      {activeItem.title}
+                    </span>
+                  </div>
+                ) : null}
+              </DragOverlay>
             </DndContext>
           </div>
         </>
