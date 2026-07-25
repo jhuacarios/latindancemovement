@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.24',
+    date: '2026-07-25',
+    module: 'music.artists',
+    type: 'feature',
+    title: 'Tocá un artista y mirá sus canciones',
+    description:
+      'En la sección Artistas, ahora podés tocar cualquier artista para ver sus canciones del catálogo de YouTube en un listado (ordenadas por reproducciones), con reproducir y abrir en YouTube.',
+  },
+  {
     version: '0.9.23',
     date: '2026-07-25',
     module: 'music',

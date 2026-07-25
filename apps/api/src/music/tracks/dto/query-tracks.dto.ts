@@ -23,6 +23,11 @@ export class QueryTracksDto {
   @IsString()
   search?: string;
 
+  /** Filtra por artista acreditado (substring del campo `artist`, sin tocar el título). */
+  @IsOptional()
+  @IsString()
+  artist?: string;
+
   @IsOptional()
   @IsIn(DANCE_STYLES)
   style?: DanceStyle;

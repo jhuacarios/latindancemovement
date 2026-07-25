@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import type { ArtistSummary } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
@@ -66,9 +67,11 @@ export default function ArtistsPage() {
           ) : (
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((a) => (
-                <div
+                <Link
                   key={a.name}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900/40 px-3 py-2"
+                  href={`/music/artists/${encodeURIComponent(a.name)}`}
+                  title={`Ver canciones de ${a.name} en el catálogo de YouTube`}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900/40 px-3 py-2 transition hover:border-brand/60 hover:bg-neutral-800/60"
                 >
                   <span className="min-w-0 truncate font-medium">{a.name}</span>
                   <span className="flex shrink-0 items-center gap-1.5">
@@ -79,7 +82,7 @@ export default function ArtistsPage() {
                       {a.trackCount}
                     </span>
                   </span>
-                </div>
+                </Link>
               ))}
             </div>
           )}
