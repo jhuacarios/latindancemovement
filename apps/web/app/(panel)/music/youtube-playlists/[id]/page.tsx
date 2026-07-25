@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -31,6 +31,25 @@ import {
 } from '@/lib/format';
 import { normalizeForMatch } from '@/lib/similarity';
 import { useLayoutUI } from '@/lib/layout-ui';
+import { clsx } from '@/components/clsx';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const PRIVACY_LABEL: Record<string, string> = {
   public: 'Pública',
@@ -90,6 +109,177 @@ function normArtist(s: string): string {
     .trim();
 }
 
+/**
+ * Fila de un video de la playlist de YouTube, con arrastre para reordenar
+ * (dnd-kit) desde un "handle" (⠿). OJO: por ahora el reorden es SOLO VISUAL —
+ * no se persiste en YouTube (se pierde al refrescar). Es para probar el arrastre.
+ * El id sortable es el playlistItemId (único y estable ante el reordenamiento).
+ */
+function SortableYtRow({
+  v,
+  i,
+  epicSourceIds,
+  isSuperAdmin,
+  addPending,
+  removePending,
+  onConfirmRemove,
+  onAddExisting,
+  onOpenAdd,
+}: {
+  v: YoutubePlaylistVideo;
+  i: number;
+  epicSourceIds: Set<string>;
+  isSuperAdmin: boolean;
+  addPending: boolean;
+  removePending: boolean;
+  onConfirmRemove: (v: YoutubePlaylistVideo) => void;
+  onAddExisting: (trackId: string) => void;
+  onOpenAdd: (v: YoutubePlaylistVideo, inCatalog: boolean) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: v.playlistItemId });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    position: 'relative',
+    zIndex: isDragging ? 1 : undefined,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={clsx(
+        'flex items-center gap-1 rounded-lg px-2 py-1.5 transition',
+        isDragging ? 'bg-neutral-800/80 opacity-90' : 'hover:bg-neutral-800/60',
+      )}
+    >
+      {/* Handle de arrastre (mouse + touch). touch-none: el gesto arrastra, no scrollea. */}
+      <button
+        type="button"
+        title="Arrastra para reordenar"
+        aria-label="Arrastrar para reordenar"
+        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-700 hover:text-neutral-200 active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        ⠿
+      </button>
+      <a
+        href={v.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex min-w-0 flex-1 items-center gap-3"
+      >
+        <span className="w-6 shrink-0 text-right text-sm text-neutral-500">
+          {i + 1}
+        </span>
+        {v.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={v.thumbnailUrl}
+            alt=""
+            className="h-10 w-16 shrink-0 rounded object-cover"
+          />
+        ) : (
+          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-neutral-800 text-sm">
+            ▶
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{v.title}</div>
+          <div className="truncate text-xs text-neutral-500">
+            {[
+              v.channelTitle,
+              v.durationSec != null ? formatDuration(v.durationSec) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+          {v.match && (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <StyleBadge style={v.match.style} />
+              {isNewRelease(v.match.releaseDate) && <NewBadge />}
+              {epicSourceIds.has(v.videoId) && <EpicBadge />}
+              {v.match.substyles.map((s) => (
+                <span
+                  key={s}
+                  className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300"
+                >
+                  {s}
+                </span>
+              ))}
+              {v.match.year != null && (
+                <span className="text-[11px] text-neutral-500">
+                  · {v.match.year}
+                </span>
+              )}
+              {v.match.inCatalog && (
+                <span
+                  title="Existe en el catálogo"
+                  className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300"
+                >
+                  En Catálogo
+                </span>
+              )}
+              {v.match.inLibrary && (
+                <span
+                  title="En tus Mis Canciones"
+                  className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300"
+                >
+                  En Mis Canciones
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <span
+          className="flex shrink-0 items-center gap-1 text-sm"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <PlayButtons track={toPlayTrack(v)} />
+          {!v.match?.inLibrary && (
+            <button
+              type="button"
+              title="Agregar a Mis Canciones"
+              disabled={addPending}
+              onClick={() => {
+                if (v.match) onAddExisting(v.match.trackId);
+                else onOpenAdd(v, false);
+              }}
+              className="rounded-md border border-neutral-700 bg-neutral-800/60 px-2 py-1 text-xs text-neutral-300 transition hover:border-brand hover:text-brand disabled:opacity-50"
+            >
+              + Mis Canciones
+            </button>
+          )}
+          {!v.match && isSuperAdmin && (
+            <button
+              type="button"
+              title="Agregar al Catálogo (global)"
+              onClick={() => onOpenAdd(v, true)}
+              className="rounded-md border border-sky-700/60 bg-sky-500/10 px-2 py-1 text-xs text-sky-300 transition hover:border-sky-500 hover:text-sky-200"
+            >
+              + Catálogo
+            </button>
+          )}
+          <button
+            type="button"
+            title="Quitar de la playlist de YouTube"
+            aria-label="Quitar de la playlist de YouTube"
+            disabled={removePending}
+            onClick={() => onConfirmRemove(v)}
+            className="rounded-md border border-red-700/50 bg-red-500/10 px-2 py-1 text-sm font-bold leading-none text-red-400 transition hover:border-red-500 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </span>
+      </a>
+    </div>
+  );
+}
+
 export default function YoutubePlaylistDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -143,7 +333,15 @@ export default function YoutubePlaylistDetailPage() {
     return out;
   }, [epicData]);
 
-  const items = data?.items ?? [];
+  // Orden local para el arrastre (SOLO visual — no se guarda en YouTube). Se
+  // resincroniza cada vez que llega data fresca (refetch), perdiendo el reorden.
+  const [localItems, setLocalItems] = useState<YoutubePlaylistVideo[] | null>(
+    null,
+  );
+  useEffect(() => {
+    setLocalItems(data?.items ?? null);
+  }, [data]);
+  const items = localItems ?? data?.items ?? [];
   const totalSec = items.reduce((a, v) => a + (v.durationSec ?? 0), 0);
   const durCount = items.filter((v) => v.durationSec != null).length;
   const partialDur = Boolean(data) && durCount < items.length;
@@ -220,6 +418,33 @@ export default function YoutubePlaylistDetailPage() {
       setErr(e instanceof ApiError ? e.message : 'No se pudo quitar el video.'),
   });
 
+  // Guarda el nuevo orden en la playlist REAL de YouTube (persiste).
+  const reorderPlaylist = useMutation({
+    mutationFn: (itemIds: string[]) =>
+      api<{ moves: number }>(`/music/youtube/playlists/${id}/reorder`, {
+        method: 'PATCH',
+        body: { itemIds },
+      }),
+    onSuccess: () => {
+      setErr(null);
+      void qc.invalidateQueries({ queryKey: ['youtube-playlist', id] });
+    },
+    onError: (e) =>
+      setErr(
+        e instanceof ApiError ? e.message : 'No se pudo guardar el nuevo orden.',
+      ),
+  });
+
+  // ¿El orden local difiere del de YouTube? (hay cambios sin guardar)
+  const dirty = Boolean(
+    localItems &&
+      data &&
+      (localItems.length !== data.items.length ||
+        localItems.some(
+          (v, i) => v.playlistItemId !== data.items[i]?.playlistItemId,
+        )),
+  );
+
   function confirmRemove(v: YoutubePlaylistVideo) {
     setConfirm({
       title: 'Quitar de la playlist',
@@ -239,6 +464,25 @@ export default function YoutubePlaylistDetailPage() {
       ),
       onConfirm: () => removeFromPlaylist.mutate(v.playlistItemId),
     });
+  }
+
+  // Reordenar con arrastre (dnd-kit). SOLO visual: reordena `localItems`, no
+  // llama a YouTube. Sensores: mouse/lápiz (umbral 6px), touch (delay 150ms) y
+  // teclado (accesible).
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  function handleSortEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = items.findIndex((v) => v.playlistItemId === active.id);
+    const to = items.findIndex((v) => v.playlistItemId === over.id);
+    if (from < 0 || to < 0) return;
+    setLocalItems(arrayMove(items, from, to));
   }
 
   return (
@@ -353,19 +597,47 @@ export default function YoutubePlaylistDetailPage() {
             </a>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
-              <span className="text-2xl font-bold text-amber-300">
-                {bachataCount}
-              </span>
-              <span className="text-sm text-neutral-300">Bachatas</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
+                <span className="text-2xl font-bold text-amber-300">
+                  {bachataCount}
+                </span>
+                <span className="text-sm text-neutral-300">Bachatas</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2">
+                <span className="text-2xl font-bold text-red-300">
+                  {salsaCount}
+                </span>
+                <span className="text-sm text-neutral-300">Salsas</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2">
-              <span className="text-2xl font-bold text-red-300">
-                {salsaCount}
-              </span>
-              <span className="text-sm text-neutral-300">Salsas</span>
-            </div>
+
+            {/* Guardar / descartar el reorden (aparece solo con cambios). */}
+            {dirty && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLocalItems(data.items)}
+                  disabled={reorderPlaylist.isPending}
+                  className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  Descartar
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    reorderPlaylist.mutate(items.map((v) => v.playlistItemId))
+                  }
+                  disabled={reorderPlaylist.isPending}
+                  className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+                >
+                  {reorderPlaylist.isPending
+                    ? 'Guardando…'
+                    : '💾 Guardar cambios'}
+                </button>
+              </div>
+            )}
           </div>
 
           {artistStats.length > 0 && (
@@ -405,146 +677,59 @@ export default function YoutubePlaylistDetailPage() {
             </div>
           )}
 
+          {/* Reordenar arrastrando desde ⠿; los cambios se guardan con el botón. */}
+          <p className="text-xs text-neutral-500">
+            Arrastra desde <span className="text-neutral-300">⠿</span> para
+            reordenar.{' '}
+            {dirty ? (
+              <span className="text-amber-300">
+                Tenés cambios sin guardar — usá “Guardar cambios” para aplicarlos
+                en YouTube.
+              </span>
+            ) : (
+              'Después guardá los cambios para aplicarlos en tu playlist de YouTube.'
+            )}
+          </p>
+
           <div className="space-y-1">
-            {data.items.length === 0 && (
+            {items.length === 0 && (
               <p className="text-sm text-neutral-500">
                 Esta playlist no tiene videos.
               </p>
             )}
-            {data.items.map((v, i) => (
-              <a
-                key={`${v.videoId}-${i}`}
-                href={v.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-neutral-800/60"
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleSortEnd}
+            >
+              <SortableContext
+                items={items.map((v) => v.playlistItemId)}
+                strategy={verticalListSortingStrategy}
               >
-                <span className="w-6 shrink-0 text-right text-sm text-neutral-500">
-                  {i + 1}
-                </span>
-                {v.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={v.thumbnailUrl}
-                    alt=""
-                    className="h-10 w-16 shrink-0 rounded object-cover"
+                {items.map((v, i) => (
+                  <SortableYtRow
+                    key={v.playlistItemId}
+                    v={v}
+                    i={i}
+                    epicSourceIds={epicSourceIds}
+                    isSuperAdmin={isSuperAdmin}
+                    addPending={addToLibrary.isPending}
+                    removePending={removeFromPlaylist.isPending}
+                    onConfirmRemove={confirmRemove}
+                    onAddExisting={(trackId) => addToLibrary.mutate(trackId)}
+                    onOpenAdd={(video, inCatalog) => {
+                      setAddInCatalog(inCatalog);
+                      setAddVideo({
+                        videoId: video.videoId,
+                        title: video.title,
+                        channelTitle: video.channelTitle,
+                        thumbnailUrl: video.thumbnailUrl,
+                      });
+                    }}
                   />
-                ) : (
-                  <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded bg-neutral-800 text-sm">
-                    ▶
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{v.title}</div>
-                  <div className="truncate text-xs text-neutral-500">
-                    {[
-                      v.channelTitle,
-                      v.durationSec != null ? formatDuration(v.durationSec) : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </div>
-                  {v.match && (
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <StyleBadge style={v.match.style} />
-                      {isNewRelease(v.match.releaseDate) && <NewBadge />}
-                      {epicSourceIds.has(v.videoId) && <EpicBadge />}
-                      {v.match.substyles.map((s) => (
-                        <span
-                          key={s}
-                          className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                      {v.match.year != null && (
-                        <span className="text-[11px] text-neutral-500">
-                          · {v.match.year}
-                        </span>
-                      )}
-                      {v.match.inCatalog && (
-                        <span
-                          title="Existe en el catálogo"
-                          className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-300"
-                        >
-                          En Catálogo
-                        </span>
-                      )}
-                      {v.match.inLibrary && (
-                        <span
-                          title="En tus Mis Canciones"
-                          className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300"
-                        >
-                          En Mis Canciones
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <span
-                  className="flex shrink-0 items-center gap-1 text-sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                >
-                  <PlayButtons track={toPlayTrack(v)} />
-                  {!v.match?.inLibrary && (
-                    <button
-                      type="button"
-                      title="Agregar a Mis Canciones"
-                      disabled={addToLibrary.isPending}
-                      onClick={() => {
-                        if (v.match) {
-                          // Ya está en el catálogo: solo la agrego a mi biblioteca.
-                          addToLibrary.mutate(v.match.trackId);
-                        } else {
-                          // Externa: abro el modal para crearla como personal.
-                          setAddInCatalog(false);
-                          setAddVideo({
-                            videoId: v.videoId,
-                            title: v.title,
-                            channelTitle: v.channelTitle,
-                            thumbnailUrl: v.thumbnailUrl,
-                          });
-                        }
-                      }}
-                      className="rounded-md border border-neutral-700 bg-neutral-800/60 px-2 py-1 text-xs text-neutral-300 transition hover:border-brand hover:text-brand disabled:opacity-50"
-                    >
-                      + Mis Canciones
-                    </button>
-                  )}
-                  {!v.match && isSuperAdmin && (
-                    <button
-                      type="button"
-                      title="Agregar al Catálogo (global)"
-                      onClick={() => {
-                        setAddInCatalog(true);
-                        setAddVideo({
-                          videoId: v.videoId,
-                          title: v.title,
-                          channelTitle: v.channelTitle,
-                          thumbnailUrl: v.thumbnailUrl,
-                        });
-                      }}
-                      className="rounded-md border border-sky-700/60 bg-sky-500/10 px-2 py-1 text-xs text-sky-300 transition hover:border-sky-500 hover:text-sky-200"
-                    >
-                      + Catálogo
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    title="Quitar de la playlist de YouTube"
-                    aria-label="Quitar de la playlist de YouTube"
-                    disabled={removeFromPlaylist.isPending}
-                    onClick={() => confirmRemove(v)}
-                    className="rounded-md border border-red-700/50 bg-red-500/10 px-2 py-1 text-sm font-bold leading-none text-red-400 transition hover:border-red-500 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50"
-                  >
-                    ✕
-                  </button>
-                </span>
-              </a>
-            ))}
+                ))}
+              </SortableContext>
+            </DndContext>
           </div>
         </>
       )}

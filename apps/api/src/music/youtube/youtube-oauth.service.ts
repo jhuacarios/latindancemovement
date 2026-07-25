@@ -454,6 +454,121 @@ export class YoutubeOAuthService {
     this.invalidateDetail(userId, playlistId);
   }
 
+  /** Orden actual de items en YouTube: [{playlistItemId, videoId}] por posición.
+   *  Ligero (no trae duraciones ni match), para calcular el diff de reorden. */
+  private async fetchPlaylistItemOrder(
+    token: string,
+    playlistId: string,
+  ): Promise<{ playlistItemId: string; videoId: string }[]> {
+    const out: { playlistItemId: string; videoId: string }[] = [];
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({
+        part: 'snippet,contentDetails',
+        playlistId,
+        maxResults: '50',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) {
+        await this.youtubeFail(
+          res,
+          'No se pudieron traer los videos de la playlist.',
+        );
+      }
+      const json = (await res.json()) as {
+        items?: Array<{
+          id?: string;
+          contentDetails?: { videoId?: string };
+          snippet?: { resourceId?: { videoId?: string } };
+        }>;
+        nextPageToken?: string;
+      };
+      for (const it of json.items ?? []) {
+        const videoId =
+          it.contentDetails?.videoId ?? it.snippet?.resourceId?.videoId ?? '';
+        if (!it.id || !videoId) continue;
+        out.push({ playlistItemId: it.id, videoId });
+      }
+      pageToken = json.nextPageToken;
+    } while (pageToken);
+    return out;
+  }
+
+  /** Mueve un playlistItem a una posición concreta (YouTube reindexa el resto). */
+  private async updateItemPosition(
+    token: string,
+    playlistItemId: string,
+    playlistId: string,
+    videoId: string,
+    position: number,
+  ): Promise<void> {
+    const res = await fetch(
+      'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet',
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: playlistItemId,
+          snippet: {
+            playlistId,
+            resourceId: { kind: 'youtube#video', videoId },
+            position,
+          },
+        }),
+      },
+    );
+    if (!res.ok) {
+      await this.youtubeFail(res, 'No se pudo reordenar la playlist en YouTube.');
+    }
+  }
+
+  /**
+   * Reordena la playlist REAL de YouTube al orden pedido (`desiredItemIds`).
+   * Aplica el mínimo de movimientos: recorre el objetivo de izquierda a derecha
+   * y solo mueve (playlistItems.update) los items que no están ya en su lugar,
+   * simulando el reíndice de YouTube tras cada movimiento. Devuelve cuántos
+   * movimientos hizo (cada uno gasta ~50 unidades de cuota).
+   */
+  async reorderPlaylist(
+    userId: string,
+    playlistId: string,
+    desiredItemIds: string[],
+  ): Promise<{ moves: number }> {
+    const token = await this.accessToken(userId);
+    const current = await this.fetchPlaylistItemOrder(token, playlistId);
+    const vidById = new Map(current.map((c) => [c.playlistItemId, c.videoId]));
+
+    // Orden objetivo: lo pedido (solo ids que aún existen), y al final cualquier
+    // item que el cliente no haya incluido (defensa por si la lista se desfasó).
+    const desired = desiredItemIds.filter((id) => vidById.has(id));
+    const desiredSet = new Set(desired);
+    for (const c of current) {
+      if (!desiredSet.has(c.playlistItemId)) desired.push(c.playlistItemId);
+    }
+
+    const order = current.map((c) => c.playlistItemId); // simula el estado en YT
+    let moves = 0;
+    for (let i = 0; i < desired.length; i++) {
+      if (order[i] === desired[i]) continue;
+      const id = desired[i];
+      const j = order.indexOf(id);
+      if (j < 0) continue;
+      await this.updateItemPosition(token, id, playlistId, vidById.get(id)!, i);
+      order.splice(j, 1);
+      order.splice(i, 0, id);
+      moves++;
+    }
+    this.invalidateDetail(userId, playlistId);
+    return { moves };
+  }
+
   /** Resumen de una playlist: cuántas en cada lugar + duración total. */
   async getPlaylistStats(
     userId: string,

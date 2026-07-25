@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.16',
+    date: '2026-07-25',
+    module: 'music.youtube.ytplaylists',
+    type: 'feature',
+    title: 'Reordenar tu playlist de YouTube arrastrando',
+    description:
+      'En el detalle de una playlist de YouTube ahora podés reordenar las canciones arrastrándolas desde el ícono ⠿ (funciona con mouse y con el dedo). Cuando hacés cambios aparece el botón “Guardar cambios”, que aplica el nuevo orden en tu playlist REAL de YouTube (o “Descartar” para volver atrás). También mejoramos el arrastre en las Playlists Internas.',
+  },
+  {
     version: '0.9.15',
     date: '2026-07-25',
     module: 'general',

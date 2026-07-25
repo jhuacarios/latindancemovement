@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
-import { IsEmail, IsIn } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEmail, IsIn, IsString } from 'class-validator';
 import { YT_ACCESS_STATUSES, type YoutubeAccessStatus } from '@baile-latino/types';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -34,6 +34,13 @@ class AccessRequestDto {
 class AccessStatusDto {
   @IsIn(YT_ACCESS_STATUSES)
   status!: YoutubeAccessStatus;
+}
+
+class ReorderPlaylistDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  itemIds!: string[];
 }
 
 @Controller('music/youtube')
@@ -197,6 +204,18 @@ export class YoutubeController {
   ) {
     await this.yt.removePlaylistItem(user.id, playlistId, itemId);
     return { removed: true };
+  }
+
+  /** Reordena la playlist REAL de YouTube al orden pedido. Gasta cuota por movimiento. */
+  @Patch('playlists/:id/reorder')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DJ', 'ORGANIZADOR', 'SUPER_ADMIN')
+  reorderPlaylist(
+    @Param('id') id: string,
+    @Body() dto: ReorderPlaylistDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.yt.reorderPlaylist(user.id, id, dto.itemIds);
   }
 
   /** Crea una playlist en YouTube con las canciones de una playlist interna (snapshot). */

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -41,6 +41,24 @@ import { NewBadge } from '@/components/new-badge';
 import { EpicBadge } from '@/components/epic-badge';
 import { useLayoutUI } from '@/lib/layout-ui';
 import { useIsMobile } from '@/lib/use-is-mobile';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 type DropSide = { id: string; side: 'before' | 'after' } | null;
 
@@ -111,6 +129,256 @@ const MOBILE_COLS_VISIBLE: ColVis = {
   video: false,
   source: false,
 };
+
+/**
+ * Fila de la playlist con arrastre para reordenar (dnd-kit). El arrastre se
+ * activa desde un "handle" (⠿) para no chocar con los botones de la fila ni con
+ * el drop externo del drawer; funciona con mouse y con el dedo (touch). El drop
+ * externo (soltar una canción desde el drawer) sigue siendo drag-and-drop nativo
+ * de HTML5, que convive con dnd-kit por usar otro sistema de eventos.
+ */
+function SortableRow({
+  item,
+  idx,
+  itemsLength,
+  isSpotify,
+  cols,
+  epicIds,
+  inPlaylistCounts,
+  playingFrom,
+  spotifyPlaying,
+  reorderPending,
+  removePending,
+  externalActive,
+  dropTarget,
+  setDropTarget,
+  onDrop,
+  moveItem,
+  playSpotify,
+  confirmRemove,
+}: {
+  item: PlaylistItem;
+  idx: number;
+  itemsLength: number;
+  isSpotify: boolean;
+  cols: ColVis;
+  epicIds: Set<string>;
+  inPlaylistCounts: Map<string, number>;
+  playingFrom: 'playlist' | 'drawer' | null;
+  spotifyPlaying: SpotifyPlayable | null;
+  reorderPending: boolean;
+  removePending: boolean;
+  externalActive: boolean;
+  dropTarget: DropSide;
+  setDropTarget: (d: DropSide) => void;
+  onDrop: () => void;
+  moveItem: (index: number, delta: number) => void;
+  playSpotify: (
+    t: NonNullable<PlaylistItem['track']>,
+    from: 'playlist' | 'drawer',
+  ) => void;
+  confirmRemove: (item: PlaylistItem) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item.id });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    position: 'relative',
+    zIndex: isDragging ? 1 : undefined,
+  };
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      // Drop externo (desde el drawer): sigue siendo HTML5 nativo.
+      onDragOver={(e) => {
+        if (!externalActive) return;
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const side =
+          e.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+        if (dropTarget?.id !== item.id || dropTarget?.side !== side) {
+          setDropTarget({ id: item.id, side });
+        }
+      }}
+      onDrop={(e) => {
+        if (!externalActive) return;
+        e.preventDefault();
+        onDrop();
+      }}
+      className={clsx(
+        'select-none border-b border-neutral-800/60 last:border-0 transition-colors',
+        isDragging && 'opacity-40',
+        externalActive &&
+          dropTarget?.id === item.id &&
+          (dropTarget.side === 'before'
+            ? 'shadow-[inset_0_3px_0_0_var(--color-brand),inset_0_14px_16px_-12px_var(--color-brand)]'
+            : 'shadow-[inset_0_-3px_0_0_var(--color-brand),inset_0_-14px_16px_-12px_var(--color-brand)]'),
+        playingFrom === 'playlist' &&
+          spotifyPlaying?.sourceId === item.track?.sourceId
+          ? 'bg-brand/20'
+          : 'hover:bg-brand/5',
+      )}
+    >
+      <td className="px-0.5 py-2 text-right text-neutral-500 lg:px-4 lg:py-3">
+        {idx + 1}
+      </td>
+      <td className="px-1 py-2 lg:px-3">
+        {item.track && <TrackThumb track={item.track} />}
+      </td>
+      <td className="px-1 py-2 lg:px-4 lg:py-3 font-medium">
+        {item.track?.title ?? '—'}
+        {item.track && isNewRelease(item.track.releaseDate) && <NewBadge />}
+        {item.track && epicIds.has(item.track.id) && <EpicBadge />}
+        {item.track && (inPlaylistCounts.get(item.trackId) ?? 0) > 1 && (
+          <span
+            title="Aparece varias veces en esta playlist"
+            className="ml-1.5 shrink-0 rounded-full bg-neutral-700 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-300"
+          >
+            ×{inPlaylistCounts.get(item.trackId)}
+          </span>
+        )}
+        {item.isWarmup && (
+          <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">
+            warmup
+          </span>
+        )}
+      </td>
+      {cols.artist && (
+        <td className="px-1 py-2 text-neutral-300 max-lg:w-px lg:px-4 lg:py-3">
+          {item.track?.artist ?? '—'}
+        </td>
+      )}
+      {cols.style && (
+        <td className="px-1 py-2 max-lg:w-px lg:px-4 lg:py-3">
+          {item.track && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="lg:hidden">
+                <StyleBadge style={item.track.style} compact />
+              </span>
+              <span className="hidden lg:inline">
+                <StyleBadge style={item.track.style} />
+              </span>
+              {item.track.substyles?.map((s) => (
+                <span
+                  key={s}
+                  className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 max-lg:hidden"
+                >
+                  {s}
+                </span>
+              ))}
+              {item.track.tags?.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300 max-lg:hidden"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </td>
+      )}
+      {cols.duration && (
+        <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
+          {formatDuration(item.track?.durationSec)}
+        </td>
+      )}
+      {cols.date && (
+        <td className="whitespace-nowrap px-1 py-2 lg:px-4 lg:py-3 text-neutral-400">
+          {formatReleaseDate(item.track?.releaseDate, item.track?.year)}
+        </td>
+      )}
+      {!isSpotify && cols.views && (
+        <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
+          {formatViews(item.track?.details?.viewCount)}
+        </td>
+      )}
+      {!isSpotify && cols.vpd && (
+        <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
+          {formatViewsPerDay(
+            item.track?.details?.viewCount,
+            item.track?.releaseDate,
+          )}
+        </td>
+      )}
+      <td className="px-1 py-2 lg:px-4 lg:py-3 text-right">
+        <div className="flex items-center justify-end gap-1 lg:gap-2">
+          {/* Handle de arrastre (mouse + touch). touch-none evita que el gesto
+              scrollee la página en vez de arrastrar. */}
+          <button
+            type="button"
+            title="Arrastra para reordenar"
+            aria-label="Arrastrar para reordenar"
+            className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-800 hover:text-neutral-200 active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            ⠿
+          </button>
+          {/* Reordenar en móvil como respaldo (por si el arrastre táctil incomoda). */}
+          <div className="flex flex-col lg:hidden">
+            <button
+              type="button"
+              title="Subir"
+              aria-label="Subir"
+              disabled={idx === 0 || reorderPending}
+              onClick={() => moveItem(idx, -1)}
+              className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              title="Bajar"
+              aria-label="Bajar"
+              disabled={idx === itemsLength - 1 || reorderPending}
+              onClick={() => moveItem(idx, 1)}
+              className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
+            >
+              ▼
+            </button>
+          </div>
+          {item.track && (
+            <PlayButtons track={item.track} showVideo={cols.video} />
+          )}
+          {item.track?.source === 'SPOTIFY' && (
+            <button
+              type="button"
+              title={
+                spotifyPlaying?.sourceId === item.track.sourceId
+                  ? 'Detener'
+                  : 'Reproducir (Spotify)'
+              }
+              aria-label="Reproducir"
+              onClick={() => playSpotify(item.track!, 'playlist')}
+              className={
+                'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
+                (playingFrom === 'playlist' &&
+                spotifyPlaying?.sourceId === item.track.sourceId
+                  ? 'bg-brand text-white'
+                  : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
+              }
+            >
+              {playingFrom === 'playlist' &&
+              spotifyPlaying?.sourceId === item.track.sourceId
+                ? '⏸'
+                : '▶'}
+            </button>
+          )}
+          {cols.source && item.track && <SourceLink track={item.track} />}
+          <DeleteIconButton
+            disabled={removePending}
+            title="Quitar de la playlist"
+            aria-label="Quitar de la playlist"
+            onClick={() => confirmRemove(item)}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
 
 export default function PlaylistDetailPage() {
   const params = useParams<{ id: string }>();
@@ -236,6 +504,27 @@ export default function PlaylistDetailPage() {
     }
     return ids;
   }, [items, epicYt]);
+
+  // Reordenar con arrastre (dnd-kit). Sensores: mouse/lápiz (con un umbral de
+  // 6px para no confundir click con arrastre) y touch (con un pequeño delay para
+  // distinguir el arrastre del scroll). El teclado permite reordenar accesible.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  function handleSortEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const from = items.findIndex((i) => i.id === active.id);
+    const to = items.findIndex((i) => i.id === over.id);
+    if (from < 0 || to < 0) return;
+    const arr = arrayMove(items, from, to);
+    setLocalItems(arr); // optimista
+    reorder.mutate(arr.map((i) => i.id));
+  }
 
   // Columnas visibles + menú del engranaje. Se guardan por fuente Y por tamaño:
   // móvil y escritorio tienen su propia configuración (claves separadas).
@@ -654,7 +943,10 @@ export default function PlaylistDetailPage() {
               <span className="max-lg:hidden">Arrastra una fila para reordenar</span>
               <span className="lg:hidden">Usa ▲▼ para reordenar</span>
               {drawerOpen && ', o arrastra canciones desde el panel para agregarlas'}
-              .
+              .{' '}
+              <span className="font-semibold text-clave">
+                🔁 Puedes repetir la misma canción las veces que quieras.
+              </span>
             </p>
           )}
 
@@ -663,6 +955,11 @@ export default function PlaylistDetailPage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">
           <Card className="overflow-x-auto p-0">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleSortEnd}
+            >
             <table className="w-full text-[11px] lg:min-w-[720px] lg:text-sm">
               <thead className="whitespace-nowrap border-b border-neutral-800 text-left text-neutral-400 [&_th]:py-1">
                 <tr>
@@ -753,195 +1050,34 @@ export default function PlaylistDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr
-                    key={item.id}
-                    draggable
-                    onDragStart={() => setDragId(item.id)}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const side =
-                        e.clientY - rect.top < rect.height / 2
-                          ? 'before'
-                          : 'after';
-                      if (dropTarget?.id !== item.id || dropTarget?.side !== side) {
-                        setDropTarget({ id: item.id, side });
-                      }
-                    }}
-                    onDragEnd={() => {
-                      setDragId(null);
-                      setDropTarget(null);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleDrop();
-                    }}
-                    className={clsx(
-                      'cursor-grab select-none border-b border-neutral-800/60 last:border-0 transition-colors active:cursor-grabbing',
-                      dragId === item.id && 'opacity-40',
-                      dropTarget?.id === item.id &&
-                        dragId !== item.id &&
-                        (dropTarget.side === 'before'
-                          ? 'shadow-[inset_0_3px_0_0_var(--color-brand),inset_0_14px_16px_-12px_var(--color-brand)]'
-                          : 'shadow-[inset_0_-3px_0_0_var(--color-brand),inset_0_-14px_16px_-12px_var(--color-brand)]'),
-                      playingFrom === 'playlist' &&
-                        spotifyPlaying?.sourceId === item.track?.sourceId
-                        ? 'bg-brand/20'
-                        : 'hover:bg-brand/5',
-                    )}
-                  >
-                    <td className="px-0.5 py-2 text-right text-neutral-500 lg:px-4 lg:py-3">{idx + 1}</td>
-                    <td className="px-1 py-2 lg:px-3">
-                      {item.track && <TrackThumb track={item.track} />}
-                    </td>
-                    <td className="px-1 py-2 lg:px-4 lg:py-3 font-medium">
-                      {item.track?.title ?? '—'}
-                      {item.track && isNewRelease(item.track.releaseDate) && (
-                        <NewBadge />
-                      )}
-                      {item.track && epicIds.has(item.track.id) && <EpicBadge />}
-                      {item.track &&
-                        (inPlaylistCounts.get(item.trackId) ?? 0) > 1 && (
-                          <span
-                            title="Aparece varias veces en esta playlist"
-                            className="ml-1.5 shrink-0 rounded-full bg-neutral-700 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-300"
-                          >
-                            ×{inPlaylistCounts.get(item.trackId)}
-                          </span>
-                        )}
-                      {item.isWarmup && (
-                        <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-300">
-                          warmup
-                        </span>
-                      )}
-                    </td>
-                    {cols.artist && (
-                      <td className="px-1 py-2 text-neutral-300 max-lg:w-px lg:px-4 lg:py-3">
-                        {item.track?.artist ?? '—'}
-                      </td>
-                    )}
-                    {cols.style && (
-                      <td className="px-1 py-2 max-lg:w-px lg:px-4 lg:py-3">
-                        {item.track && (
-                          <div className="flex flex-wrap items-center gap-1">
-                            <span className="lg:hidden">
-                              <StyleBadge style={item.track.style} compact />
-                            </span>
-                            <span className="hidden lg:inline">
-                              <StyleBadge style={item.track.style} />
-                            </span>
-                            {item.track.substyles?.map((s) => (
-                              <span
-                                key={s}
-                                className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 max-lg:hidden"
-                              >
-                                {s}
-                              </span>
-                            ))}
-                            {item.track.tags?.map((tag) => (
-                              <span
-                                key={tag.id}
-                                className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs text-violet-300 max-lg:hidden"
-                              >
-                                {tag.name}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                    )}
-                    {cols.duration && (
-                      <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
-                        {formatDuration(item.track?.durationSec)}
-                      </td>
-                    )}
-                    {cols.date && (
-                      <td className="whitespace-nowrap px-1 py-2 lg:px-4 lg:py-3 text-neutral-400">
-                        {formatReleaseDate(
-                          item.track?.releaseDate,
-                          item.track?.year,
-                        )}
-                      </td>
-                    )}
-                    {!isSpotify && cols.views && (
-                      <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
-                        {formatViews(item.track?.details?.viewCount)}
-                      </td>
-                    )}
-                    {!isSpotify && cols.vpd && (
-                      <td className="px-1 py-2 lg:px-4 lg:py-3 tabular-nums text-neutral-400">
-                        {formatViewsPerDay(
-                          item.track?.details?.viewCount,
-                          item.track?.releaseDate,
-                        )}
-                      </td>
-                    )}
-                    <td className="px-1 py-2 lg:px-4 lg:py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 lg:gap-2">
-                        {/* Reordenar en móvil (el arrastre táctil no funciona). */}
-                        <div className="flex flex-col lg:hidden">
-                          <button
-                            type="button"
-                            title="Subir"
-                            aria-label="Subir"
-                            disabled={idx === 0 || reorder.isPending}
-                            onClick={() => moveItem(idx, -1)}
-                            className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            type="button"
-                            title="Bajar"
-                            aria-label="Bajar"
-                            disabled={idx === items.length - 1 || reorder.isPending}
-                            onClick={() => moveItem(idx, 1)}
-                            className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
-                          >
-                            ▼
-                          </button>
-                        </div>
-                        {item.track && (
-                          <PlayButtons track={item.track} showVideo={cols.video} />
-                        )}
-                        {item.track?.source === 'SPOTIFY' && (
-                          <button
-                            type="button"
-                            title={
-                              spotifyPlaying?.sourceId === item.track.sourceId
-                                ? 'Detener'
-                                : 'Reproducir (Spotify)'
-                            }
-                            aria-label="Reproducir"
-                            onClick={() => playSpotify(item.track!, 'playlist')}
-                            className={
-                              'flex h-7 w-7 items-center justify-center rounded-full text-xs transition ' +
-                              (playingFrom === 'playlist' &&
-                              spotifyPlaying?.sourceId === item.track.sourceId
-                                ? 'bg-brand text-white'
-                                : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700')
-                            }
-                          >
-                            {playingFrom === 'playlist' &&
-                            spotifyPlaying?.sourceId === item.track.sourceId
-                              ? '⏸'
-                              : '▶'}
-                          </button>
-                        )}
-                        {cols.source && item.track && (
-                          <SourceLink track={item.track} />
-                        )}
-                        <DeleteIconButton
-                          disabled={removeItem.isPending}
-                          title="Quitar de la playlist"
-                          aria-label="Quitar de la playlist"
-                          onClick={() => confirmRemove(item)}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                <SortableContext
+                  items={items.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {items.map((item, idx) => (
+                    <SortableRow
+                      key={item.id}
+                      item={item}
+                      idx={idx}
+                      itemsLength={items.length}
+                      isSpotify={isSpotify}
+                      cols={cols}
+                      epicIds={epicIds}
+                      inPlaylistCounts={inPlaylistCounts}
+                      playingFrom={playingFrom}
+                      spotifyPlaying={spotifyPlaying}
+                      reorderPending={reorder.isPending}
+                      removePending={removeItem.isPending}
+                      externalActive={externalDragId != null}
+                      dropTarget={dropTarget}
+                      setDropTarget={setDropTarget}
+                      onDrop={handleDrop}
+                      moveItem={moveItem}
+                      playSpotify={playSpotify}
+                      confirmRemove={confirmRemove}
+                    />
+                  ))}
+                </SortableContext>
                 {items.length === 0 && (
                   <tr>
                     <td
@@ -974,6 +1110,7 @@ export default function PlaylistDetailPage() {
                 )}
               </tbody>
             </table>
+            </DndContext>
           </Card>
             </div>
 
