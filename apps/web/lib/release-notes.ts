@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.14',
+    date: '2026-07-25',
+    module: 'music.youtube.playlists',
+    type: 'fix',
+    title: 'En el celular, la canción suena al primer toque',
+    description:
+      'Al agregar canciones a una playlist desde el teléfono, tocar una canción del buscador ahora la reproduce de inmediato (antes había que tocar dos veces porque el navegador bloqueaba el sonido). El doble-toque sigue sirviendo para agregarla.',
+  },
+  {
     version: '0.9.13',
     date: '2026-07-25',
     module: 'music.youtube.playlists',

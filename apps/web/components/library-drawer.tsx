@@ -17,6 +17,7 @@ import { isNewRelease, isWithinLastMonths, viewsPerDay } from '@/lib/format';
 import { buildEpicMatcher } from '@/lib/similarity';
 import { NewBadge } from './new-badge';
 import { EpicBadge } from './epic-badge';
+import { useIsMobile } from '@/lib/use-is-mobile';
 
 /**
  * Panel lateral de "Mis Canciones": busca en la biblioteca del usuario y permite
@@ -58,9 +59,18 @@ export function LibraryDrawer({
   const fromCatalog = source === 'catalog';
   const player = usePlayer();
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
   // Distingue click (reproducir) de doble click (agregar): el click espera un
   // pelín por si viene un segundo click.
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reproduce la canción. En móvil DEBE llamarse de forma síncrona dentro del
+  // gesto del tap: si se difiere (setTimeout), el navegador pierde el "user
+  // gesture" y bloquea el autoplay (el primer tap no sonaba).
+  function playTrack(t: Track) {
+    if (t.source === 'SPOTIFY') onPlaySpotify?.(t);
+    else if (player.canPlay(t)) player.playAudio(t);
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
@@ -408,12 +418,17 @@ export function LibraryDrawer({
                 onDragStart={() => onItemDragStart(t.id, fromCatalog)}
                 onDragEnd={onItemDragEnd}
                 onClick={() => {
-                  // Click: reproducir abajo (esperando por si es doble click).
+                  // Móvil: reproducir YA, dentro del gesto (si se difiere, el
+                  // navegador bloquea el autoplay). El doble-tap igual agrega.
+                  if (isMobile) {
+                    playTrack(t);
+                    return;
+                  }
+                  // Escritorio: esperar un pelín por si viene un doble click.
                   if (clickTimer.current) clearTimeout(clickTimer.current);
                   clickTimer.current = setTimeout(() => {
                     clickTimer.current = null;
-                    if (t.source === 'SPOTIFY') onPlaySpotify?.(t);
-                    else if (player.canPlay(t)) player.playAudio(t);
+                    playTrack(t);
                   }, 220);
                 }}
                 onDoubleClick={() => {
