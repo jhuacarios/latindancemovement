@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.19',
+    date: '2026-07-25',
+    module: 'music.youtube.ytplaylists',
+    type: 'improvement',
+    title: 'Zona de arrastre más grande en el celular',
+    description:
+      'Al reordenar una playlist de YouTube en el teléfono, la zona para agarrar y arrastrar cada canción (el ícono ⠿) ahora ocupa toda la altura de la fila y es más ancha, así es más fácil de tomar con el dedo (antes el área real era más chica de lo que parecía).',
+  },
+  {
     version: '0.9.18',
     date: '2026-07-25',
     module: 'music.youtube.ytplaylists',

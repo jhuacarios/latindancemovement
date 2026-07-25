@@ -160,7 +160,7 @@ function SortableYtRow({
         type="button"
         title="Arrastra para reordenar"
         aria-label="Arrastrar para reordenar"
-        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-700 hover:text-neutral-200 active:cursor-grabbing max-lg:h-7 max-lg:w-4"
+        className="flex h-8 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-700 hover:text-neutral-200 active:cursor-grabbing max-lg:h-auto max-lg:w-9 max-lg:self-stretch max-lg:bg-neutral-800/40"
         {...attributes}
         {...listeners}
       >
