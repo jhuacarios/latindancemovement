@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.22',
+    date: '2026-07-25',
+    module: 'music.youtube.playlists',
+    type: 'improvement',
+    title: 'Reordenar Playlists Internas arrastrando (también en el celular)',
+    description:
+      'En el detalle de una playlist interna, reordenar ahora es arrastrando desde el ícono ⠿ — con el mismo pulido que las playlists de YouTube: la canción sigue tu dedo sin parpadeo y el área de agarre es grande en el teléfono. Quitamos los botones ▲▼ porque el arrastre táctil ya funciona bien.',
+  },
+  {
     version: '0.9.20',
     date: '2026-07-25',
     module: 'music.youtube.ytplaylists',

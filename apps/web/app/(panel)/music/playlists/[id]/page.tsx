@@ -43,6 +43,7 @@ import { useLayoutUI } from '@/lib/layout-ui';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
@@ -50,6 +51,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -140,39 +142,33 @@ const MOBILE_COLS_VISIBLE: ColVis = {
 function SortableRow({
   item,
   idx,
-  itemsLength,
   isSpotify,
   cols,
   epicIds,
   inPlaylistCounts,
   playingFrom,
   spotifyPlaying,
-  reorderPending,
   removePending,
   externalActive,
   dropTarget,
   setDropTarget,
   onDrop,
-  moveItem,
   playSpotify,
   confirmRemove,
 }: {
   item: PlaylistItem;
   idx: number;
-  itemsLength: number;
   isSpotify: boolean;
   cols: ColVis;
   epicIds: Set<string>;
   inPlaylistCounts: Map<string, number>;
   playingFrom: 'playlist' | 'drawer' | null;
   spotifyPlaying: SpotifyPlayable | null;
-  reorderPending: boolean;
   removePending: boolean;
   externalActive: boolean;
   dropTarget: DropSide;
   setDropTarget: (d: DropSide) => void;
   onDrop: () => void;
-  moveItem: (index: number, delta: number) => void;
   playSpotify: (
     t: NonNullable<PlaylistItem['track']>,
     from: 'playlist' | 'drawer',
@@ -209,7 +205,7 @@ function SortableRow({
       }}
       className={clsx(
         'select-none border-b border-neutral-800/60 last:border-0 transition-colors',
-        isDragging && 'opacity-40',
+        isDragging && 'opacity-30',
         externalActive &&
           dropTarget?.id === item.id &&
           (dropTarget.side === 'before'
@@ -311,35 +307,12 @@ function SortableRow({
             type="button"
             title="Arrastra para reordenar"
             aria-label="Arrastrar para reordenar"
-            className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-800 hover:text-neutral-200 active:cursor-grabbing"
+            className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-neutral-500 transition hover:bg-neutral-800 hover:text-neutral-200 active:cursor-grabbing max-lg:h-auto max-lg:w-8 max-lg:self-stretch max-lg:bg-neutral-800/40"
             {...attributes}
             {...listeners}
           >
             ⠿
           </button>
-          {/* Reordenar en móvil como respaldo (por si el arrastre táctil incomoda). */}
-          <div className="flex flex-col lg:hidden">
-            <button
-              type="button"
-              title="Subir"
-              aria-label="Subir"
-              disabled={idx === 0 || reorderPending}
-              onClick={() => moveItem(idx, -1)}
-              className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
-            >
-              ▲
-            </button>
-            <button
-              type="button"
-              title="Bajar"
-              aria-label="Bajar"
-              disabled={idx === itemsLength - 1 || reorderPending}
-              onClick={() => moveItem(idx, 1)}
-              className="flex h-4 w-6 items-center justify-center rounded text-[10px] leading-none text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-30"
-            >
-              ▼
-            </button>
-          </div>
           {item.track && (
             <PlayButtons track={item.track} showVideo={cols.video} />
           )}
@@ -515,7 +488,18 @@ export default function PlaylistDetailPage() {
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+  // Ítem que se arrastra: se muestra en un DragOverlay (clon flotante que sigue
+  // al dedo/cursor) para evitar el parpadeo en touch mientras se decide dónde
+  // soltarlo.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeItem = activeId
+    ? (items.find((i) => i.id === activeId) ?? null)
+    : null;
+  function handleSortStart(e: DragStartEvent) {
+    setActiveId(e.active.id as string);
+  }
   function handleSortEnd(e: DragEndEvent) {
+    setActiveId(null);
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     const from = items.findIndex((i) => i.id === active.id);
@@ -725,18 +709,6 @@ export default function PlaylistDetailPage() {
     reorder.mutate(rest.map((i) => i.id));
   }
 
-  // Reordenar una posición (para móvil, donde el drag táctil no funciona).
-  // Reusa el mismo patrón optimista que el drag.
-  function moveItem(index: number, delta: number) {
-    const to = index + delta;
-    if (to < 0 || to >= items.length) return;
-    const arr = [...items];
-    const [m] = arr.splice(index, 1);
-    arr.splice(to, 0, m);
-    setLocalItems(arr); // optimista
-    reorder.mutate(arr.map((i) => i.id));
-  }
-
   function confirmRemove(item: PlaylistItem) {
     setConfirm({
       title: 'Quitar de la playlist',
@@ -941,7 +913,7 @@ export default function PlaylistDetailPage() {
               }
             >
               <span className="max-lg:hidden">Arrastra una fila para reordenar</span>
-              <span className="lg:hidden">Usa ▲▼ para reordenar</span>
+              <span className="lg:hidden">Arrastra desde ⠿ para reordenar</span>
               {drawerOpen && ', o arrastra canciones desde el panel para agregarlas'}
               .{' '}
               <span className="font-semibold text-clave">
@@ -958,7 +930,9 @@ export default function PlaylistDetailPage() {
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragStart={handleSortStart}
               onDragEnd={handleSortEnd}
+              onDragCancel={() => setActiveId(null)}
             >
             <table className="w-full text-[11px] lg:min-w-[720px] lg:text-sm">
               <thead className="whitespace-nowrap border-b border-neutral-800 text-left text-neutral-400 [&_th]:py-1">
@@ -1059,20 +1033,17 @@ export default function PlaylistDetailPage() {
                       key={item.id}
                       item={item}
                       idx={idx}
-                      itemsLength={items.length}
                       isSpotify={isSpotify}
                       cols={cols}
                       epicIds={epicIds}
                       inPlaylistCounts={inPlaylistCounts}
                       playingFrom={playingFrom}
                       spotifyPlaying={spotifyPlaying}
-                      reorderPending={reorder.isPending}
                       removePending={removeItem.isPending}
                       externalActive={externalDragId != null}
                       dropTarget={dropTarget}
                       setDropTarget={setDropTarget}
                       onDrop={handleDrop}
-                      moveItem={moveItem}
                       playSpotify={playSpotify}
                       confirmRemove={confirmRemove}
                     />
@@ -1110,6 +1081,20 @@ export default function PlaylistDetailPage() {
                 )}
               </tbody>
             </table>
+              {/* Clon flotante que sigue al dedo/cursor mientras se arrastra. */}
+              <DragOverlay>
+                {activeItem ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-brand/60 bg-neutral-900 px-2 py-1.5 shadow-xl">
+                    <span className="text-neutral-500">⠿</span>
+                    {activeItem.track && (
+                      <TrackThumb track={activeItem.track} widthClass="w-14" />
+                    )}
+                    <span className="truncate text-[13px] font-medium">
+                      {activeItem.track?.title ?? '—'}
+                    </span>
+                  </div>
+                ) : null}
+              </DragOverlay>
             </DndContext>
           </Card>
             </div>
