@@ -47,3 +47,15 @@ body {
   font-family: var(--font-sans);
   @apply bg-selva text-sabor antialiased;
 }
+
+/* iOS Safari: al enfocar un input con texto < 16px hace auto-zoom al campo y se
+   queda ampliado, incómodo para seguir usando la app. Forzar 16px en los campos
+   de formulario en móvil evita ese auto-zoom (el zoom manual con gesto sigue).
+   Regla sin @layer a propósito: así le gana a utilidades como `text-xs`. */
+@media (max-width: 1023px) {
+  input:not([type='checkbox']):not([type='radio']),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

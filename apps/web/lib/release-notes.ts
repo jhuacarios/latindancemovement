@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.15',
+    date: '2026-07-25',
+    module: 'general',
+    type: 'fix',
+    title: 'iPhone: ya no hace zoom al tocar un buscador',
+    description:
+      'En iPhone, al tocar un campo de búsqueda el navegador hacía un zoom que después quedaba ampliado e incómodo. Ya no pasa: los campos de texto quedan al tamaño justo para que Safari no haga ese zoom automático (el zoom con los dedos sigue funcionando).',
+  },
+  {
     version: '0.9.14',
     date: '2026-07-25',
     module: 'music.youtube.playlists',
