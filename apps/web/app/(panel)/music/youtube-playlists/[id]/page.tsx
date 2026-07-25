@@ -506,11 +506,11 @@ export default function YoutubePlaylistDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-lg:space-y-3">
       <div>
         <Link
           href="/music/youtube-playlists"
-          className="text-sm text-brand hover:underline"
+          className="text-sm text-brand hover:underline max-lg:text-xs"
         >
           ← Volver a Playlists YouTube
         </Link>
@@ -543,23 +543,25 @@ export default function YoutubePlaylistDetailPage() {
 
       {data && (
         <>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3 max-lg:gap-2">
+            <div className="flex gap-4 max-lg:gap-2.5">
               {data.thumbnailUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={data.thumbnailUrl}
                   alt=""
-                  className="h-24 w-40 shrink-0 rounded-lg object-cover"
+                  className="h-24 w-40 shrink-0 rounded-lg object-cover max-lg:h-16 max-lg:w-28"
                 />
               ) : (
-                <div className="flex h-24 w-40 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-3xl">
+                <div className="flex h-24 w-40 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-3xl max-lg:h-16 max-lg:w-28 max-lg:text-2xl">
                   📺
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="text-2xl font-bold">{data.title}</h1>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-neutral-400">
+                <h1 className="text-2xl font-bold max-lg:text-lg max-lg:leading-tight">
+                  {data.title}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-neutral-400 max-lg:gap-1.5 max-lg:text-xs">
                   <span>
                     {data.itemCount} {data.itemCount === 1 ? 'video' : 'videos'}
                   </span>
@@ -579,28 +581,28 @@ export default function YoutubePlaylistDetailPage() {
                     {PRIVACY_LABEL[data.privacyStatus] ?? data.privacyStatus}
                   </span>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-1.5 max-lg:mt-1.5 max-lg:gap-1">
                   <span
                     title="En tus Mis Canciones"
-                    className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"
+                    className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300 max-lg:px-1.5 max-lg:text-[10px]"
                   >
                     {inLibCount} en Mis Canciones
                   </span>
                   <span
                     title="En el catálogo global"
-                    className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300"
+                    className="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300 max-lg:px-1.5 max-lg:text-[10px]"
                   >
                     {inCatCount} en Catálogo
                   </span>
                   <span
                     title="No están en el sistema"
-                    className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                    className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 max-lg:px-1.5 max-lg:text-[10px]"
                   >
                     {externalCount} externas
                   </span>
                 </div>
                 {data.description && (
-                  <p className="mt-2 max-w-2xl whitespace-pre-line text-sm text-neutral-400">
+                  <p className="mt-2 max-w-2xl whitespace-pre-line text-sm text-neutral-400 max-lg:mt-1.5 max-lg:text-[11px]">
                     {data.description}
                   </p>
                 )}
@@ -608,28 +610,32 @@ export default function YoutubePlaylistDetailPage() {
             </div>
 
             <a href={data.url} target="_blank" rel="noopener noreferrer">
-              <Button variant="ghost">
-                <span className="flex items-center gap-2">
-                  <YoutubeIcon className="h-4 w-4 text-[#FF0000]" />
+              <Button variant="ghost" className="max-lg:px-2 max-lg:py-1 max-lg:text-xs">
+                <span className="flex items-center gap-2 max-lg:gap-1.5">
+                  <YoutubeIcon className="h-4 w-4 text-[#FF0000] max-lg:h-3.5 max-lg:w-3.5" />
                   Ver en YouTube
                 </span>
               </Button>
             </a>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2">
-                <span className="text-2xl font-bold text-amber-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 max-lg:gap-2">
+            <div className="flex flex-wrap gap-3 max-lg:gap-2">
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 max-lg:gap-1 max-lg:px-2 max-lg:py-1">
+                <span className="text-2xl font-bold text-amber-300 max-lg:text-sm">
                   {bachataCount}
                 </span>
-                <span className="text-sm text-neutral-300">Bachatas</span>
+                <span className="text-sm text-neutral-300 max-lg:text-[11px]">
+                  Bachatas
+                </span>
               </div>
-              <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2">
-                <span className="text-2xl font-bold text-red-300">
+              <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 max-lg:gap-1 max-lg:px-2 max-lg:py-1">
+                <span className="text-2xl font-bold text-red-300 max-lg:text-sm">
                   {salsaCount}
                 </span>
-                <span className="text-sm text-neutral-300">Salsas</span>
+                <span className="text-sm text-neutral-300 max-lg:text-[11px]">
+                  Salsas
+                </span>
               </div>
             </div>
 
@@ -661,11 +667,11 @@ export default function YoutubePlaylistDetailPage() {
           </div>
 
           {artistStats.length > 0 && (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-3 max-lg:p-2">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 max-lg:mb-1.5 max-lg:text-[10px]">
                 Artistas · grupos · DJs presentes ({artistStats.length})
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 max-lg:gap-1">
                 {(showAllArtists ? artistStats : artistStats.slice(0, 14)).map(
                   (a) => (
                     <span
@@ -673,10 +679,10 @@ export default function YoutubePlaylistDetailPage() {
                       title={`${a.name}: en ${a.count} de ${items.length} ${
                         items.length === 1 ? 'canción' : 'canciones'
                       }`}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200 max-lg:gap-1 max-lg:px-2 max-lg:py-0.5 max-lg:text-[11px]"
                     >
                       {a.name}
-                      <span className="text-[11px] font-semibold text-emerald-300">
+                      <span className="text-[11px] font-semibold text-emerald-300 max-lg:text-[10px]">
                         {a.pct}%
                       </span>
                     </span>
@@ -686,7 +692,7 @@ export default function YoutubePlaylistDetailPage() {
                   <button
                     type="button"
                     onClick={() => setShowAllArtists((s) => !s)}
-                    className="rounded-full bg-neutral-800/60 px-2.5 py-1 text-xs text-neutral-400 transition hover:text-neutral-200"
+                    className="rounded-full bg-neutral-800/60 px-2.5 py-1 text-xs text-neutral-400 transition hover:text-neutral-200 max-lg:px-2 max-lg:py-0.5 max-lg:text-[11px]"
                   >
                     {showAllArtists
                       ? 'Ver menos'
@@ -698,7 +704,7 @@ export default function YoutubePlaylistDetailPage() {
           )}
 
           {/* Reordenar arrastrando desde ⠿; los cambios se guardan con el botón. */}
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-neutral-500 max-lg:text-[11px]">
             Arrastra desde <span className="text-neutral-300">⠿</span> para
             reordenar.{' '}
             {dirty ? (

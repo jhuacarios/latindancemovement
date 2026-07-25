@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.9.20',
+    date: '2026-07-25',
+    module: 'music.youtube.ytplaylists',
+    type: 'improvement',
+    title: 'Encabezado de la playlist de YouTube más compacto en el celular',
+    description:
+      'En el teléfono, el encabezado del detalle de una playlist de YouTube (carátula, título, datos, contadores de Bachatas/Salsas y artistas presentes) quedó más pequeño y con menos espacios, para ver antes la lista de canciones.',
+  },
+  {
     version: '0.9.19',
     date: '2026-07-25',
     module: 'music.youtube.ytplaylists',
