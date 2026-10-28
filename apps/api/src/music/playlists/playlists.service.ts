@@ -62,6 +62,59 @@ export class PlaylistsService {
     return toPublicPlaylist(p);
   }
 
+  /**
+   * Duplica una playlist (misma distribución + mismas canciones y orden) con un
+   * nombre único: "<base> (copia)", "(copia 2)", "(copia 3)"… Si el original ya
+   * es una copia, sigue numerando sobre la misma base (no anida "(copia) (copia)").
+   */
+  async duplicate(id: string, user: AuthUser): Promise<Playlist> {
+    const src = await this.prisma.playlist.findUnique({
+      where: { id },
+      include: ITEMS_INCLUDE,
+    });
+    if (!src) throw new NotFoundException('Playlist no encontrada');
+    if (user.role !== 'SUPER_ADMIN' && src.ownerId !== user.id) {
+      throw new ForbiddenException('No eres dueño de esta playlist');
+    }
+
+    const base = src.name.replace(/ \(copia( \d+)?\)$/i, '');
+    const taken = new Set(
+      (
+        await this.prisma.playlist.findMany({
+          where: { ownerId: src.ownerId },
+          select: { name: true },
+        })
+      ).map((p) => p.name),
+    );
+    let name = `${base} (copia)`;
+    let n = 2;
+    while (taken.has(name)) name = `${base} (copia ${n++})`;
+
+    const created = await this.prisma.playlist.create({
+      data: {
+        name,
+        source: src.source,
+        eventId: src.eventId,
+        status: src.status,
+        visibility: src.visibility,
+        targetBachataPct: src.targetBachataPct,
+        bachatasPerBlock: src.bachatasPerBlock,
+        salsasPerBlock: src.salsasPerBlock,
+        ownerId: src.ownerId,
+        items: {
+          create: src.items.map((it) => ({
+            trackId: it.trackId,
+            position: it.position,
+            isWarmup: it.isWarmup,
+            addedById: user.id,
+          })),
+        },
+      },
+      include: ITEMS_INCLUDE,
+    });
+    return toPublicPlaylist(created);
+  }
+
   async update(
     id: string,
     dto: UpdatePlaylistDto,

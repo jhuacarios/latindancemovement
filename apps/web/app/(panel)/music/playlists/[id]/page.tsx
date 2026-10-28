@@ -28,6 +28,12 @@ import { LibraryDrawer } from '@/components/library-drawer';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { clsx } from '@/components/clsx';
 import {
+  SortTh,
+  nextSort,
+  type SortState,
+  type SortDir,
+} from '@/components/sort-th';
+import {
   formatDuration,
   formatReleaseDate,
   formatViews,
@@ -71,12 +77,85 @@ function fmtTotalDuration(sec: number): string {
   return h > 0 ? `${h}h ${m % 60}min` : `${m} min`;
 }
 
-/** Baraja un array in-place (Fisher-Yates). */
-function shuffleInPlace<T>(a: T[]): void {
-  for (let i = a.length - 1; i > 0; i--) {
+/** Baraja simple (Fisher-Yates) devolviendo un array nuevo (no muta). */
+function shuffleCopy<T>(a: T[]): T[] {
+  const r = [...a];
+  for (let i = r.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    [r[i], r[j]] = [r[j], r[i]];
   }
+  return r;
+}
+
+/**
+ * Baraja intentando dejar equidistantes (según reglas activas):
+ *  - `dup`: las copias de una misma canción (prioridad 1).
+ *  - `artist`: las canciones de un mismo artista (prioridad 2).
+ *
+ * Greedy: recorre posición por posición y elige la canción que mejor respeta el
+ * espaciado objetivo de cada regla (para una con `k` apariciones, el objetivo es
+ * ~L/k de separación). La regla de repetidas pesa mucho más que la de artistas,
+ * así que cuando compiten manda la de repetidas. Con jitter aleatorio para variar.
+ */
+function spreadShuffle(
+  items: PlaylistItem[],
+  opts: { dup: boolean; artist: boolean },
+): PlaylistItem[] {
+  if (!opts.dup && !opts.artist) return shuffleCopy(items);
+  const N = items.length;
+
+  const trackCount = new Map<string, number>();
+  const artistCount = new Map<string, number>();
+  for (const it of items) {
+    trackCount.set(it.trackId, (trackCount.get(it.trackId) ?? 0) + 1);
+    const a = it.track?.artist ?? '';
+    if (a) artistCount.set(a, (artistCount.get(a) ?? 0) + 1);
+  }
+  // Espaciado objetivo por clave: ~L/apariciones (mínimo 1).
+  const target = (count: number) => Math.max(1, Math.floor(N / Math.max(1, count)));
+
+  const remaining = shuffleCopy(items); // base aleatoria (variedad entre corridas)
+  const result: PlaylistItem[] = [];
+  const lastTrack = new Map<string, number>();
+  const lastArtist = new Map<string, number>();
+
+  for (let pos = 0; pos < N; pos++) {
+    let bestIdx = 0;
+    let bestScore = -Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const c = remaining[i];
+      const tid = c.trackId;
+      const art = c.track?.artist ?? '';
+      // Score por regla: 1 si ya está "suficientemente lejos" (o nunca sonó),
+      // <1 si está demasiado cerca de su última aparición.
+      const tScore = !opts.dup
+        ? 1
+        : Math.min(
+            (lastTrack.has(tid) ? pos - lastTrack.get(tid)! : Infinity) /
+              target(trackCount.get(tid) ?? 1),
+            1,
+          );
+      const aScore =
+        !opts.artist || !art
+          ? 1
+          : Math.min(
+              (lastArtist.has(art) ? pos - lastArtist.get(art)! : Infinity) /
+                target(artistCount.get(art) ?? 1),
+              1,
+            );
+      // Prioridad: repetidas (1000) >> artistas (10) >> aleatorio (1).
+      const score = 1000 * tScore + 10 * aScore + Math.random();
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+    const [chosen] = remaining.splice(bestIdx, 1);
+    result.push(chosen);
+    lastTrack.set(chosen.trackId, pos);
+    if (chosen.track?.artist) lastArtist.set(chosen.track.artist, pos);
+  }
+  return result;
 }
 
 /** Columnas mostrables/ocultables (# , miniatura, Título y acciones principales
@@ -372,7 +451,43 @@ export default function PlaylistDetailPage() {
   const [externalFromCatalog, setExternalFromCatalog] = useState(false);
   const [dropTarget, setDropTarget] = useState<DropSide>(null);
   // Editor de distribución (N bachatas / M salsas por bloque). null = cerrado.
-  const [distForm, setDistForm] = useState<{ n: number; m: number } | null>(null);
+  const [distForm, setDistForm] = useState<{
+    n: number;
+    m: number;
+    name: string;
+  } | null>(null);
+
+  // Orden por columna (como el catálogo): reordena la playlist y persiste. La
+  // flecha marca la columna activa; se limpia al reordenar por otros medios.
+  const [sort, setSort] = useState<SortState>({ by: '', dir: 'asc' });
+
+  // Edición inline del nombre (click sobre el título). null = no editando.
+  const [editingName, setEditingName] = useState<string | null>(null);
+
+  // Reglas opcionales de la playlist (por dispositivo, localStorage). Default ON.
+  // spreadDup: repartir las canciones repetidas equidistantes (prioridad 1).
+  // spreadArtist: repartir las canciones del mismo artista equidistantes (prioridad 2).
+  const [spreadDup, setSpreadDup] = useState(true);
+  const [spreadArtist, setSpreadArtist] = useState(true);
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const d = localStorage.getItem(`nectason.playlistRules.${id}.spreadDup`);
+      if (d != null) setSpreadDup(d === '1');
+      const a = localStorage.getItem(`nectason.playlistRules.${id}.spreadArtist`);
+      if (a != null) setSpreadArtist(a === '1');
+    } catch {
+      /* sin storage: usa los defaults */
+    }
+  }, [id]);
+  function saveRule(key: 'spreadDup' | 'spreadArtist', v: boolean) {
+    (key === 'spreadDup' ? setSpreadDup : setSpreadArtist)(v);
+    try {
+      localStorage.setItem(`nectason.playlistRules.${id}.${key}`, v ? '1' : '0');
+    } catch {
+      /* ignora si no hay storage */
+    }
+  }
   // Reproductor de Spotify (barra inferior) para canciones de Spotify.
   const [spotifyPlaying, setSpotifyPlaying] = useState<SpotifyPlayable | null>(
     null,
@@ -506,6 +621,7 @@ export default function PlaylistDetailPage() {
     const to = items.findIndex((i) => i.id === over.id);
     if (from < 0 || to < 0) return;
     const arr = arrayMove(items, from, to);
+    setSort({ by: '', dir: 'asc' }); // el orden ya no es el de la columna
     setLocalItems(arr); // optimista
     reorder.mutate(arr.map((i) => i.id));
   }
@@ -639,14 +755,16 @@ export default function PlaylistDetailPage() {
     const m = mOverride ?? data?.salsasPerBlock ?? 0;
     // Sin distribución configurada: abre el editor para definirla primero.
     if (n + m === 0) {
-      setDistForm({ n: 5, m: 3 });
+      setDistForm({ n: 5, m: 3, name: data?.name ?? '' });
       return;
     }
-    const bachatas = items.filter((i) => i.track?.style === 'BACHATA');
-    const salsas = items.filter((i) => i.track?.style !== 'BACHATA');
+    let bachatas = items.filter((i) => i.track?.style === 'BACHATA');
+    let salsas = items.filter((i) => i.track?.style !== 'BACHATA');
     if (shuffle) {
-      shuffleInPlace(bachatas);
-      shuffleInPlace(salsas);
+      // Reglas opcionales: repartir repetidas y/o artistas equidistantes.
+      const opts = { dup: spreadDup, artist: spreadArtist };
+      bachatas = spreadShuffle(bachatas, opts);
+      salsas = spreadShuffle(salsas, opts);
     }
     const result: PlaylistItem[] = [];
     let bi = 0;
@@ -657,6 +775,7 @@ export default function PlaylistDetailPage() {
     }
     while (bi < bachatas.length) result.push(bachatas[bi++]); // extras
     while (si < salsas.length) result.push(salsas[si++]);
+    setSort({ by: '', dir: 'asc' }); // el orden ya no es el de la columna
     setLocalItems(result); // optimista
     reorder.mutate(result.map((i) => i.id));
   }
@@ -678,6 +797,77 @@ export default function PlaylistDetailPage() {
         e instanceof ApiError ? e.message : 'No se pudo cambiar la distribución.',
       ),
   });
+
+  // Renombra la playlist (sin reordenar).
+  const renamePlaylist = useMutation({
+    mutationFn: (name: string) =>
+      api(`/music/playlists/${id}`, { method: 'PATCH', body: { name } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['playlist', id] }),
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo cambiar el nombre.'),
+  });
+
+  // Guarda las Configuraciones: renombra si cambió el nombre, y aplica la
+  // distribución (reordenando) solo si cambió; si no, cierra el modal.
+  async function saveConfig() {
+    if (!distForm || !data) return;
+    const newName = distForm.name.trim();
+    if (newName && newName !== data.name) {
+      await renamePlaylist.mutateAsync(newName);
+    }
+    const distChanged =
+      distForm.n !== (data.bachatasPerBlock ?? 5) ||
+      distForm.m !== (data.salsasPerBlock ?? 3);
+    if (distChanged && distForm.n + distForm.m > 0) {
+      changeDistribution.mutate({ n: distForm.n, m: distForm.m });
+    } else {
+      setDistForm(null);
+    }
+  }
+
+  // Guarda el nombre editado inline (Enter/blur). Vacío o sin cambios: cancela.
+  async function commitName() {
+    if (editingName == null) return;
+    const v = editingName.trim();
+    if (v && data && v !== data.name) await renamePlaylist.mutateAsync(v);
+    setEditingName(null);
+  }
+
+  // Ordena la playlist por una columna (toggle asc/desc) y persiste el orden.
+  function sortByColumn(col: string, primary: SortDir) {
+    const next = nextSort(sort, col, primary);
+    setSort(next);
+    const val = (it: PlaylistItem): number | string => {
+      const t = it.track;
+      switch (col) {
+        case 'title':
+          return (t?.title ?? '').toLowerCase();
+        case 'artist':
+          return (t?.artist ?? '').toLowerCase();
+        case 'releaseDate':
+          return t?.releaseDate ?? '';
+        case 'duration':
+          return t?.durationSec ?? -1;
+        case 'views':
+          return Number(t?.details?.viewCount ?? -1);
+        case 'vpd':
+          return viewsPerDay(t?.details?.viewCount, t?.releaseDate) ?? -1;
+        default:
+          return 0;
+      }
+    };
+    const arr = [...items].sort((a, b) => {
+      const va = val(a);
+      const vb = val(b);
+      const cmp =
+        typeof va === 'string' && typeof vb === 'string'
+          ? va.localeCompare(vb, 'es')
+          : (va as number) - (vb as number);
+      return next.dir === 'asc' ? cmp : -cmp;
+    });
+    setLocalItems(arr);
+    reorder.mutate(arr.map((i) => i.id));
+  }
 
   function handleDrop() {
     const target = dropTarget;
@@ -747,7 +937,28 @@ export default function PlaylistDetailPage() {
                   source={data.source}
                   className="h-6 w-6 shrink-0"
                 />
-                {data.name}
+                {editingName !== null ? (
+                  <input
+                    autoFocus
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void commitName();
+                      else if (e.key === 'Escape') setEditingName(null);
+                    }}
+                    onBlur={() => void commitName()}
+                    className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-2xl font-bold focus:border-brand focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingName(data.name)}
+                    title="Clic para editar el nombre"
+                    className="min-w-0 truncate rounded px-1 text-left hover:bg-neutral-800/60"
+                  >
+                    {data.name}
+                  </button>
+                )}
                 <span className="text-sm font-normal text-neutral-500">
                   ({isSpotify ? 'Spotify' : 'YouTube'})
                 </span>
@@ -852,11 +1063,12 @@ export default function PlaylistDetailPage() {
                     setDistForm({
                       n: data.bachatasPerBlock ?? 5,
                       m: data.salsasPerBlock ?? 3,
+                      name: data.name,
                     })
                   }
-                  title="Cambiar cuántas bachatas y salsas por bloque, y reordenar las canciones a ese patrón manteniendo el orden actual"
+                  title="Configuraciones de la playlist: nombre, distribución por bloque y reglas opcionales"
                 >
-                  ⚙️ Cambiar distribución
+                  ⚙️ Configuraciones
                 </Button>
               )}
               <Button
@@ -939,24 +1151,66 @@ export default function PlaylistDetailPage() {
                 <tr>
                   <th className="w-6 px-0.5 py-2 text-right lg:w-12 lg:px-4 lg:py-3">#</th>
                   <th className="w-10 px-1 py-2 lg:w-16 lg:px-3"></th>
-                  <th className="px-1 py-2 max-lg:w-full lg:px-4 lg:py-3">Título</th>
+                  <SortTh
+                    label="Título"
+                    col="title"
+                    primary="asc"
+                    sort={sort}
+                    onSort={sortByColumn}
+                    className="max-lg:w-full lg:py-3"
+                  />
                   {cols.artist && (
-                    <th className="px-1 py-2 max-lg:w-px lg:px-4 lg:py-3">Artista</th>
+                    <SortTh
+                      label="Artista"
+                      col="artist"
+                      primary="asc"
+                      sort={sort}
+                      onSort={sortByColumn}
+                      className="max-lg:w-px lg:py-3"
+                    />
                   )}
                   {cols.style && (
                     <th className="px-1 py-2 max-lg:w-px lg:px-4 lg:py-3">Estilo</th>
                   )}
-                  {cols.duration && <th className="px-1 py-2 lg:px-4 lg:py-3">Duración</th>}
+                  {cols.duration && (
+                    <SortTh
+                      label="Duración"
+                      col="duration"
+                      primary="asc"
+                      sort={sort}
+                      onSort={sortByColumn}
+                      className="lg:py-3"
+                    />
+                  )}
                   {cols.date && (
-                    <th className="px-1 py-2 lg:px-4 lg:py-3">
-                      {isSpotify ? 'Fecha' : 'Fecha subida'}
-                    </th>
+                    <SortTh
+                      label={isSpotify ? 'Fecha' : 'Fecha subida'}
+                      col="releaseDate"
+                      primary="desc"
+                      sort={sort}
+                      onSort={sortByColumn}
+                      className="lg:py-3"
+                    />
                   )}
                   {!isSpotify && cols.views && (
-                    <th className="px-1 py-2 lg:px-4 lg:py-3">Reproducciones</th>
+                    <SortTh
+                      label="Reproducciones"
+                      col="views"
+                      primary="desc"
+                      sort={sort}
+                      onSort={sortByColumn}
+                      className="lg:py-3"
+                    />
                   )}
                   {!isSpotify && cols.vpd && (
-                    <th className="px-1 py-2 lg:px-4 lg:py-3">Repr./día</th>
+                    <SortTh
+                      label="Repr./día"
+                      col="vpd"
+                      primary="desc"
+                      sort={sort}
+                      onSort={sortByColumn}
+                      className="lg:py-3"
+                    />
                   )}
                   <th className="px-1 py-2 lg:px-4 lg:py-3 text-right">
                     <div className="relative inline-block" ref={colMenuRef}>
@@ -1159,7 +1413,7 @@ export default function PlaylistDetailPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-semibold">⚙️ Cambiar distribución</h2>
+              <h2 className="font-semibold">⚙️ Configuraciones</h2>
               <button
                 onClick={() => setDistForm(null)}
                 className="rounded-lg bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
@@ -1167,7 +1421,23 @@ export default function PlaylistDetailPage() {
                 ✕
               </button>
             </div>
-            <p className="mb-4 text-xs text-neutral-400">
+            <div className="mb-4">
+              <label className="mb-1 block text-xs text-neutral-400">
+                Nombre de la playlist
+              </label>
+              <Input
+                value={distForm.name}
+                onChange={(e) =>
+                  setDistForm({ ...distForm, name: e.target.value })
+                }
+                placeholder="Nombre de la playlist"
+              />
+            </div>
+
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Distribución por bloque
+            </p>
+            <p className="mb-3 text-xs text-neutral-400">
               Define el patrón por bloque. Las canciones se reordenan a esta
               distribución manteniendo el orden actual de cada estilo (no se
               barajan). Los sobrantes van al final.
@@ -1213,23 +1483,90 @@ export default function PlaylistDetailPage() {
                 ? `Bloques de ${distForm.n} bachata${distForm.n === 1 ? '' : 's'} → ${distForm.m} salsa${distForm.m === 1 ? '' : 's'}.`
                 : 'Indica al menos una canción por bloque.'}
             </p>
+
+            {/* Reglas opcionales (se guardan al instante, por dispositivo). */}
+            <div className="mt-4 space-y-3 border-t border-neutral-800 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Reglas opcionales (al “Ordenar + barajar”)
+              </p>
+
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-sm text-neutral-300">
+                  Repetidas equidistantes
+                  <span className="mt-0.5 block text-xs text-neutral-500">
+                    Las copias de una misma canción intentan salir separadas
+                    entre sí. <span className="text-neutral-400">Prioridad 1.</span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={spreadDup}
+                  aria-label="Repetidas equidistantes"
+                  onClick={() => saveRule('spreadDup', !spreadDup)}
+                  className={clsx(
+                    'relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition',
+                    spreadDup ? 'bg-brand' : 'bg-neutral-700',
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all',
+                      spreadDup ? 'left-4' : 'left-0.5',
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-sm text-neutral-300">
+                  Artistas equidistantes
+                  <span className="mt-0.5 block text-xs text-neutral-500">
+                    Evita que suenen dos canciones del mismo artista una tras
+                    otra. <span className="text-neutral-400">Prioridad 2 (cede
+                    ante la anterior).</span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={spreadArtist}
+                  aria-label="Artistas equidistantes"
+                  onClick={() => saveRule('spreadArtist', !spreadArtist)}
+                  className={clsx(
+                    'relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition',
+                    spreadArtist ? 'bg-brand' : 'bg-neutral-700',
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all',
+                      spreadArtist ? 'left-4' : 'left-0.5',
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
             <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="ghost"
-                disabled={changeDistribution.isPending}
+                disabled={changeDistribution.isPending || renamePlaylist.isPending}
                 onClick={() => setDistForm(null)}
               >
                 Cancelar
               </Button>
               <Button
                 disabled={
-                  changeDistribution.isPending || distForm.n + distForm.m === 0
+                  changeDistribution.isPending ||
+                  renamePlaylist.isPending ||
+                  !distForm.name.trim()
                 }
-                onClick={() =>
-                  changeDistribution.mutate({ n: distForm.n, m: distForm.m })
-                }
+                onClick={() => void saveConfig()}
               >
-                {changeDistribution.isPending ? 'Aplicando…' : 'Aplicar y reordenar'}
+                {changeDistribution.isPending || renamePlaylist.isPending
+                  ? 'Guardando…'
+                  : 'Guardar'}
               </Button>
             </div>
           </div>

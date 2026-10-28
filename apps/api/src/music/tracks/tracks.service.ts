@@ -17,6 +17,7 @@ import type {
   ImportResult,
   Paginated,
   PlaylistImportResult,
+  SpotifyImportMatch,
   Track,
   TrackSource,
   YoutubeDiscoverCandidate,
@@ -549,18 +550,23 @@ export class TracksService {
    * ordenados alfabéticamente. Cada artista con su nº de canciones y estilos.
    */
   async listArtists(): Promise<ArtistSummary[]> {
+    // El roster incluye artistas de cualquier fuente (para no perder a nadie),
+    // pero el CONTADOR y las marcas B/S cuentan SOLO YouTube: así el número
+    // coincide con lo que se ve al entrar (el detalle es YouTube; Spotify en
+    // pausa). Un artista sin canciones de YouTube aparece con 0.
     const rows = await this.prisma.track.findMany({
       where: {
         scope: 'CATALOG',
         OR: [{ style: { startsWith: 'BACHATA' } }, { style: { startsWith: 'SALSA' } }],
       },
-      select: { artist: true, style: true },
+      select: { artist: true, style: true, source: true },
     });
     const map = new Map<
       string,
       { name: string; count: number; bachata: boolean; salsa: boolean }
     >();
     for (const r of rows) {
+      const isYoutube = r.source === 'YOUTUBE';
       const isSalsa = (r.style ?? '').startsWith('SALSA');
       for (const a of splitArtistNames(r.artist)) {
         const k = normForDup(a);
@@ -571,9 +577,12 @@ export class TracksService {
           bachata: false,
           salsa: false,
         };
-        cur.count += 1;
-        if (isSalsa) cur.salsa = true;
-        else cur.bachata = true;
+        // Solo YouTube suma al contador y marca el estilo.
+        if (isYoutube) {
+          cur.count += 1;
+          if (isSalsa) cur.salsa = true;
+          else cur.bachata = true;
+        }
         map.set(k, cur);
       }
     }
@@ -699,6 +708,23 @@ export class TracksService {
    * PROPUESTO (por el texto o heredado del canal) para que confirmes. Solo lee
    * metadata pública. Pesado (API de YouTube) → cacheado 6 h.
    */
+  /**
+   * Saca de una lista de candidatos los que YA están en el catálogo. Se aplica
+   * SIEMPRE al servir (aunque el resultado venga del caché de 6 h), porque si no
+   * una canción recién agregada seguiría apareciendo como sugerencia.
+   */
+  private async excludeAlreadyInCatalog(
+    list: YoutubeDiscoverCandidate[],
+  ): Promise<YoutubeDiscoverCandidate[]> {
+    if (!list.length) return list;
+    const rows = await this.prisma.track.findMany({
+      where: { source: 'YOUTUBE', scope: 'CATALOG' },
+      select: { sourceId: true },
+    });
+    const inCatalog = new Set(rows.map((r) => r.sourceId));
+    return list.filter((c) => !inCatalog.has(c.videoId));
+  }
+
   async discoverYoutube(
     months = 3,
     maxChannels = 40,
@@ -709,7 +735,9 @@ export class TracksService {
       this.ytCandidatesCache.key === key &&
       this.ytCandidatesCache.exp > Date.now()
     ) {
-      return this.ytCandidatesCache.data;
+      // El caché guarda la parte cara (subidas de YouTube); la exclusión por
+      // catálogo se recalcula fresca en cada request.
+      return this.excludeAlreadyInCatalog(this.ytCandidatesCache.data);
     }
 
     const now = new Date();
@@ -839,7 +867,7 @@ export class TracksService {
       exp: Date.now() + 6 * 60 * 60 * 1000,
       data: filtered,
     };
-    return filtered;
+    return this.excludeAlreadyInCatalog(filtered);
   }
 
   /**
@@ -1180,6 +1208,28 @@ export class TracksService {
     return filled;
   }
 
+  /**
+   * ¿Ese link ya está en el catálogo? Se usa para avisar apenas se pega el link
+   * (antes de guardar) en vez de fallar recién al enviar el formulario.
+   * Devuelve también la canción existente, para mostrar cuál es.
+   */
+  async existsByLink(link: string): Promise<{
+    exists: boolean;
+    track?: { id: string; title: string; artist: string; style: string };
+  }> {
+    const parsed = parseTrackLink(link);
+    if (!parsed) return { exists: false };
+    const found = await this.prisma.track.findFirst({
+      where: {
+        source: parsed.source,
+        sourceId: parsed.sourceId,
+        scope: 'CATALOG',
+      },
+      select: { id: true, title: true, artist: true, style: true },
+    });
+    return found ? { exists: true, track: found } : { exists: false };
+  }
+
   /** sourceIds de Spotify ya en el catálogo (para ignorar al importar). */
   async catalogSpotifySourceIds(): Promise<string[]> {
     const rows = await this.prisma.track.findMany({
@@ -1187,6 +1237,35 @@ export class TracksService {
       select: { sourceId: true },
     });
     return rows.map((r) => r.sourceId);
+  }
+
+  /**
+   * Marca cada match con `inCatalog=true` si alguno de sus candidatos de YouTube
+   * ya está en el catálogo (mismo video). Señal fiable de "ya subimos una versión
+   * de esta canción". Muta el array in-place.
+   */
+  async flagMatchesInCatalog(matches: SpotifyImportMatch[]): Promise<void> {
+    const ids = new Set<string>();
+    for (const m of matches) {
+      if (m.best?.sourceId) ids.add(m.best.sourceId);
+      for (const c of m.candidates) if (c.sourceId) ids.add(c.sourceId);
+    }
+    if (!ids.size) return;
+    const rows = await this.prisma.track.findMany({
+      where: {
+        source: 'YOUTUBE',
+        scope: 'CATALOG',
+        sourceId: { in: [...ids] },
+      },
+      select: { sourceId: true },
+    });
+    const have = new Set(rows.map((r) => r.sourceId));
+    for (const m of matches) {
+      const cands = [m.best, ...m.candidates].filter(
+        (c): c is ExtractedTrackMetadata => Boolean(c),
+      );
+      m.inCatalog = cands.some((c) => have.has(c.sourceId));
+    }
   }
 
   /**

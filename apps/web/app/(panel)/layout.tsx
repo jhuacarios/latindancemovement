@@ -17,6 +17,7 @@ import { YoutubeIcon } from '@/components/youtube-icon';
 import { SpotifyIcon } from '@/components/spotify-icon';
 import { LayoutUIContext } from '@/lib/layout-ui';
 import { ViewAsRoleContext } from '@/lib/view-as-role';
+import { useUnreadChat } from '@/lib/chat';
 
 const VIEW_AS_KEY = 'nectason.viewAsRole';
 
@@ -38,6 +39,7 @@ export default function PanelLayout({
   const [viewAsRole, setViewAsRoleState] = useState<UserRole | null>(null);
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const unreadChat = useUnreadChat();
 
   // Persistencia del "Ver como rol" (solo aplica a super admin).
   useEffect(() => {
@@ -209,6 +211,11 @@ export default function PanelLayout({
                 {m.status === 'soon' && (
                   <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 lg:text-xs">
                     pronto
+                  </span>
+                )}
+                {m.key === 'chat' && unreadChat > 0 && (
+                  <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {unreadChat > 99 ? '99+' : unreadChat}
                   </span>
                 )}
                 {hasChildren && (

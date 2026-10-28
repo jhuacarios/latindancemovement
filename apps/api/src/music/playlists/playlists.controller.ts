@@ -49,6 +49,13 @@ export class PlaylistsController {
     return this.playlists.create(dto, user.id);
   }
 
+  /** Duplica una playlist (distribución + canciones) con nombre único "(copia N)". */
+  @Post(':id/duplicate')
+  @Roles('DJ', 'ORGANIZADOR')
+  duplicate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.playlists.duplicate(id, user);
+  }
+
   /** Genera una playlist automática por filtros/recomendaciones. Persiste si se envía `name`. */
   @Post('generate')
   @Roles('DJ', 'ORGANIZADOR')

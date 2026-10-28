@@ -10,6 +10,12 @@ export interface ModuleChild {
   brandIcon?: 'youtube' | 'spotify';
   /** Sub-items (un nivel de anidamiento, ej: YouTube → Canciones/Catálogo/Playlists). */
   children?: ModuleChild[];
+  /**
+   * Roles por defecto de ESTA sección, si difieren del módulo raíz (ej: todos
+   * ven la lista de eventos, pero solo organizadores publican). SUPER_ADMIN
+   * siempre pasa. La matriz de permisos del admin sigue teniendo prioridad.
+   */
+  roles?: UserRole[];
 }
 
 export interface AppModule {
@@ -44,6 +50,13 @@ export const MODULES: AppModule[] = [
       { label: 'Resumen', key: 'music.resumen', href: '/music' },
       { label: 'Descubre', key: 'music.discover', href: '/music/discover' },
       { label: 'Artistas', key: 'music.artists', href: '/music/artists' },
+      { label: 'DJs disponibles', key: 'music.djs', href: '/music/djs', roles: ALL },
+      {
+        // Sin href: solo gatea el botón "Agregar DJ".
+        label: 'Agregar DJ disponible',
+        key: 'music.djs.create',
+        roles: ['DJ', 'ORGANIZADOR', 'SUPER_ADMIN'],
+      },
       {
         label: 'YouTube',
         key: 'music.youtube',
@@ -72,11 +85,29 @@ export const MODULES: AppModule[] = [
   {
     key: 'events',
     title: 'Eventos',
-    description: 'Sociales, preventas, fondos en custodia y notificaciones.',
+    description: 'Sociales y eventos por región, publicados desde el flyer.',
     href: '/events',
     icon: '📅',
-    roles: ['ORGANIZADOR', 'VENUE', 'SUPER_ADMIN'],
-    status: 'soon',
+    roles: ALL,
+    status: 'ready',
+    children: [
+      { label: 'Próximos eventos', key: 'events.list', href: '/events' },
+      {
+        label: 'Publicar evento',
+        key: 'events.create',
+        href: '/events/new',
+        roles: ['ORGANIZADOR', 'VENUE', 'SUPER_ADMIN'],
+      },
+    ],
+  },
+  {
+    key: 'chat',
+    title: 'Mensajes',
+    description: 'Chat directo con otros miembros, con historial permanente.',
+    href: '/chat',
+    icon: '💬',
+    roles: ALL,
+    status: 'ready',
   },
   {
     key: 'sales',
@@ -151,11 +182,31 @@ export const MODULES: AppModule[] = [
   {
     key: 'community',
     title: 'Comunidad',
-    description: 'Perfiles, conexiones, feed y mapa de eventos.',
+    description: 'Sociales al aire libre y salsotecas por región, con sus cuentas de Instagram.',
     href: '/community',
     icon: '🌐',
     roles: ALL,
-    status: 'soon',
+    status: 'ready',
+    children: [
+      {
+        label: 'Sociales al aire libre',
+        key: 'community.outdoor',
+        href: '/community/outdoor',
+      },
+      {
+        // Sin href: no aparece en el menú, solo gatea el botón "Agregar social"
+        // (y se puede ajustar desde Admin → Roles y permisos).
+        label: 'Agregar social al aire libre',
+        key: 'community.outdoor.create',
+        roles: ['ORGANIZADOR', 'VENUE', 'PROFESOR', 'DJ', 'SUPER_ADMIN'],
+      },
+      { label: 'Salsotecas', key: 'community.salsotecas', href: '/community/salsotecas' },
+      {
+        label: 'Agregar salsoteca',
+        key: 'community.salsotecas.create',
+        roles: ['ORGANIZADOR', 'VENUE', 'PROFESOR', 'DJ', 'SUPER_ADMIN'],
+      },
+    ],
   },
   {
     key: 'credits',
@@ -243,10 +294,26 @@ export function permTree(): PermNode[] {
   return out;
 }
 
-/** Roles por defecto de una clave: hereda del módulo raíz (primer segmento). */
+/**
+ * Roles por defecto de una clave: el `roles` más específico definido en la
+ * cadena de secciones ('a.b.c' → 'a.b' → 'a'); si ninguna sección lo define,
+ * hereda del módulo raíz.
+ */
 export function defaultRolesForKey(key: string): UserRole[] {
   const rootKey = key.split('.')[0];
-  return MODULES.find((m) => m.key === rootKey)?.roles ?? [];
+  const mod = MODULES.find((m) => m.key === rootKey);
+  if (!mod) return [];
+  let best: UserRole[] | undefined;
+  const visit = (children: ModuleChild[]) => {
+    for (const c of children) {
+      if (c.roles && (key === c.key || key.startsWith(`${c.key}.`))) {
+        best = c.roles;
+      }
+      if (c.children) visit(c.children);
+    }
+  };
+  if (mod.children) visit(mod.children);
+  return best ?? mod.roles;
 }
 
 /** Clave de permiso de la sección (hoja) que mejor matchea una ruta (href más largo). */

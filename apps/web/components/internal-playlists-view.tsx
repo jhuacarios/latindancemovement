@@ -29,6 +29,10 @@ export function InternalPlaylistsView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+  // Modal de renombrar: { id, name } de la playlist que se está editando.
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ['playlists', source],
@@ -57,7 +61,32 @@ export function InternalPlaylistsView({
       setErr(e instanceof ApiError ? e.message : 'No se pudo eliminar.'),
   });
 
-  const busy = del.isPending;
+  // Duplica una playlist (sin preguntar): el backend le pone nombre "(copia N)".
+  const dup = useMutation({
+    mutationFn: (id: string) =>
+      api<Playlist>(`/music/playlists/${id}/duplicate`, { method: 'POST' }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['playlists'] });
+      setErr(null);
+    },
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo duplicar.'),
+  });
+
+  // Renombra una playlist desde el modal.
+  const rename = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api(`/music/playlists/${id}`, { method: 'PATCH', body: { name } }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['playlists'] });
+      setRenaming(null);
+      setErr(null);
+    },
+    onError: (e) =>
+      setErr(e instanceof ApiError ? e.message : 'No se pudo renombrar.'),
+  });
+
+  const busy = del.isPending || dup.isPending;
   const items = data ?? [];
 
   function deleteOne(p: Playlist) {
@@ -216,17 +245,47 @@ export function InternalPlaylistsView({
                 )}
 
                 {!selectMode && (
-                  <DeleteIconButton
-                    type="button"
-                    title="Eliminar playlist"
-                    disabled={busy}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      deleteOne(p);
-                    }}
-                    className="absolute right-2 top-2 px-1.5 py-0.5"
-                  />
+                  <>
+                    <button
+                      type="button"
+                      title="Renombrar playlist"
+                      aria-label="Renombrar playlist"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setRenaming({ id: p.id, name: p.name });
+                      }}
+                      className="absolute right-16 top-2 rounded-md border border-neutral-700 bg-neutral-800/70 px-1.5 py-0.5 text-xs text-neutral-300 transition hover:border-brand hover:text-brand disabled:opacity-50"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      title="Duplicar playlist"
+                      aria-label="Duplicar playlist"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dup.mutate(p.id);
+                      }}
+                      className="absolute right-9 top-2 rounded-md border border-neutral-700 bg-neutral-800/70 px-1.5 py-0.5 text-xs text-neutral-300 transition hover:border-brand hover:text-brand disabled:opacity-50"
+                    >
+                      ⧉
+                    </button>
+                    <DeleteIconButton
+                      type="button"
+                      title="Eliminar playlist"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteOne(p);
+                      }}
+                      className="absolute right-2 top-2 px-1.5 py-0.5"
+                    />
+                  </>
                 )}
               </Card>
             );
@@ -250,6 +309,63 @@ export function InternalPlaylistsView({
       </div>
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+
+      {renaming && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => !rename.isPending && setRenaming(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-semibold">✏️ Renombrar playlist</h2>
+              <button
+                onClick={() => setRenaming(null)}
+                className="rounded-lg bg-neutral-800 px-2 py-1 text-sm hover:bg-neutral-700"
+              >
+                ✕
+              </button>
+            </div>
+            <Input
+              autoFocus
+              value={renaming.name}
+              onChange={(e) =>
+                setRenaming({ ...renaming, name: e.target.value })
+              }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && renaming.name.trim()) {
+                  rename.mutate({ id: renaming.id, name: renaming.name.trim() });
+                } else if (e.key === 'Escape') {
+                  setRenaming(null);
+                }
+              }}
+              placeholder="Nombre de la playlist"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                disabled={rename.isPending}
+                onClick={() => setRenaming(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                disabled={rename.isPending || !renaming.name.trim()}
+                onClick={() =>
+                  rename.mutate({
+                    id: renaming.id,
+                    name: renaming.name.trim(),
+                  })
+                }
+              >
+                {rename.isPending ? 'Guardando…' : 'Guardar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -80,7 +80,9 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
       // Estilo inicial: el detectado del mejor candidato (si lo hay).
       const st: Record<number, DanceStyle> = {};
       res.forEach((m, i) => {
-        if (m.best?.detectedStyle) st[i] = m.best.detectedStyle;
+        // Las que ya están en el catálogo arrancan sin estilo (omitidas), para
+        // no duplicar. El usuario puede elegir estilo igual para forzar.
+        if (m.best?.detectedStyle && !m.inCatalog) st[i] = m.best.detectedStyle;
       });
       setStyleByRow(st);
       setPick({});
@@ -135,7 +137,7 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-5"
+        className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -166,7 +168,8 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
 
         <p className="mt-2 text-[11px] text-neutral-500">
           Por cada canción se busca el mejor video de YouTube (audio limpio para
-          social). Puede tardar un poco y consume cuota de YouTube.
+          social). Solo se ofrecen coincidencias de confianza <span className="text-clave">alta</span>;
+          las dudosas quedan sin match. Puede tardar un poco y consume cuota de YouTube.
         </p>
 
         {err &&
@@ -257,7 +260,17 @@ export function SpotifyImportModal({ onClose }: { onClose: () => void }) {
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          <div className="font-medium">{m.spotify.title}</div>
+                          <div className="flex flex-wrap items-center gap-1.5 font-medium">
+                            {m.spotify.title}
+                            {m.inCatalog && (
+                              <span
+                                title="Ya subimos una versión de esta canción (un candidato ya está en el catálogo). No se selecciona para no duplicar."
+                                className="rounded-full bg-clave/15 px-1.5 py-0.5 text-[10px] font-semibold text-clave"
+                              >
+                                ✓ Ya la subimos
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-neutral-400">
                             {m.spotify.artist ?? '—'} · {fmtDur(m.spotify.durationSec)}
                           </div>

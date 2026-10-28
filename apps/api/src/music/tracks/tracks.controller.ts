@@ -73,6 +73,14 @@ export class TracksController {
     return this.youtube.extract(link);
   }
 
+  /** ¿El link ya está en el catálogo? Avisa al pegarlo, antes de guardar. */
+  @Get('exists')
+  @Roles('DJ', 'ORGANIZADOR', 'ARTISTA')
+  exists(@Query('link') link: string) {
+    if (!link) throw new BadRequestException('Falta el parámetro "link".');
+    return this.tracks.existsByLink(link);
+  }
+
   /** Extrae metadata de un link de Spotify para autocompletar (no guarda). */
   @Get('spotify-metadata')
   @Roles('DJ', 'ORGANIZADOR', 'ARTISTA')
@@ -261,8 +269,10 @@ export class TracksController {
   /** Matchea una playlist de Spotify con los mejores videos de YouTube (no guarda). */
   @Post('spotify-preview')
   @Roles('SUPER_ADMIN')
-  spotifyPreview(@Body() dto: SpotifyPreviewDto) {
-    return this.spotifyMatch.matchPlaylist(dto.link);
+  async spotifyPreview(@Body() dto: SpotifyPreviewDto) {
+    const matches = await this.spotifyMatch.matchPlaylist(dto.link);
+    await this.tracks.flagMatchesInCatalog(matches);
+    return matches;
   }
 
   /** Importa al catálogo los videos de YouTube elegidos para cada track. */

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import { TrackThumb } from '@/components/track-thumb';
 import { PlayButtons } from '@/components/play-buttons';
 import { SourceLink } from '@/components/source-link';
 import { NewBadge } from '@/components/new-badge';
+import { YoutubeIcon } from '@/components/youtube-icon';
 import { formatDuration, formatViews, isNewRelease } from '@/lib/format';
 import { useLayoutUI } from '@/lib/layout-ui';
 
@@ -48,6 +49,25 @@ export default function ArtistTracksPage() {
 
   const tracks = data?.data ?? [];
 
+  // Canales de YouTube presentes entre las canciones del artista (distintos, por
+  // channelId; con cuántas canciones aporta cada uno).
+  const channels = useMemo(() => {
+    const m = new Map<
+      string,
+      { id: string | null; title: string; count: number }
+    >();
+    for (const t of tracks) {
+      const title = t.details?.channelTitle;
+      if (!title) continue;
+      const id = t.details?.channelId ?? null;
+      const key = id ?? title;
+      const cur = m.get(key);
+      if (cur) cur.count += 1;
+      else m.set(key, { id, title, count: 1 });
+    }
+    return [...m.values()].sort((a, b) => b.count - a.count);
+  }, [tracks]);
+
   return (
     <div className="space-y-4">
       <div>
@@ -67,6 +87,44 @@ export default function ArtistTracksPage() {
           Canciones en el catálogo de YouTube
           {data ? ` · ${tracks.length}` : ''}.
         </p>
+
+        {channels.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-neutral-500">
+              {channels.length === 1 ? 'Canal:' : 'Canales:'}
+            </span>
+            {channels.map((ch) => {
+              const inner = (
+                <>
+                  <YoutubeIcon className="h-3 w-3 shrink-0 text-[#FF0000]" />
+                  <span className="truncate">{ch.title}</span>
+                  <span className="text-[10px] text-neutral-500">
+                    {ch.count}
+                  </span>
+                </>
+              );
+              return ch.id ? (
+                <a
+                  key={ch.id}
+                  href={`https://www.youtube.com/channel/${ch.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`Abrir el canal ${ch.title} en YouTube`}
+                  className="inline-flex max-w-[16rem] items-center gap-1 rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200 transition hover:text-brand"
+                >
+                  {inner}
+                </a>
+              ) : (
+                <span
+                  key={ch.title}
+                  className="inline-flex max-w-[16rem] items-center gap-1 rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300"
+                >
+                  {inner}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {isLoading && <Spinner label="Buscando canciones…" />}

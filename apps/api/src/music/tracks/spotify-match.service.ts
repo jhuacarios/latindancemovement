@@ -62,7 +62,11 @@ export class SpotifyMatchService {
       .map((c) => ({ c, s: scoreCandidate(c, sp) }))
       .sort((a, b) => b.s - a.s);
 
-    const top = scored[0];
+    // Solo se ofrecen recomendaciones de confianza ALTA: un candidato que no
+    // califica como 'high' por si mismo no se propone (evita meter al catalogo
+    // un video que no es la cancion). Si ninguno califica, la fila queda sin match.
+    const high = scored.filter((x) => confidenceOf(x.s, x.c, sp) === 'high');
+    const top = high[0];
     return {
       spotify: {
         title: sp.title,
@@ -71,8 +75,8 @@ export class SpotifyMatchService {
         year: sp.year,
       },
       best: top?.c ?? null,
-      candidates: scored.slice(0, 4).map((x) => x.c),
-      confidence: top ? confidenceOf(top.s, top.c, sp) : 'none',
+      candidates: high.slice(0, 4).map((x) => x.c),
+      confidence: top ? 'high' : 'none',
     };
   }
 

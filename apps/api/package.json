@@ -18,6 +18,7 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@baile-latino/types": "workspace:*",
     "@fastify/multipart": "^10.0.0",
     "@nestjs/common": "^11.0.0",
@@ -39,7 +40,8 @@
     "passport-jwt": "^4.0.1",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",

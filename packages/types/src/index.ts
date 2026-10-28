@@ -367,6 +367,12 @@ export interface SpotifyImportMatch {
    * match). Permite a la UI distinguirlo de un "sin resultados" real.
    */
   quotaError?: boolean;
+  /**
+   * true si alguno de los candidatos de YouTube ya está en el catálogo (mismo
+   * video). Indica que ya subimos una versión de esta canción; la UI la marca
+   * y la deja sin seleccionar por defecto para no duplicar.
+   */
+  inCatalog?: boolean;
 }
 
 export interface PlaylistGenerationSummary {
@@ -685,4 +691,201 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
+}
+
+// ---------------------------------------------------------------------------
+// Eventos
+// ---------------------------------------------------------------------------
+/** Regiones de Chile, de norte a sur. El `code` es lo que se guarda en la DB. */
+export const CHILE_REGIONS = [
+  { code: 'ARICA_PARINACOTA', name: 'Arica y Parinacota' },
+  { code: 'TARAPACA', name: 'Tarapacá' },
+  { code: 'ANTOFAGASTA', name: 'Antofagasta' },
+  { code: 'ATACAMA', name: 'Atacama' },
+  { code: 'COQUIMBO', name: 'Coquimbo' },
+  { code: 'VALPARAISO', name: 'Valparaíso' },
+  { code: 'METROPOLITANA', name: 'Metropolitana de Santiago' },
+  { code: 'OHIGGINS', name: "O'Higgins" },
+  { code: 'MAULE', name: 'Maule' },
+  { code: 'NUBLE', name: 'Ñuble' },
+  { code: 'BIOBIO', name: 'Biobío' },
+  { code: 'ARAUCANIA', name: 'La Araucanía' },
+  { code: 'LOS_RIOS', name: 'Los Ríos' },
+  { code: 'LOS_LAGOS', name: 'Los Lagos' },
+  { code: 'AYSEN', name: 'Aysén' },
+  { code: 'MAGALLANES', name: 'Magallanes' },
+] as const;
+export type ChileRegion = (typeof CHILE_REGIONS)[number]['code'];
+export const CHILE_REGION_CODES = CHILE_REGIONS.map((r) => r.code) as ChileRegion[];
+
+export function regionName(code: string): string {
+  return CHILE_REGIONS.find((r) => r.code === code)?.name ?? code;
+}
+
+export const EVENT_STATUSES = ['PUBLISHED', 'CANCELLED'] as const;
+export type EventStatus = (typeof EVENT_STATUSES)[number];
+
+/** Evento (social, show, taller…) tal como lo devuelve la API. Sin el flyer: ese va por `/events/:id/flyer`. */
+export interface EventDto {
+  id: string;
+  title: string;
+  description: string | null;
+  /** ISO 8601 (UTC). */
+  startsAt: string;
+  endsAt: string | null;
+  region: ChileRegion;
+  city: string | null;
+  venueName: string | null;
+  address: string | null;
+  styles: DanceStyle[];
+  /** % de bachata en la noche (0-100). null = no informado. */
+  bachataPct: number | null;
+  /** Texto libre: "Preventa $5.000 · Puerta $7.000". */
+  priceInfo: string | null;
+  ticketUrl: string | null;
+  instagramUrl: string | null;
+  organizerName: string | null;
+  organizerInstagram: string | null;
+  status: EventStatus;
+  hasFlyer: boolean;
+  createdById: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Sección de la lista de eventos: una región con sus eventos y el conteo de próximos. */
+export interface EventsRegionSection {
+  region: ChileRegion;
+  name: string;
+  upcomingCount: number;
+  events: EventDto[];
+}
+
+export interface EventsByRegionResponse {
+  sections: EventsRegionSection[];
+  total: number;
+  upcomingTotal: number;
+}
+
+export type ExtractionConfidence = 'high' | 'medium' | 'low';
+
+/** Datos que Claude extrae de un flyer (+ texto opcional). Todo puede venir null. */
+export interface FlyerExtraction {
+  title: string | null;
+  description: string | null;
+  /** YYYY-MM-DD */
+  date: string | null;
+  /** HH:mm (24h) */
+  time: string | null;
+  endTime: string | null;
+  venueName: string | null;
+  address: string | null;
+  city: string | null;
+  region: ChileRegion | null;
+  styles: DanceStyle[];
+  bachataPct: number | null;
+  priceInfo: string | null;
+  ticketUrl: string | null;
+  instagramUrl: string | null;
+  organizerName: string | null;
+  organizerInstagram: string | null;
+  confidence: {
+    date: ExtractionConfidence;
+    venue: ExtractionConfidence;
+    region: ExtractionConfidence;
+    prices: ExtractionConfidence;
+  };
+  /** Dudas o cosas que el organizador debería revisar. */
+  notes: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Directorios de la comunidad: sociales al aire libre, salsotecas, DJs…
+// (mismo modelo: ficha por región con horario/disponibilidad, estilos e Instagram)
+// ---------------------------------------------------------------------------
+export const COMMUNITY_PLACE_KINDS = ['OUTDOOR_SOCIAL', 'SALSOTECA', 'DJ'] as const;
+export type CommunityPlaceKind = (typeof COMMUNITY_PLACE_KINDS)[number];
+
+/** Ficha de un directorio de la comunidad (lugar, junta o DJ), sin fecha única. */
+export interface CommunityPlaceDto {
+  id: string;
+  kind: CommunityPlaceKind;
+  name: string;
+  region: ChileRegion;
+  city: string | null;
+  /** Playa/parque, referencia del local, o academia/colectivo (DJ). */
+  place: string | null;
+  address: string | null;
+  /** Texto libre: horario habitual, o disponibilidad en el caso de un DJ. */
+  schedule: string | null;
+  styles: DanceStyle[];
+  description: string | null;
+  /** Handles sin @ de las cuentas que lo organizan/anuncian. */
+  instagramHandles: string[];
+  hasPhoto: boolean;
+  active: boolean;
+  createdById: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityPlacesRegionSection {
+  region: ChileRegion;
+  name: string;
+  count: number;
+  places: CommunityPlaceDto[];
+}
+
+export interface CommunityPlacesByRegionResponse {
+  sections: CommunityPlacesRegionSection[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Chat (mensajes directos 1 a 1, historial permanente)
+// ---------------------------------------------------------------------------
+/** Datos mínimos de un usuario para mostrarlo en el chat (sin email). */
+export interface ChatUser {
+  id: string;
+  name: string;
+  role: UserRole;
+  city: string | null;
+  instagramHandle: string | null;
+}
+
+export interface ChatMessageDto {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  /** Texto; vacío si el mensaje es solo una imagen. */
+  body: string;
+  /** La imagen se pide aparte: GET /chat/conversations/:id/messages/:mid/image */
+  hasImage: boolean;
+  imageWidth: number | null;
+  imageHeight: number | null;
+  createdAt: string;
+}
+
+export interface ChatConversationDto {
+  id: string;
+  /** El otro participante (para 1 a 1). */
+  other: ChatUser;
+  lastMessage: ChatMessageDto | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  /** Hasta cuándo leyó el otro (para el "visto"). */
+  otherReadAt: string | null;
+  createdAt: string;
+}
+
+export interface ChatMessagesPage {
+  messages: ChatMessageDto[];
+  /** Cursor para pedir mensajes más antiguos (id del más antiguo devuelto). null = no hay más. */
+  nextCursor: string | null;
+}
+
+export interface ChatUnreadResponse {
+  total: number;
 }

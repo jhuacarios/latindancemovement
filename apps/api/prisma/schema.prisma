@@ -42,6 +42,10 @@ model User {
   songRequests   SongRequest[]
   requestVotes   RequestVote[]
   ytAccessRequest YoutubeAccessRequest?
+  events         Event[]        @relation("EventCreatedBy")
+  communityPlaces CommunityPlace[] @relation("CommunityPlaceCreatedBy")
+  chatMemberships ChatParticipant[]
+  chatMessages    ChatMessage[]    @relation("ChatMessageSender")
 
   @@index([role])
 }
@@ -244,4 +248,110 @@ model SiteSetting {
   logoMime  String? // tipo MIME (image/png, image/svg+xml, …)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Evento de la comunidad (social, show, taller…). El flyer se guarda en base64
+/// igual que el logo del sitio; las listas nunca lo seleccionan (ver events.service).
+model Event {
+  id                 String    @id @default(cuid())
+  title              String
+  description        String?
+  startsAt           DateTime
+  endsAt             DateTime?
+  region             String // ChileRegion (code)
+  city               String?
+  venueName          String?
+  address            String?
+  styles             String    @default("") // CSV de DanceStyle
+  bachataPct         Int? // % de bachata en la noche (0-100)
+  priceInfo          String? // texto libre con precios / preventas
+  ticketUrl          String?
+  instagramUrl       String?
+  organizerName      String?
+  organizerInstagram String?
+  status             String    @default("PUBLISHED") // EventStatus
+  flyerData          String? // base64 del flyer, sin prefijo data:
+  flyerMime          String?
+  createdById        String
+  createdBy          User      @relation("EventCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([region, startsAt])
+  @@index([startsAt])
+  @@index([createdById])
+}
+
+/// Ficha de un directorio de la comunidad (social al aire libre, salsoteca, DJ
+/// disponible…). Sin fecha única: horario/disponibilidad en texto y las cuentas
+/// de Instagram asociadas. `kind` distingue el tipo (CommunityPlaceKind).
+model CommunityPlace {
+  id               String   @id @default(cuid())
+  kind             String // CommunityPlaceKind: OUTDOOR_SOCIAL | SALSOTECA | DJ
+  name             String
+  region           String // ChileRegion (code)
+  city             String?
+  place            String?
+  address          String?
+  schedule         String? // texto libre, ej. "Domingos desde las 17:00"
+  styles           String   @default("") // CSV de DanceStyle
+  description      String?
+  instagramHandles String   @default("") // CSV de handles sin @
+  photoData        String? // base64, sin prefijo data:
+  photoMime        String?
+  active           Boolean  @default(true)
+  createdById      String
+  createdBy        User     @relation("CommunityPlaceCreatedBy", fields: [createdById], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([kind, region])
+  @@index([createdById])
+}
+
+/// Conversación 1 a 1. `pairKey` = los dos userId ordenados y unidos con "|",
+/// así la misma pareja siempre reutiliza la conversación (única).
+model ChatConversation {
+  id            String    @id @default(cuid())
+  pairKey       String    @unique
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model ChatParticipant {
+  conversationId String
+  userId         String
+  /// Hasta cuándo leyó: los mensajes posteriores (de otros) cuentan como no leídos.
+  lastReadAt     DateTime?
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id])
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+/// Mensaje de chat. Historial permanente: nunca se borra. Puede llevar una
+/// imagen (base64, comprimida en el cliente); `body` puede ir vacío en ese caso.
+model ChatMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  imageData      String? // base64, sin prefijo data:
+  imageMime      String?
+  imageWidth     Int?
+  imageHeight    Int?
+  createdAt      DateTime @default(now())
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User             @relation("ChatMessageSender", fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
 }

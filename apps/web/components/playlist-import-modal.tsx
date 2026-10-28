@@ -179,6 +179,66 @@ export function PlaylistImportModal({
   }
 
   // Solo se importan las que tienen estilo (detectado o elegido).
+  // Alta individual por fila: sourceId -> estado. La fila NO desaparece; queda
+  // marcada como agregada.
+  const [rowAdded, setRowAdded] = useState<Record<string, 'ok' | 'err'>>({});
+  const [rowAdding, setRowAdding] = useState<string | null>(null);
+
+  /**
+   * Agrega UNA canción al destino (catálogo o Mis Canciones), sin esperar a
+   * guardar el lote. Necesita estilo elegido (o detectado).
+   */
+  async function addOne(it: ExtractedTrackMetadata) {
+    const style = rowStyles[it.sourceId];
+    if (!style) {
+      setErr(`Elige el estilo de "${it.title}" antes de agregarla.`);
+      return;
+    }
+    setErr(null);
+    setRowAdding(it.sourceId);
+    try {
+      const y = rowYears[it.sourceId];
+      const m = rowMonths[it.sourceId];
+      const og = origDates[it.sourceId];
+      const changed = !og || m !== og.m || (y ?? '') !== og.y;
+      await api(isLibrary ? '/music/library/personal' : '/music/tracks', {
+        method: 'POST',
+        body: {
+          title: it.title,
+          artist: it.artist ?? it.channelTitle ?? 'Desconocido',
+          style,
+          source: it.source,
+          sourceId: it.sourceId,
+          coverUrl: it.coverUrl ?? undefined,
+          durationSec: it.durationSec ?? undefined,
+          year: /^\d{4}$/.test(y ?? '') ? Number(y) : (it.year ?? undefined),
+          releaseDate:
+            changed && m && /^\d{4}$/.test(y ?? '') ? `${y}-${m}-01` : undefined,
+          ytMetadata: it.details ? JSON.stringify(it.details) : undefined,
+        },
+      });
+      setRowAdded((prev) => ({ ...prev, [it.sourceId]: 'ok' }));
+      if (isLibrary) {
+        void qc.invalidateQueries({ queryKey: ['library'] });
+        void qc.invalidateQueries({ queryKey: ['library-summary'] });
+      } else {
+        void qc.invalidateQueries({ queryKey: ['catalog'] });
+        void qc.invalidateQueries({ queryKey: ['catalog-summary'] });
+      }
+    } catch (e) {
+      setRowAdded((prev) => ({ ...prev, [it.sourceId]: 'err' }));
+      setErr(e instanceof ApiError ? e.message : `No se pudo agregar "${it.title}".`);
+    } finally {
+      setRowAdding(null);
+    }
+  }
+
+  /** Quita una canción de esta importación (no toca el catálogo). */
+  function removeRow(sourceId: string) {
+    setItems((prev) => (prev ? prev.filter((x) => x.sourceId !== sourceId) : prev));
+    setNowPlaying((p) => (p?.sourceId === sourceId ? null : p));
+  }
+
   const willImport = items
     ? items.filter((it) => rowStyles[it.sourceId]).length
     : 0;
@@ -190,7 +250,7 @@ export function PlaylistImportModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-5"
+        className="flex max-h-[85vh] w-full max-w-5xl flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -296,15 +356,16 @@ export function PlaylistImportModal({
             )}
 
             <div className="no-scrollbar mt-3 flex-1 overflow-auto rounded-lg border border-neutral-800">
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
                 <thead className="sticky top-0 border-b border-neutral-800 bg-neutral-900 text-left text-neutral-400">
                   <tr>
-                    <th className="w-10 px-2 py-2"></th>
-                    <th className="w-14 px-2 py-2"></th>
+                    <th className="w-9 px-1 py-2"></th>
+                    <th className="w-14 px-1 py-2"></th>
                     <th className="px-3 py-2">Título</th>
                     <th className="px-3 py-2">Artista</th>
-                    <th className="px-3 py-2">Estilo</th>
-                    <th className="w-16 px-3 py-2">Año</th>
+                    <th className="w-36 px-2 py-2">Estilo</th>
+                    <th className="w-36 px-2 py-2">Año</th>
+                    <th className="w-20 px-2 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,7 +376,10 @@ export function PlaylistImportModal({
                     return (
                       <tr
                         key={it.sourceId}
-                        className="border-b border-neutral-800/60 last:border-0"
+                        className={clsx(
+                          'border-b border-neutral-800/60 last:border-0',
+                          rowAdded[it.sourceId] === 'ok' && 'bg-clave/5',
+                        )}
                       >
                         <td className="px-2 py-2">
                           <button
@@ -346,12 +410,14 @@ export function PlaylistImportModal({
                             <div className="aspect-video w-12 rounded bg-neutral-800" />
                           )}
                         </td>
-                        <td className="px-3 py-2 font-medium">{it.title}</td>
-                        <td className="px-3 py-2 text-neutral-300">
+                        <td className="break-words px-3 py-2 font-medium">
+                          {it.title}
+                        </td>
+                        <td className="break-words px-3 py-2 text-neutral-300">
                           {it.artist ?? it.channelTitle ?? '—'}
                         </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1">
+                        <td className="px-2 py-2">
+                          <div className="flex flex-wrap items-center gap-1">
                             <div className="inline-flex gap-1 rounded-lg bg-neutral-800/60 p-0.5">
                               {(['BACHATA', 'SALSA'] as const).map((s) => {
                                 const active = value === s;
@@ -379,8 +445,8 @@ export function PlaylistImportModal({
                             )}
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-neutral-400">
-                          <div className="flex items-center gap-1">
+                        <td className="px-2 py-2 text-neutral-400">
+                          <div className="flex flex-nowrap items-center gap-1">
                             <select
                               value={rowMonths[it.sourceId] ?? ''}
                               onChange={(e) =>
@@ -430,8 +496,46 @@ export function PlaylistImportModal({
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') e.currentTarget.blur();
                               }}
-                              className="w-16 rounded-md border border-transparent bg-neutral-800/60 px-2 py-1 text-sm text-neutral-200 [appearance:textfield] hover:border-neutral-700 focus:border-brand focus:bg-neutral-800 focus:outline-none"
+                              className="w-14 rounded-md border border-transparent bg-neutral-800/60 px-1.5 py-1 text-sm text-neutral-200 [appearance:textfield] hover:border-neutral-700 focus:border-brand focus:bg-neutral-800 focus:outline-none"
                             />
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">
+                          <div className="flex items-center justify-end gap-1">
+                          {rowAdded[it.sourceId] === 'ok' ? (
+                            <span
+                              title="Ya se agregó"
+                              className="flex h-6 w-6 items-center justify-center rounded-md bg-clave/15 text-sm font-bold text-clave"
+                            >
+                              ✓
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              title={
+                                rowStyles[it.sourceId]
+                                  ? 'Agregar solo esta canción'
+                                  : 'Elige el estilo primero'
+                              }
+                              aria-label="Agregar solo esta canción"
+                              disabled={
+                                rowAdding === it.sourceId || !rowStyles[it.sourceId]
+                              }
+                              onClick={() => addOne(it)}
+                              className="flex h-6 w-6 items-center justify-center rounded-md border border-clave/50 bg-clave/10 text-sm font-bold leading-none text-clave transition hover:bg-clave/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {rowAdding === it.sourceId ? '…' : '+'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            title="Quitar de esta importación"
+                            aria-label="Quitar de esta importación"
+                            onClick={() => removeRow(it.sourceId)}
+                            className="rounded-md border border-red-700/50 bg-red-500/10 px-1.5 py-0.5 text-sm font-bold leading-none text-red-400 transition hover:border-red-500 hover:bg-red-500/20 hover:text-red-300"
+                          >
+                            ✕
+                          </button>
                           </div>
                         </td>
                       </tr>

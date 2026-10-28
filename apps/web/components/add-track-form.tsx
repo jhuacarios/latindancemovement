@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   DANCE_STYLES,
   type DanceStyle,
@@ -11,6 +11,7 @@ import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Select } from './ui';
 import { SubstyleMultiSelect } from './substyle-select';
 import { MONTHS, maxMonthFor } from '@/lib/months';
+import { useDebounced } from '@/lib/use-debounce';
 
 export interface NewTrackBody {
   title: string;
@@ -79,6 +80,36 @@ export function AddTrackForm({
   const [info, setInfo] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Aviso temprano: apenas se pega el link, se consulta si ya está en el
+  // catálogo (sin esperar a guardar). null = sin dato / link incompleto.
+  const [dup, setDup] = useState<{
+    id: string;
+    title: string;
+    artist: string;
+    style: string;
+  } | null>(null);
+  const debouncedLink = useDebounced(form.link.trim(), 400);
+  useEffect(() => {
+    if (!debouncedLink || !matchesSource(debouncedLink)) {
+      setDup(null);
+      return;
+    }
+    let alive = true;
+    api<{ exists: boolean; track?: typeof dup }>(
+      `/music/tracks/exists?link=${encodeURIComponent(debouncedLink)}`,
+    )
+      .then((r) => {
+        if (alive) setDup(r.exists && r.track ? r.track : null);
+      })
+      .catch(() => {
+        if (alive) setDup(null); // no bloquea: si falla, se valida al guardar
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedLink]);
 
   async function autofill() {
     const link = form.link.trim();
@@ -220,7 +251,14 @@ export function AddTrackForm({
               {fetching ? 'Leyendo…' : '✨ Autocompletar'}
             </Button>
           </div>
-          {info && <p className="mt-1 text-xs text-emerald-300">{info}</p>}
+          {dup ? (
+            <p className="mt-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200">
+              ⚠️ <strong>Ya está en el catálogo:</strong> “{dup.title}” —{' '}
+              {dup.artist} ({dup.style}). Agregarla de nuevo dará error.
+            </p>
+          ) : (
+            info && <p className="mt-1 text-xs text-emerald-300">{info}</p>
+          )}
         </div>
 
         <Input

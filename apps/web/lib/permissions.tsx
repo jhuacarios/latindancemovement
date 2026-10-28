@@ -54,15 +54,15 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
 
   const can = useCallback(
     (role: UserRole, key: string, action: PermissionAction): boolean => {
-      if (role === 'SUPER_ADMIN') return true;
-      // Spotify EN PAUSA (2026-07): toda la sección `music.spotify*` queda solo
-      // para SUPER_ADMIN mientras no esté habilitada la creación de playlists
-      // (dev mode = 5 users). Oculta el menú y bloquea el acceso directo por URL,
-      // sin depender de la matriz. Quitar estas 2 líneas al reactivar Spotify.
-      // Ver memoria "spotify-integration-pausada".
+      // Spotify EN PAUSA: toda la sección `music.spotify*` queda oculta y
+      // bloqueada para TODOS, incluido SUPER_ADMIN (va antes del early-return de
+      // super admin, a propósito). Los datos de Spotify usados dentro de YouTube
+      // (novedades, etc.) son server-side y no pasan por acá, así que siguen.
+      // Quitar este bloque al reactivar Spotify. Ver "spotify-integration-pausada".
       if (key === 'music.spotify' || key.startsWith('music.spotify.')) {
         return false;
       }
+      if (role === 'SUPER_ADMIN') return true;
       // Camino de claves: 'a.b.c' -> 'a.b' -> 'a'. Gana el permiso explícito más específico.
       let k = key;
       for (;;) {

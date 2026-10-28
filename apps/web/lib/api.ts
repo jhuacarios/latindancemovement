@@ -47,7 +47,16 @@ async function parseError(res: Response): Promise<string> {
   return res.statusText || `Error ${res.status}`;
 }
 
-async function tryRefresh(): Promise<boolean> {
+/**
+ * Refresco en vuelo. El backend ROTA el refresh token en cada uso, así que si
+ * varias peticiones expiran a la vez (una pantalla que carga catálogo +
+ * resumen + épicas en paralelo) y cada una refresca por su cuenta, la primera
+ * invalida el token de las demás: fallan, borran la sesión y la pantalla queda
+ * sin datos. Por eso todas comparten un único refresco.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function doRefresh(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
   const res = await fetch(`${BASE}/auth/refresh`, {
@@ -58,6 +67,23 @@ async function tryRefresh(): Promise<boolean> {
   if (!res.ok) return false;
   const tokens = (await res.json()) as AuthTokens;
   setTokens(tokens);
+  return true;
+}
+
+async function tryRefresh(): Promise<boolean> {
+  const before = getAccessToken();
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  const ok = await refreshInFlight;
+  // Aunque este refresco haya fallado, otro pudo renovar la sesión mientras
+  // tanto: si el access token cambió, el reintento debe seguir adelante.
+  if (!ok) {
+    const after = getAccessToken();
+    return Boolean(after && after !== before);
+  }
   return true;
 }
 
@@ -119,6 +145,49 @@ export async function uploadFile<T>(
 
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
   return (await res.json()) as T;
+}
+
+/**
+ * Envía un FormData ya armado (archivo + campos de texto) a un endpoint
+ * protegido. Generaliza `uploadFile` para formularios con más de un campo.
+ */
+export async function uploadForm<T>(
+  path: string,
+  fd: FormData,
+  method: 'POST' | 'PUT' = 'POST',
+  _retried = false,
+): Promise<T> {
+  const token = getAccessToken();
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  if (res.status === 401 && !_retried) {
+    const refreshed = await tryRefresh();
+    if (refreshed) return uploadForm<T>(path, fd, method, true);
+    clearTokens();
+  }
+  if (!res.ok) throw new ApiError(res.status, await parseError(res));
+  return (await res.json()) as T;
+}
+
+/**
+ * Descarga un recurso protegido como Blob (p. ej. una imagen del chat, que un
+ * <img src> no podría pedir porque no lleva el token). Refresca sesión si expiró.
+ */
+export async function fetchProtectedBlob(path: string, _retried = false): Promise<Blob> {
+  const token = getAccessToken();
+  const res = await fetch(`${BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (res.status === 401 && !_retried) {
+    const refreshed = await tryRefresh();
+    if (refreshed) return fetchProtectedBlob(path, true);
+    clearTokens();
+  }
+  if (!res.ok) throw new ApiError(res.status, await parseError(res));
+  return res.blob();
 }
 
 /** Descarga un archivo protegido (p. ej. el Excel) y dispara el guardado. */

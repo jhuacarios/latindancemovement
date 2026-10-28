@@ -65,7 +65,38 @@ export default function DiscoverYoutubePage() {
     staleTime: 60 * 60 * 1000,
   });
 
-  const visible = (data ?? []).filter((c) => !added.has(c.videoId));
+  // Sugerencias descartadas una a una. Se guardan en el dispositivo para que no
+  // vuelvan a aparecer en próximas visitas (no tocan el catálogo).
+  const HIDDEN_KEY = 'nectason.discoverYoutube.hidden';
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HIDDEN_KEY);
+      if (raw) setHidden(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      /* sin storage: arranca vacío */
+    }
+  }, []);
+  function persistHidden(next: Set<string>) {
+    setHidden(next);
+    try {
+      localStorage.setItem(HIDDEN_KEY, JSON.stringify([...next]));
+    } catch {
+      /* ignora si no hay storage */
+    }
+  }
+  const hideOne = (videoId: string) =>
+    persistHidden(new Set(hidden).add(videoId));
+  function unhideAll() {
+    persistHidden(new Set());
+    setShowHidden(false);
+  }
+
+  const hiddenCount = (data ?? []).filter((c) => hidden.has(c.videoId)).length;
+  const visible = (data ?? []).filter(
+    (c) => !added.has(c.videoId) && (showHidden || !hidden.has(c.videoId)),
+  );
   const bachata = visible.filter((c) => c.proposedStyle === 'BACHATA');
   const salsa = visible.filter((c) => c.proposedStyle === 'SALSA');
   const revisar = visible.filter((c) => c.proposedStyle == null);
@@ -120,6 +151,27 @@ export default function DiscoverYoutubePage() {
         </p>
       )}
 
+      {hiddenCount > 0 && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+          {hiddenCount} sugerencia{hiddenCount === 1 ? '' : 's'} oculta
+          {hiddenCount === 1 ? '' : 's'}.
+          <button
+            type="button"
+            onClick={() => setShowHidden((v) => !v)}
+            className="rounded-md border border-neutral-700 px-2 py-0.5 transition hover:text-neutral-200"
+          >
+            {showHidden ? 'Dejar de mostrarlas' : 'Mostrarlas'}
+          </button>
+          <button
+            type="button"
+            onClick={unhideAll}
+            className="rounded-md border border-neutral-700 px-2 py-0.5 transition hover:text-neutral-200"
+          >
+            Restaurar todas
+          </button>
+        </p>
+      )}
+
       {visible.length > 0 && (
         <>
           <Section
@@ -127,18 +179,21 @@ export default function DiscoverYoutubePage() {
             accent="text-amber-300"
             items={bachata}
             onAdded={markAdded}
+            onHide={hideOne}
           />
           <Section
             title="Salsa"
             accent="text-red-300"
             items={salsa}
             onAdded={markAdded}
+            onHide={hideOne}
           />
           <Section
             title="Por revisar"
             accent="text-neutral-300"
             items={revisar}
             onAdded={markAdded}
+            onHide={hideOne}
           />
         </>
       )}
@@ -151,11 +206,13 @@ function Section({
   accent,
   items,
   onAdded,
+  onHide,
 }: {
   title: string;
   accent: string;
   items: YoutubeDiscoverCandidate[];
   onAdded: (videoId: string) => void;
+  onHide: (videoId: string) => void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -168,7 +225,12 @@ function Section({
       </h2>
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
         {items.map((c) => (
-          <CandidateCard key={c.videoId} c={c} onAdded={onAdded} />
+          <CandidateCard
+            key={c.videoId}
+            c={c}
+            onAdded={onAdded}
+            onHide={onHide}
+          />
         ))}
       </div>
     </section>
@@ -178,9 +240,11 @@ function Section({
 function CandidateCard({
   c,
   onAdded,
+  onHide,
 }: {
   c: YoutubeDiscoverCandidate;
   onAdded: (videoId: string) => void;
+  onHide: (videoId: string) => void;
 }) {
   const qc = useQueryClient();
   const isAdmin = useEffectiveRole() === 'SUPER_ADMIN';
@@ -259,6 +323,15 @@ function CandidateCard({
           >
             YouTube ↗
           </a>
+          <button
+            type="button"
+            onClick={() => onHide(c.videoId)}
+            title="Ocultar esta sugerencia (no vuelve a aparecer)"
+            aria-label="Ocultar esta sugerencia"
+            className="ml-auto rounded-md border border-neutral-700 bg-neutral-800/60 px-2 py-1 text-xs text-neutral-400 transition hover:border-red-500/60 hover:text-red-300"
+          >
+            ✕
+          </button>
         </div>
       </div>
 

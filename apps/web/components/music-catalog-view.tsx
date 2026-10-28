@@ -284,7 +284,7 @@ export function MusicCatalogView({
   // La búsqueda se consulta con debounce: el input se ve al instante, pero el
   // request al servidor (sobre TODO el catálogo) se dispara al dejar de escribir.
   const debouncedSearch = useDebounced(search, 300);
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     // Búsqueda/estilo/orden en el server (cubren TODO el catálogo); los
     // sub-estilos/nuevas/épicas/meses se filtran en cliente sobre lo cargado.
     queryKey: ['catalog', source, { search: debouncedSearch, style, sort }],
@@ -945,7 +945,17 @@ export function MusicCatalogView({
       </Card>
 
       {isLoading && <Spinner />}
-      {error && <p className="text-sm text-red-300">No se pudo cargar el catálogo.</p>}
+      {error && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-red-300">
+          <span>
+            No se pudo cargar el catálogo
+            {error instanceof ApiError ? `: ${error.message}` : '.'}
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => void refetch()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
 
       {data && (
         <Card className="overflow-x-auto p-0">
