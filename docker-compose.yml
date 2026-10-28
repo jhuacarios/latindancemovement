@@ -1,4 +1,6 @@
-# Postgres para desarrollo local. Levantar con: docker compose up -d db
+# Servicios para desarrollo local.
+#   docker compose up -d db                       → solo Postgres
+#   docker compose up -d                          → todo (Postgres, Redis, S3 local, analizador)
 # Luego (desde apps/api): pnpm db:push && pnpm db:seed
 services:
   db:
@@ -14,5 +16,45 @@ services:
     volumes:
       - baile-pgdata:/var/lib/postgresql/data
 
+  # Colas de BullMQ (análisis de audio del módulo Estudio).
+  redis:
+    image: redis:7-alpine
+    container_name: baile-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+
+  # Storage S3-compatible local (SeaweedFS; MinIO ya no publica imágenes). En prod
+  # es Cloudflare R2: mismo código, otro endpoint. Valida firmas con estas claves.
+  # El bucket lo crea la API al arrancar en desarrollo.
+  s3:
+    image: chrislusf/seaweedfs:latest
+    container_name: baile-s3
+    restart: unless-stopped
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    configs:
+      - source: s3-config
+        target: /etc/seaweedfs/s3.json
+    ports:
+      - '8333:8333'
+    volumes:
+      - baile-s3:/data
+
+  # Analizador de audio (Python). Sin estado: recibe una URL firmada y devuelve JSON.
+  analyzer:
+    build: ./apps/analyzer
+    container_name: baile-analyzer
+    restart: unless-stopped
+    environment:
+      ANALYZER_TOKEN: dev-analyzer-token
+    ports:
+      - '8000:8000'
+
+configs:
+  s3-config:
+    content: |
+      {"identities":[{"name":"dev","credentials":[{"accessKey":"devaccesskey","secretKey":"devsecretkey"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+
 volumes:
   baile-pgdata:
+  baile-s3:
