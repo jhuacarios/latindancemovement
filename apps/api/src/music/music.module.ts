@@ -49,5 +49,7 @@ import { SpotifyOAuthService } from './spotify/spotify-oauth.service';
     YoutubeAccessService,
     SpotifyOAuthService,
   ],
+  // Interfaz pública del catálogo para otros módulos (Estudio vincula audios a canciones).
+  exports: [TracksService],
 })
 export class MusicModule {}

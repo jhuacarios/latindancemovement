@@ -7,6 +7,7 @@ import { AdminModule } from './admin/admin.module';
 import { EventsModule } from './events/events.module';
 import { CommunityModule } from './community/community.module';
 import { ChatModule } from './chat/chat.module';
+import { StudioModule } from './studio/studio.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -19,6 +20,7 @@ import { HealthController } from './health.controller';
     EventsModule,
     CommunityModule,
     ChatModule,
+    StudioModule,
   ],
   controllers: [HealthController],
 })

@@ -889,3 +889,107 @@ export interface ChatMessagesPage {
 export interface ChatUnreadResponse {
   total: number;
 }
+
+// ─── Módulo Estudio (análisis musical) ──────────────────────────────────────
+// Tiempos dentro de la canción siempre en milisegundos enteros, en la línea de
+// tiempo del archivo del usuario.
+
+export const ANALYSIS_STATUSES = ['PENDING', 'PROCESSING', 'DONE', 'ERROR'] as const;
+export type AnalysisStatus = (typeof ANALYSIS_STATUSES)[number];
+
+/** Estado del archivo, tal como lo ve el usuario. */
+export const AUDIO_FILE_STATUSES = ['UPLOADING', 'QUEUED', 'PROCESSING', 'READY', 'ERROR'] as const;
+export type AudioFileStatus = (typeof AUDIO_FILE_STATUSES)[number];
+
+export const SONG_SECTION_TYPES = [
+  'INTRO',
+  'VERSO',
+  'CORO',
+  'MAJAO',
+  'MAMBO',
+  'PUENTE',
+  'OUTRO',
+  'OTRO',
+] as const;
+export type SongSectionType = (typeof SONG_SECTION_TYPES)[number];
+
+export const SONG_MARKER_TYPES = ['BREAK', 'ACENTO', 'CORTE', 'NOTA'] as const;
+export type SongMarkerType = (typeof SONG_MARKER_TYPES)[number];
+
+export const MARK_ORIGINS = ['AUTOMATICO', 'MANUAL'] as const;
+export type MarkOrigin = (typeof MARK_ORIGINS)[number];
+
+/** Formatos de audio aceptados en Estudio. */
+export const STUDIO_AUDIO_MIME_TYPES = [
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/flac',
+  'audio/x-flac',
+] as const;
+
+/** Tiempos de una frase de bachata (2 compases de 4). */
+export const BEATS_PER_PHRASE = 8;
+
+/** Fila de la lista de audios del usuario. */
+export interface AudioFileSummary {
+  id: string;
+  originalName: string;
+  status: AudioFileStatus;
+  error: string | null;
+  durationMs: number | null;
+  bpm: number | null;
+  trackId: string | null;
+  createdAt: string;
+}
+
+export interface SongEnergy {
+  stepMs: number;
+  values: number[]; // 0..1
+}
+
+export interface SongSectionDto {
+  id: string;
+  type: SongSectionType;
+  startMs: number;
+  endMs: number;
+  label: string | null;
+  origin: MarkOrigin;
+}
+
+export interface SongMarkerDto {
+  id: string;
+  type: SongMarkerType;
+  timeMs: number;
+  text: string | null;
+  origin: MarkOrigin;
+}
+
+/** Vista de estudio de una canción: el análisis compartido + la capa del usuario, ya combinados. */
+export interface SongStudy extends AudioFileSummary {
+  analyzerVersion: string | null;
+  beatsMs: number[];
+  downbeatsMs: number[];
+  /** El "1" efectivo: el corregido por el usuario o, si no hay, el automático. */
+  firstBeatOffsetMs: number | null;
+  /** true si el "1" lo corrigió el usuario. */
+  firstBeatCorrected: boolean;
+  /** Índice en `beatsMs` del "1" de cada frase de 8. */
+  phraseStartIndexes: number[];
+  energy: SongEnergy | null;
+  sections: SongSectionDto[];
+  markers: SongMarkerDto[];
+}
+
+/** Respuesta al pedir una subida: el navegador sube el archivo directo al storage. */
+export interface StudioUploadTicket {
+  audioFileId: string;
+  uploadUrl: string;
+  /** Headers que el PUT debe llevar tal cual (la firma los incluye). */
+  uploadHeaders: Record<string, string>;
+}
+
+export * from './phrases';

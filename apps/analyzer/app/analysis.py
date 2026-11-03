@@ -42,6 +42,18 @@ def detect_beats(wav: Path) -> Beats:
     return Beats(beats=beats, downbeats=downbeats)
 
 
+def estimate_bpm(beats: np.ndarray) -> float:
+    """BPM a partir de los beats detectados.
+
+    madmom entrega beats en pasos de 10 ms, así que un solo intervalo viene
+    redondeado (124 BPM = 484 ms → 480 o 490). Se mide sobre tramos de 8 beats,
+    que diluyen ese redondeo, y la mediana ignora tramos con beats perdidos.
+    """
+    span = min(BEATS_PER_PHRASE, len(beats) - 1)
+    periods = (beats[span:] - beats[:-span]) / span
+    return 60.0 / float(np.median(periods))
+
+
 def compute_energy(y: np.ndarray, sr: int, step_ms: int = ENERGY_STEP_MS) -> list[float]:
     hop = 512
     rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop)[0]
@@ -102,7 +114,7 @@ def analyze_file(wav: Path) -> AnalyzeResponse:
     return AnalyzeResponse(
         analyzerVersion=ANALYZER_VERSION,
         durationMs=round(duration_sec * 1000),
-        bpm=round(60.0 / float(np.median(np.diff(detected.beats))), 1),
+        bpm=round(estimate_bpm(detected.beats), 1),
         beatsMs=[round(t * 1000) for t in detected.beats],
         downbeatsMs=[round(t * 1000) for t in detected.downbeats],
         firstBeatOffsetMs=round(phrase_start * 1000),

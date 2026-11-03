@@ -16,36 +16,37 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(cuid())
-  email           String   @unique
-  passwordHash    String? // opcional: los usuarios que solo entran con Google no tienen contraseña
-  googleId        String?  @unique // vinculación con cuenta de Google
-  emailVerified   Boolean  @default(false) // true si un proveedor (Google) verificó el email
-  name            String
-  role            String   @default("BAILARIN") // UserRole
-  city            String?
-  instagramHandle String?
-  styles          String   @default("") // CSV de DanceStyle
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String? // opcional: los usuarios que solo entran con Google no tienen contraseña
+  googleId         String?  @unique // vinculación con cuenta de Google
+  emailVerified    Boolean  @default(false) // true si un proveedor (Google) verificó el email
+  name             String
+  role             String   @default("BAILARIN") // UserRole
+  city             String?
+  instagramHandle  String?
+  styles           String   @default("") // CSV de DanceStyle
   // Preferencia de baile: BACHATA | SALSA | AMBOS. null = todavía no la eligió,
   // y por eso se le pregunta al entrar.
-  stylePreference String?
+  stylePreference  String?
   refreshTokenHash String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  tracksCreated  Track[]        @relation("TrackCreatedBy")
-  tracksAsArtist Track[]        @relation("TrackArtist")
-  ownedTracks    Track[]        @relation("TrackOwner")
-  library        UserTrack[]
-  trackTags      TrackTag[]
-  playlists      Playlist[]
-  songRequests   SongRequest[]
-  requestVotes   RequestVote[]
+  tracksCreated   Track[]               @relation("TrackCreatedBy")
+  tracksAsArtist  Track[]               @relation("TrackArtist")
+  ownedTracks     Track[]               @relation("TrackOwner")
+  library         UserTrack[]
+  trackTags       TrackTag[]
+  playlists       Playlist[]
+  songRequests    SongRequest[]
+  requestVotes    RequestVote[]
   ytAccessRequest YoutubeAccessRequest?
-  events         Event[]        @relation("EventCreatedBy")
-  communityPlaces CommunityPlace[] @relation("CommunityPlaceCreatedBy")
+  events          Event[]               @relation("EventCreatedBy")
+  communityPlaces CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
   chatMemberships ChatParticipant[]
-  chatMessages    ChatMessage[]    @relation("ChatMessageSender")
+  chatMessages    ChatMessage[]         @relation("ChatMessageSender")
+  audioFiles      AudioFile[]
 
   @@index([role])
 }
@@ -71,30 +72,30 @@ model YoutubeAccessRequest {
 }
 
 model Track {
-  id             String   @id @default(cuid())
-  title          String
-  artist         String
-  style          String // DanceStyle
-  substyle       String? // DanceSubstyle
-  year           Int?
-  source         String // TrackSource: SPOTIFY | YOUTUBE
-  sourceId       String
-  coverUrl       String?
-  durationSec    Int?
-  searchText     String? // título+artista normalizado (sin acentos, minúsculas) para buscar; lo mantiene un trigger
-  viewCount      BigInt? // reproducciones (de ytMetadata.viewCount), para ordenar
-  popularity     Int? // índice de popularidad de Spotify (0-100); Spotify no expone streams
-  releaseDate    String? // fecha de lanzamiento de Spotify ("2024-04-04" | "2024-04" | "2024" | "" = sin dato)
+  id              String   @id @default(cuid())
+  title           String
+  artist          String
+  style           String // DanceStyle
+  substyle        String? // DanceSubstyle
+  year            Int?
+  source          String // TrackSource: SPOTIFY | YOUTUBE
+  sourceId        String
+  coverUrl        String?
+  durationSec     Int?
+  searchText      String? // título+artista normalizado (sin acentos, minúsculas) para buscar; lo mantiene un trigger
+  viewCount       BigInt? // reproducciones (de ytMetadata.viewCount), para ordenar
+  popularity      Int? // índice de popularidad de Spotify (0-100); Spotify no expone streams
+  releaseDate     String? // fecha de lanzamiento de Spotify ("2024-04-04" | "2024-04" | "2024" | "" = sin dato)
   spotifyPlayable Boolean? // Spotify: ¿reproducible en el embed? false = restringida (país/licencia); null = desconocido
-  isRelease      Boolean  @default(false)
-  approvalStatus String   @default("APROBADA") // TrackApprovalStatus
-  scope          String   @default("CATALOG") // TrackScope: CATALOG (global) | PERSONAL (privada del DJ)
-  ownerId        String? // dueño cuando scope = PERSONAL
-  ytMetadata     String? // JSON con todos los datos extraídos de YouTube (snippet, stats, status, etc.)
-  artistUserId   String?
-  createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isRelease       Boolean  @default(false)
+  approvalStatus  String   @default("APROBADA") // TrackApprovalStatus
+  scope           String   @default("CATALOG") // TrackScope: CATALOG (global) | PERSONAL (privada del DJ)
+  ownerId         String? // dueño cuando scope = PERSONAL
+  ytMetadata      String? // JSON con todos los datos extraídos de YouTube (snippet, stats, status, etc.)
+  artistUserId    String?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   owner         User?          @relation("TrackOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   artistUser    User?          @relation("TrackArtist", fields: [artistUserId], references: [id], onDelete: SetNull)
@@ -103,6 +104,7 @@ model Track {
   songRequests  SongRequest[]
   savedBy       UserTrack[]
   trackTags     TrackTag[]
+  audioFiles    AudioFile[] // audios de usuarios vinculados a esta canción (módulo Estudio)
 
   // Sin unique global de (source,sourceId): el mismo video puede estar en el
   // catálogo y además como copia personal de uno o más DJs. Dedupe en la app.
@@ -354,4 +356,99 @@ model ChatMessage {
   sender       User             @relation("ChatMessageSender", fields: [senderId], references: [id])
 
   @@index([conversationId, createdAt])
+}
+
+// ─── Módulo Estudio (análisis musical de bachatas) ──────────────────────────
+
+/**
+ * Análisis COMPARTIDO de una grabación. Sin dueño: lo reutilizan todos los
+ * archivos con la misma huella acústica (Chromaprint). Solo guarda datos sobre la
+ * canción (tiempos, energía); el audio de cada usuario nunca se comparte. Se
+ * borra cuando ya ningún AudioFile lo referencia.
+ */
+model RecordingAnalysis {
+  id                String   @id @default(cuid())
+  status            String   @default("PENDING") // AnalysisStatus: PENDING | PROCESSING | DONE | ERROR
+  analyzerVersion   String?
+  durationMs        Int?
+  fingerprint       Json? // number[] (Chromaprint crudo)
+  bpm               Float?
+  firstBeatOffsetMs Int? // el "1" automático de la frase de 8
+  beatsMs           Json? // number[]
+  downbeatsMs       Json? // number[]
+  energy            Json? // { stepMs, values }
+  sections          Json? // automáticas [{ type, startMs, endMs }] (Fase 2)
+  markers           Json? // automáticas [{ type, timeMs }] (Fase 2)
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  audioFiles AudioFile[]
+
+  @@index([durationMs]) // candidatos para comparar huellas
+}
+
+/**
+ * Archivo de audio que subió un usuario. PRIVADO: solo su dueño lo ve (URLs
+ * firmadas de corta duración). Es la "capa del usuario" sobre la grabación: su
+ * "1" corregido, sus secciones y sus marcas.
+ */
+model AudioFile {
+  id                String             @id @default(cuid())
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId           String? // vínculo opcional con el catálogo
+  track             Track?             @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  storageKey        String             @unique
+  originalName      String
+  mimeType          String
+  sizeBytes         Int
+  durationMs        Int? // de ESTE archivo (puede diferir de la grabación compartida)
+  status            String             @default("UPLOADING") // AudioFileStatus: UPLOADING | QUEUED | PROCESSING | READY | ERROR
+  error             String?
+  recordingId       String?
+  recording         RecordingAnalysis? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
+  alignOffsetMs     Int                @default(0) // tiempo en ESTE archivo = tiempo en la grabación + alignOffsetMs
+  firstBeatOffsetMs Int? // el "1" corregido por el usuario (null = el automático)
+  rightsAcceptedAt  DateTime // declaró tener derecho a usar el archivo para su práctica
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  sections SongSection[]
+  markers  SongMarker[]
+
+  @@index([userId])
+  @@index([recordingId])
+}
+
+/**
+ * Sección de la canción en la línea de tiempo del archivo del usuario.
+ */
+model SongSection {
+  id          String    @id @default(cuid())
+  audioFileId String
+  audioFile   AudioFile @relation(fields: [audioFileId], references: [id], onDelete: Cascade)
+  type        String // SongSectionType: INTRO | VERSO | CORO | MAJAO | MAMBO | PUENTE | OUTRO | OTRO
+  startMs     Int
+  endMs       Int
+  label       String?
+  origin      String // MarkOrigin: AUTOMATICO | MANUAL
+
+  @@index([audioFileId])
+}
+
+/**
+ * Break, acento, corte o nota personal en un momento de la canción.
+ */
+model SongMarker {
+  id          String    @id @default(cuid())
+  audioFileId String
+  audioFile   AudioFile @relation(fields: [audioFileId], references: [id], onDelete: Cascade)
+  type        String // SongMarkerType: BREAK | ACENTO | CORTE | NOTA
+  timeMs      Int
+  text        String?
+  origin      String // MarkOrigin
+  createdAt   DateTime  @default(now())
+
+  @@index([audioFileId])
 }

@@ -17,3 +17,6 @@ allowBuilds:
   "esbuild": true
   "sharp": true
   "unrs-resolver": true
+  # Aceleradores nativos opcionales (bullmq → msgpackr; jest → watcher): sin ellos usan JS puro.
+  "msgpackr-extract": false
+  "@parcel/watcher": false
