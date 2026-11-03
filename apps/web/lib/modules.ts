@@ -110,6 +110,15 @@ export const MODULES: AppModule[] = [
     status: 'ready',
   },
   {
+    key: 'studio',
+    title: 'Estudio',
+    description: 'Estudia tus bachatas: el 1 de cada frase, energía, loop y velocidad.',
+    href: '/studio',
+    icon: '🎚️',
+    roles: ALL,
+    status: 'ready',
+  },
+  {
     key: 'sales',
     title: 'Ventas y Pagos',
     description: 'Entradas, QR, boletas SII y panel de ventas.',
