@@ -553,6 +553,13 @@ región (qué suena dónde — el moat de "data premium DJs").
 - No mezclar lógica de negocio en controllers — va en services
 - Imports de `@baile-latino/types` siempre desde el paquete, nunca copiar tipos
 
+### Módulo Estudio (análisis musical)
+- Analizador Python en `apps/analyzer/` (FastAPI, sin estado, Docker py3.12). Tests: `docker run --rm nectason-analyzer python -m pytest`.
+- Audio de usuarios en bucket S3-compatible PRIVADO (R2 en prod, SeaweedFS en local), solo por URL firmada. Nunca compartir audio entre usuarios.
+- `RecordingAnalysis` es compartido por huella acústica; la capa del usuario (`AudioFile`, secciones, marcas, el "1" corregido) es privada.
+- Subir `ANALYZER_VERSION` en cada cambio que altere resultados.
+- Tests API: `pnpm --filter @baile-latino/api test` y `test:e2e` (requiere `docker compose up -d db`).
+
 ---
 
 ## Comandos
