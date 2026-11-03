@@ -1,0 +1,30 @@
+# Proxy HTTPS COMPARTIDO del servidor: un solo Caddy para todos los proyectos
+# (Nectason hoy; la tienda u otros después). Cada proyecto corre en su propio
+# stack y se conecta a la red `web`; acá solo se decide qué dominio va a cuál.
+#
+#   docker compose -f deploy/proxy/docker-compose.yml up -d
+#   (tras editar el Caddyfile)  docker compose -f deploy/proxy/docker-compose.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
+name: proxy
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - web
+
+networks:
+  web:
+    name: web
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,8 @@
+# Un bloque por dominio. Caddy saca y renueva solo los certificados HTTPS.
+# Para sumar otro proyecto: conectarlo a la red `web` con un alias y agregar
+# su bloque acá (ej: tutienda.cl { reverse_proxy tienda-web:3000 }).
+
+api.nectason.app {
+	encode zstd gzip
+	reverse_proxy nectason-api:3000
+}
