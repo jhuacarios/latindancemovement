@@ -21,29 +21,31 @@ El audio del Estudio y la galería van a **Cloudflare R2**, no al disco del serv
 
 ## Primera instalación
 
-Servidor: Ubuntu 24.04, puertos 22/80/443 abiertos.
+Servidor: Ubuntu 24.04, puertos 22/80/443 abiertos (hoy: Hetzner CPX22 en Helsinki, `135.181.200.203`).
 
 ```bash
-# 1. Docker
+# 1. Docker + 4 GB de swap (Demucs llega a ~2,5 GB de RAM al separar instrumentos)
 curl -fsSL https://get.docker.com | sh
+fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo "/swapfile none swap sw 0 0" >> /etc/fstab
 
-# 2. Llave de solo lectura para clonar el repo (agregar la .pub en GitHub →
-#    repo → Settings → Deploy keys, SIN permiso de escritura)
-ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N "" -C "nectason-server"
-cat ~/.ssh/github_deploy.pub
-printf 'Host github.com\n  IdentityFile ~/.ssh/github_deploy\n' >> ~/.ssh/config
+# 2. Código (el repo es público: se clona por HTTPS, sin llaves)
+git clone https://github.com/jhuacarios/latindancemovement.git /opt/nectason
 
-# 3. Código
-git clone git@github.com:jhuacarios/latindancemovement.git /opt/nectason
-
-# 4. Variables (completar; valores aleatorios con: openssl rand -hex 32)
+# 3. Variables (completar; valores aleatorios con: openssl rand -hex 32)
 cp /opt/nectason/deploy/.env.example /opt/nectason/deploy/.env
+chmod 600 /opt/nectason/deploy/.env
 nano /opt/nectason/deploy/.env
 
-# 5. Levantar
-chmod +x /opt/nectason/deploy/update.sh
+# 4. Levantar
 /opt/nectason/deploy/update.sh
+
+# 5. Respaldo diario de la base a R2 (04:00 UTC)
+echo "0 4 * * * root /opt/nectason/deploy/backup-db.sh >> /var/log/nectason-backup.log 2>&1" > /etc/cron.d/nectason-backup
 ```
+
+Guardar una copia de `deploy/.env` en el gestor de contraseñas: es lo único que no
+se puede reconstruir desde el repo.
 
 **DNS (Cloudflare):** `api.nectason.app` → registro **A** a la IP del servidor, en
 modo **DNS only** (nube gris). Caddy necesita el puerto 80 libre y el DNS apuntando

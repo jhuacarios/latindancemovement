@@ -35,6 +35,10 @@ services:
     restart: unless-stopped
     environment:
       ANALYZER_TOKEN: ${ANALYZER_TOKEN}
+      ANALYZER_THREADS: ${ANALYZER_THREADS:-2}
+    # Separar instrumentos (Demucs) usa toda la CPU que encuentre: se limita para
+    # que la API (y otros proyectos del servidor, como la tienda) sigan ágiles.
+    cpus: ${ANALYZER_CPUS:-1.5}
     # Sin puertos publicados: solo la API le habla, por la red interna.
 
   db:
