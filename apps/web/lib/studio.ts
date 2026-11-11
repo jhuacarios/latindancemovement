@@ -1,4 +1,4 @@
-import type { AudioFileSummary, DanceStyle, SongStudy, StudioUploadTicket } from '@baile-latino/types';
+import type { AudioFileSummary, DanceStyle, SongStudy, StemUrls, StudioUploadTicket } from '@baile-latino/types';
 import { STUDIO_AUDIO_MIME_TYPES } from '@baile-latino/types';
 import { api, ApiError } from './api';
 
@@ -75,6 +75,8 @@ export const studioApi = {
     }),
   reanalyze: (id: string) =>
     api<AudioFileSummary>(`/studio/audio-files/${id}/reanalyze`, { method: 'POST' }),
+  requestStems: (id: string) => api<SongStudy>(`/studio/audio-files/${id}/stems`, { method: 'POST' }),
+  stemUrls: (id: string) => api<StemUrls>(`/studio/audio-files/${id}/stems`),
   remove: (id: string) => api<{ id: string }>(`/studio/audio-files/${id}`, { method: 'DELETE' }),
 };
 

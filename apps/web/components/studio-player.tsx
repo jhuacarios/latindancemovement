@@ -7,6 +7,7 @@ import { countOfBeat, type SongEnergy, type SongStudy } from '@baile-latino/type
 import { Button } from './ui';
 import { clsx } from './clsx';
 import { InstrumentLanes, SECTION_LABEL, SectionBar } from './studio-instruments';
+import { StudioMixer } from './studio-mixer';
 
 // Colores de BRANDING.md (wavesurfer pinta en canvas: necesita valores, no clases).
 const COLOR = {
@@ -59,12 +60,16 @@ export function StudioPlayer({
   audioUrl,
   onSetFirstBeat,
   savingFirstBeat,
+  onRequestStems,
+  requestingStems,
 }: {
   study: SongStudy;
   audioUrl: string;
   /** null = volver al "1" automático. */
   onSetFirstBeat: (timeMs: number | null) => void;
   savingFirstBeat: boolean;
+  onRequestStems: () => void;
+  requestingStems: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
@@ -72,6 +77,8 @@ export function StudioPlayer({
   const loopRef = useRef<{ start: number; end: number } | null>(null);
 
   const [ready, setReady] = useState(false);
+  /** Instancia expuesta al mezclador (que usa su audio como reloj). */
+  const [wsInstance, setWsInstance] = useState<WaveSurfer | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
@@ -126,6 +133,7 @@ export function StudioPlayer({
     ws.on('ready', (dur) => {
       setDurationMs(Math.round(dur * 1000));
       setReady(true);
+      setWsInstance(ws);
     });
     ws.on('error', () => setLoadError('No se pudo cargar el audio. Recarga la página.'));
     ws.on('play', () => setPlaying(true));
@@ -159,6 +167,7 @@ export function StudioPlayer({
       wsRef.current = null;
       regionsRef.current = null;
       setReady(false);
+      setWsInstance(null);
     };
   }, [audioUrl, setLoop]);
 
@@ -371,6 +380,13 @@ export function StudioPlayer({
           <span className="w-12 tabular-nums">{Math.round(rate * 100)} %</span>
         </label>
       </div>
+
+      <StudioMixer
+        ws={wsInstance}
+        study={study}
+        onRequestStems={onRequestStems}
+        requesting={requestingStems}
+      />
 
       {/* Corregir el "1" */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-800 px-4 py-3 text-sm">

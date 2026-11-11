@@ -20,7 +20,9 @@ export default function StudioBachataSongPage() {
       if (!d) return false;
       if (IN_PROGRESS.has(d.status)) return 3000;
       // La detección de instrumentos tarda un par de minutos: se consulta más espaciado.
+      // La separación (instrumentos o pistas del mezclador) tarda un par de minutos: más espaciado.
       if (d.instrumentsStatus && INSTRUMENTS_IN_PROGRESS.has(d.instrumentsStatus)) return 10_000;
+      if (d.stemsStatus && INSTRUMENTS_IN_PROGRESS.has(d.stemsStatus)) return 10_000;
       return false;
     },
   });
@@ -36,6 +38,11 @@ export default function StudioBachataSongPage() {
 
   const firstBeat = useMutation({
     mutationFn: (timeMs: number | null) => studioApi.setFirstBeat(id, timeMs),
+    onSuccess: (updated) => qc.setQueryData(['studio', 'audio-file', id], updated),
+  });
+
+  const stems = useMutation({
+    mutationFn: () => studioApi.requestStems(id),
     onSuccess: (updated) => qc.setQueryData(['studio', 'audio-file', id], updated),
   });
 
@@ -88,6 +95,8 @@ export default function StudioBachataSongPage() {
           audioUrl={audio.data.url}
           onSetFirstBeat={(t) => firstBeat.mutate(t)}
           savingFirstBeat={firstBeat.isPending}
+          onRequestStems={() => stems.mutate()}
+          requestingStems={stems.isPending}
         />
       )}
     </div>
