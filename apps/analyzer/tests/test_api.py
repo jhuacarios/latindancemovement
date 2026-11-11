@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from app.schemas import AnalyzeResponse, FingerprintResponse
+from app.schemas import INSTRUMENT_KEYS, AnalyzeResponse, FingerprintResponse, InstrumentsResponse
 
 TOKEN = "test-token"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -33,7 +33,7 @@ def test_health_is_public(client):
     assert res.json()["ok"] is True
 
 
-@pytest.mark.parametrize("endpoint", ["/analyze", "/fingerprint"])
+@pytest.mark.parametrize("endpoint", ["/analyze", "/fingerprint", "/instruments"])
 def test_requires_token(client, endpoint):
     assert client.post(endpoint, json={"audioUrl": "https://storage.test/a"}).status_code == 401
     bad = {"Authorization": "Bearer otro"}
@@ -62,3 +62,16 @@ def test_fingerprint_contract(client):
 def test_download_error_is_422(client):
     res = client.post("/analyze", json={"audioUrl": "https://storage.test/no-existe"}, headers=AUTH)
     assert res.status_code == 422
+
+
+def test_instruments_contract(client, monkeypatch):
+    # Sin correr Demucs (eso lo cubre test_instruments): pistas falsas.
+    from app import instruments
+
+    monkeypatch.setattr(instruments, "separate", lambda y, sr: {"drums": y, "vocals": y * 0.5})
+    res = client.post("/instruments", json={"audioUrl": "https://storage.test/a"}, headers=AUTH)
+    assert res.status_code == 200
+    body = InstrumentsResponse.model_validate(res.json())
+    assert set(body.tracks) == set(INSTRUMENT_KEYS)
+    assert body.stepMs > 0 and body.durationMs > 0
+    assert len({len(v) for v in body.tracks.values()}) == 1

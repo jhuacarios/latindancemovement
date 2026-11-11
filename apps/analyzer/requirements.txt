@@ -8,3 +8,9 @@ librosa==1.0.0
 soundfile==0.14.0
 # madmom: el release de PyPI (0.16.1) no instala en Python >= 3.10; se fija un commit de main.
 madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc86dae
+# Separación de instrumentos (Demucs, modelo htdemucs_6s). torch en su build solo-CPU:
+# la de PyPI trae CUDA (varios GB) que el servidor no usa.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchaudio==2.5.1+cpu
+demucs==4.0.1

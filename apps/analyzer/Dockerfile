@@ -13,6 +13,9 @@ COPY requirements.txt requirements-dev.txt ./
 RUN pip install --no-cache-dir cython numpy==2.5.4 \
   && pip install --no-cache-dir -r requirements-dev.txt
 
+# Pesos del modelo de separación dentro de la imagen (~80 MB): sin descargas al arrancar.
+RUN python -c "from demucs.pretrained import get_model; get_model('htdemucs_6s')"
+
 COPY . .
 
 ENV PORT=8000

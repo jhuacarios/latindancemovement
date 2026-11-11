@@ -12,7 +12,15 @@ from . import ANALYZER_VERSION
 from .analysis import analyze_file
 from .audio import AudioError, download, to_wav
 from .fingerprint import fingerprint
-from .schemas import AnalyzeRequest, AnalyzeResponse, FingerprintRequest, FingerprintResponse
+from .instruments import analyze_instruments
+from .schemas import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    FingerprintRequest,
+    FingerprintResponse,
+    InstrumentsRequest,
+    InstrumentsResponse,
+)
 
 app = FastAPI(title="Nectason analyzer", version=ANALYZER_VERSION)
 
@@ -52,5 +60,16 @@ def analyze_endpoint(body: AnalyzeRequest) -> AnalyzeResponse:
         try:
             wav = _prepare(body.audioUrl, Path(tmp))
             return analyze_file(wav)
+        except AudioError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# Separación de instrumentos: lenta (~1-2 min por canción con 4 CPU), por eso va aparte de /analyze.
+@app.post("/instruments", response_model=InstrumentsResponse, dependencies=[Depends(require_token)])
+def instruments_endpoint(body: InstrumentsRequest) -> InstrumentsResponse:
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            wav = _prepare(body.audioUrl, Path(tmp))
+            return analyze_instruments(wav)
         except AudioError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
