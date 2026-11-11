@@ -51,15 +51,15 @@ def _model():
     return model
 
 
-def separate(y: np.ndarray, sr: int) -> dict[str, np.ndarray]:
-    """Separa el audio mono en las pistas de Demucs (mono, mismo largo)."""
+def separate_stereo(stereo: np.ndarray, sr: int) -> dict[str, np.ndarray]:
+    """Separa audio estéreo (2, n) en las pistas de Demucs, cada una (2, n)."""
     import torch
     from demucs.apply import apply_model
 
     model = _model()
     if sr != model.samplerate:
-        y = librosa.resample(y, orig_sr=sr, target_sr=model.samplerate)
-    wav = torch.from_numpy(np.stack([y, y])).float()  # el modelo espera estéreo
+        stereo = librosa.resample(stereo, orig_sr=sr, target_sr=model.samplerate)
+    wav = torch.from_numpy(np.ascontiguousarray(stereo)).float()
     ref = wav.mean(0)
     mean, std = ref.mean(), ref.std() + 1e-8
     with torch.no_grad():
@@ -67,7 +67,13 @@ def separate(y: np.ndarray, sr: int) -> dict[str, np.ndarray]:
             model, ((wav - mean) / std)[None], device="cpu", shifts=0, split=True, overlap=0.25, progress=False
         )[0]
     out = out * std + mean
-    return {name: out[i].mean(0).numpy() for i, name in enumerate(model.sources)}
+    return {name: out[i].numpy() for i, name in enumerate(model.sources)}
+
+
+def separate(y: np.ndarray, sr: int) -> dict[str, np.ndarray]:
+    """Separa el audio mono en las pistas de Demucs (mono, mismo largo)."""
+    stems = separate_stereo(np.stack([y, y]), sr)  # el modelo espera estéreo
+    return {name: x.mean(0) for name, x in stems.items()}
 
 
 def _bin_by_time(frames: np.ndarray, sr: int, n_steps: int) -> np.ndarray:

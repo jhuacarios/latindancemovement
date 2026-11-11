@@ -33,6 +33,23 @@ INSTRUMENT_KEYS = ("vocals", "bass", "guitar", "guira", "bongo", "tumba", "other
 InstrumentKey = Literal["vocals", "bass", "guitar", "guira", "bongo", "tumba", "other"]
 
 
+# Pistas que se guardan para el mezclador ("other" incluye lo que Demucs llama "piano").
+STEM_KEYS = ("vocals", "guitar", "bass", "drums", "other")
+StemKey = Literal["vocals", "guitar", "bass", "drums", "other"]
+
+
+class StemsRequest(BaseModel):
+    audioUrl: str = Field(min_length=1)
+    # URL firmada (PUT, Content-Type audio/mp4) donde subir cada pista. Deben venir todas.
+    uploads: dict[StemKey, str]
+
+
+class StemsResponse(BaseModel):
+    analyzerVersion: str
+    durationMs: int = Field(ge=0)
+    stems: list[StemKey]
+
+
 class InstrumentsRequest(BaseModel):
     audioUrl: str = Field(min_length=1)
 

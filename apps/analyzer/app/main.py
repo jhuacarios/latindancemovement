@@ -13,13 +13,17 @@ from .analysis import analyze_file
 from .audio import AudioError, download, to_wav
 from .fingerprint import fingerprint
 from .instruments import analyze_instruments
+from .stems import StemUploadError, make_stems
 from .schemas import (
+    STEM_KEYS,
     AnalyzeRequest,
     AnalyzeResponse,
     FingerprintRequest,
     FingerprintResponse,
     InstrumentsRequest,
     InstrumentsResponse,
+    StemsRequest,
+    StemsResponse,
 )
 
 app = FastAPI(title="Nectason analyzer", version=ANALYZER_VERSION)
@@ -32,9 +36,9 @@ def require_token(authorization: str | None = Header(default=None)) -> None:
         raise HTTPException(status_code=401, detail="Token inválido.")
 
 
-def _prepare(url: str, workdir: Path) -> Path:
+def _prepare(url: str, workdir: Path, channels: int = 1) -> Path:
     raw = download(url, workdir / "input")
-    return to_wav(raw, workdir / "audio.wav")
+    return to_wav(raw, workdir / "audio.wav", channels)
 
 
 @app.get("/health")
@@ -73,3 +77,19 @@ def instruments_endpoint(body: InstrumentsRequest) -> InstrumentsResponse:
             return analyze_instruments(wav)
         except AudioError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# Pistas para el mezclador: separa en estéreo y sube cada pista a la URL firmada que manda la API.
+@app.post("/stems", response_model=StemsResponse, dependencies=[Depends(require_token)])
+def stems_endpoint(body: StemsRequest) -> StemsResponse:
+    missing = [k for k in STEM_KEYS if k not in body.uploads]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Faltan URLs de subida: {', '.join(missing)}")
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            wav = _prepare(body.audioUrl, Path(tmp), channels=2)
+            return make_stems(wav, body.uploads, Path(tmp))
+        except AudioError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except StemUploadError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc

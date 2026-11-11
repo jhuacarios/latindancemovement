@@ -33,7 +33,7 @@ def test_health_is_public(client):
     assert res.json()["ok"] is True
 
 
-@pytest.mark.parametrize("endpoint", ["/analyze", "/fingerprint", "/instruments"])
+@pytest.mark.parametrize("endpoint", ["/analyze", "/fingerprint", "/instruments", "/stems"])
 def test_requires_token(client, endpoint):
     assert client.post(endpoint, json={"audioUrl": "https://storage.test/a"}).status_code == 401
     bad = {"Authorization": "Bearer otro"}
@@ -75,3 +75,45 @@ def test_instruments_contract(client, monkeypatch):
     assert set(body.tracks) == set(INSTRUMENT_KEYS)
     assert body.stepMs > 0 and body.durationMs > 0
     assert len({len(v) for v in body.tracks.values()}) == 1
+
+
+def test_stems_uploads_every_stem(client, monkeypatch):
+    from app import instruments, stems
+
+    monkeypatch.setattr(stems, "separate_stereo", lambda x, sr: {"vocals": x * 0.5, "drums": x * 0.2, "piano": x * 0.1})
+    put = {}
+
+    def fake_upload(path, url):
+        assert path.suffix == ".m4a" and path.stat().st_size > 0
+        put[url] = path.name
+
+    monkeypatch.setattr(stems, "upload", fake_upload)
+    keys = ["vocals", "guitar", "bass", "drums", "other"]
+    uploads = {k: f"https://storage.test/put/{k}" for k in keys}
+    res = client.post("/stems", json={"audioUrl": "https://storage.test/a", "uploads": uploads}, headers=AUTH)
+    assert res.status_code == 200, res.text
+    assert res.json()["stems"] == keys
+    assert put == {uploads[k]: f"{k}.m4a" for k in keys}
+
+
+def test_stems_requires_every_upload_url(client):
+    res = client.post(
+        "/stems",
+        json={"audioUrl": "https://storage.test/a", "uploads": {"vocals": "https://storage.test/put/v"}},
+        headers=AUTH,
+    )
+    assert res.status_code == 400
+
+
+def test_stems_upload_failure_is_502(client, monkeypatch):
+    from app import stems
+
+    monkeypatch.setattr(stems, "separate_stereo", lambda x, sr: {})
+
+    def failing(path, url):
+        raise stems.StemUploadError("El storage rechazó la pista (HTTP 403).")
+
+    monkeypatch.setattr(stems, "upload", failing)
+    uploads = {k: "https://storage.test/put" for k in ["vocals", "guitar", "bass", "drums", "other"]}
+    res = client.post("/stems", json={"audioUrl": "https://storage.test/a", "uploads": uploads}, headers=AUTH)
+    assert res.status_code == 502

@@ -31,10 +31,10 @@ def download(url: str, dest: Path) -> Path:
     return dest
 
 
-def to_wav(src: Path, dest: Path) -> Path:
-    """Convierte cualquier formato soportado por ffmpeg a WAV mono 44.1 kHz."""
+def to_wav(src: Path, dest: Path, channels: int = 1) -> Path:
+    """Convierte cualquier formato soportado por ffmpeg a WAV 44.1 kHz (mono por defecto)."""
     proc = subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-i", str(src), "-ac", "1", "-ar", str(SAMPLE_RATE), str(dest)],
+        ["ffmpeg", "-v", "error", "-y", "-i", str(src), "-ac", str(channels), "-ar", str(SAMPLE_RATE), str(dest)],
         capture_output=True,
         text=True,
     )
