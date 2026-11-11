@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import type { DanceStyle } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { STUDIO_MAX_UPLOAD_MB, audioMimeType, uploadAudio } from '@/lib/studio';
 import { Button, Card } from './ui';
@@ -9,7 +10,7 @@ import { Button, Card } from './ui';
  * Subida de un audio al Estudio. El archivo va directo al storage privado; antes
  * el usuario declara tener derecho a usarlo para su práctica personal.
  */
-export function StudioUpload({ onUploaded }: { onUploaded: () => void }) {
+export function StudioUpload({ style, onUploaded }: { style: DanceStyle; onUploaded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [rights, setRights] = useState(false);
@@ -31,7 +32,7 @@ export function StudioUpload({ onUploaded }: { onUploaded: () => void }) {
     setError(null);
     setProgress(0);
     try {
-      await uploadAudio(file, rights, setProgress);
+      await uploadAudio(file, rights, style, setProgress);
       setFile(null);
       setRights(false);
       if (inputRef.current) inputRef.current.value = '';

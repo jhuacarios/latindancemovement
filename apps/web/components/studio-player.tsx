@@ -6,6 +6,7 @@ import RegionsPlugin, { type Region } from 'wavesurfer.js/dist/plugins/regions.e
 import { countOfBeat, type SongEnergy, type SongStudy } from '@baile-latino/types';
 import { Button } from './ui';
 import { clsx } from './clsx';
+import { InstrumentLanes, SECTION_LABEL, SectionBar } from './studio-instruments';
 
 // Colores de BRANDING.md (wavesurfer pinta en canvas: necesita valores, no clases).
 const COLOR = {
@@ -192,6 +193,8 @@ export function StudioPlayer({
     phraseStarts.map((i) => beats[i]),
     currentMs,
   );
+  const currentSection = study.sections.find((s) => currentMs >= s.startMs && currentMs < s.endMs);
+  const seek = useCallback((ms: number) => wsRef.current?.setTime(ms / 1000), []);
 
   const seekToPhrase = useCallback(
     (delta: number) => {
@@ -283,6 +286,9 @@ export function StudioPlayer({
             {phraseIdx >= 0 ? phraseIdx + 1 : '–'}
             <span className="text-base text-neutral-600"> / {phraseStarts.length}</span>
           </div>
+          {currentSection && (
+            <div className="mt-1 text-sm font-semibold text-nectar">{SECTION_LABEL[currentSection.type]}</div>
+          )}
           <div className="mt-1 text-xs text-neutral-400">
             {study.bpm !== null ? `${Math.round(study.bpm)} BPM` : ''}
             {rate !== 1 && ` · a ${Math.round(rate * 100)} %`}
@@ -296,12 +302,36 @@ export function StudioPlayer({
           <p className="py-12 text-center text-sm text-neutral-500">Cargando audio…</p>
         )}
         {loadError && <p className="py-12 text-center text-sm text-red-300">{loadError}</p>}
+        {ready && durationMs > 0 && (study.sections.length > 0 || study.markers.length > 0) && (
+          <div className="mb-2">
+            <SectionBar
+              sections={study.sections}
+              markers={study.markers}
+              durationMs={durationMs}
+              currentMs={currentMs}
+              onSeek={seek}
+            />
+          </div>
+        )}
         <div ref={containerRef} className={clsx(!ready && 'h-0 overflow-hidden')} />
         {ready && study.energy && durationMs > 0 && (
           <div className="mt-1">
             <EnergyStrip energy={study.energy} durationMs={durationMs} />
             <div className="text-[10px] uppercase tracking-wide text-neutral-600">Energía</div>
           </div>
+        )}
+        {ready && study.instruments && durationMs > 0 && (
+          <InstrumentLanes instruments={study.instruments} durationMs={durationMs} currentMs={currentMs} />
+        )}
+        {ready && (study.instrumentsStatus === 'PENDING' || study.instrumentsStatus === 'PROCESSING') && (
+          <p className="mt-2 animate-pulse text-xs text-neutral-400">
+            Detectando instrumentos y secciones… (un par de minutos; ya puedes ir estudiando)
+          </p>
+        )}
+        {ready && study.instrumentsStatus === 'ERROR' && (
+          <p className="mt-2 text-xs text-red-300">
+            No se pudieron detectar los instrumentos. Prueba con “Re-analizar”.
+          </p>
         )}
       </div>
 

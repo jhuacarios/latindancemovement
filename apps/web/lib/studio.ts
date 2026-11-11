@@ -1,4 +1,4 @@
-import type { AudioFileSummary, SongStudy, StudioUploadTicket } from '@baile-latino/types';
+import type { AudioFileSummary, DanceStyle, SongStudy, StudioUploadTicket } from '@baile-latino/types';
 import { STUDIO_AUDIO_MIME_TYPES } from '@baile-latino/types';
 import { api, ApiError } from './api';
 
@@ -6,6 +6,9 @@ export const STUDIO_MAX_UPLOAD_MB = 30;
 
 /** Estados en los que el audio sigue en proceso (la lista se refresca sola). */
 export const IN_PROGRESS = new Set(['QUEUED', 'PROCESSING']);
+
+/** Estados en los que la detección de instrumentos sigue en curso. */
+export const INSTRUMENTS_IN_PROGRESS = new Set(['PENDING', 'PROCESSING']);
 
 /** Algunos navegadores no informan el tipo (o informan uno raro): se deduce de la extensión. */
 export function audioMimeType(file: File): string | null {
@@ -46,13 +49,14 @@ function putWithProgress(
 export async function uploadAudio(
   file: File,
   rightsAccepted: boolean,
+  style: DanceStyle,
   onProgress: (fraction: number) => void,
 ): Promise<AudioFileSummary> {
   const mimeType = audioMimeType(file);
   if (!mimeType) throw new ApiError(400, 'Formato no permitido. Usa MP3, M4A, WAV o FLAC.');
   const ticket = await api<StudioUploadTicket>('/studio/uploads', {
     method: 'POST',
-    body: { fileName: file.name, mimeType, sizeBytes: file.size, rightsAccepted },
+    body: { fileName: file.name, mimeType, sizeBytes: file.size, rightsAccepted, style },
   });
   await putWithProgress(ticket.uploadUrl, ticket.uploadHeaders, file, onProgress);
   return api<AudioFileSummary>(`/studio/audio-files/${ticket.audioFileId}/complete`, {
@@ -61,7 +65,7 @@ export async function uploadAudio(
 }
 
 export const studioApi = {
-  list: () => api<AudioFileSummary[]>('/studio/audio-files'),
+  list: (style: DanceStyle) => api<AudioFileSummary[]>(`/studio/audio-files?style=${style}`),
   get: (id: string) => api<SongStudy>(`/studio/audio-files/${id}`),
   playbackUrl: (id: string) => api<{ url: string }>(`/studio/audio-files/${id}/url`),
   setFirstBeat: (id: string, timeMs: number | null) =>

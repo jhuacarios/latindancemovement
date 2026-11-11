@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AudioFileStatus, AudioFileSummary } from '@baile-latino/types';
+import type { AudioFileStatus, AudioFileSummary, DanceStyle } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { IN_PROGRESS, formatDuration, studioApi } from '@/lib/studio';
 import { Card, DeleteIconButton, Spinner } from '@/components/ui';
@@ -32,7 +32,15 @@ function StatusBadge({ status }: { status: AudioFileStatus }) {
   );
 }
 
-function AudioRow({ file, onDelete }: { file: AudioFileSummary; onDelete: () => void }) {
+function AudioRow({
+  file,
+  href,
+  onDelete,
+}: {
+  file: AudioFileSummary;
+  href: string;
+  onDelete: () => void;
+}) {
   const ready = file.status === 'READY';
   const body = (
     <div className="min-w-0 flex-1">
@@ -48,7 +56,7 @@ function AudioRow({ file, onDelete }: { file: AudioFileSummary; onDelete: () => 
   return (
     <li className="flex items-center gap-3 rounded-lg border border-neutral-800 px-4 py-3">
       {ready ? (
-        <Link href={`/studio/${file.id}`} className="min-w-0 flex-1 hover:text-clave">
+        <Link href={href} className="min-w-0 flex-1 hover:text-clave">
           {body}
         </Link>
       ) : (
@@ -63,11 +71,23 @@ function AudioRow({ file, onDelete }: { file: AudioFileSummary; onDelete: () => 
   );
 }
 
-export default function StudioPage() {
+/** Lista + subida de canciones de un estilo del Estudio (Estudio → Bachata, Salsa…). */
+export function StudioLibrary({
+  style,
+  basePath,
+  title,
+  description,
+}: {
+  style: DanceStyle;
+  basePath: string;
+  title: string;
+  description: string;
+}) {
   const qc = useQueryClient();
+  const queryKey = ['studio', 'audio-files', style];
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['studio', 'audio-files'],
-    queryFn: studioApi.list,
+    queryKey,
+    queryFn: () => studioApi.list(style),
     // Mientras haya algo analizándose, refresca cada 3 s.
     refetchInterval: (q) =>
       q.state.data?.some((f) => IN_PROGRESS.has(f.status)) ? 3000 : false,
@@ -75,7 +95,7 @@ export default function StudioPage() {
 
   const remove = useMutation({
     mutationFn: studioApi.remove,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['studio', 'audio-files'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey }),
   });
 
   function confirmDelete(file: AudioFileSummary) {
@@ -87,15 +107,12 @@ export default function StudioPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">🎚️ Estudio</h1>
-        <p className="text-sm text-neutral-400">
-          Sube una bachata y estudia dónde cae el 1 de cada frase, su energía y sus cortes. Repite
-          tramos y baja la velocidad sin cambiar el tono.
-        </p>
+        <h1 className="text-2xl font-bold">{title}</h1>
+        <p className="text-sm text-neutral-400">{description}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <StudioUpload onUploaded={() => qc.invalidateQueries({ queryKey: ['studio', 'audio-files'] })} />
+        <StudioUpload style={style} onUploaded={() => qc.invalidateQueries({ queryKey })} />
 
         <section className="space-y-3">
           <h2 className="font-semibold">Mis canciones</h2>
@@ -111,7 +128,12 @@ export default function StudioPage() {
           {data && data.length > 0 && (
             <ul className="space-y-2">
               {data.map((f) => (
-                <AudioRow key={f.id} file={f} onDelete={() => confirmDelete(f)} />
+                <AudioRow
+                  key={f.id}
+                  file={f}
+                  href={`${basePath}/${f.id}`}
+                  onDelete={() => confirmDelete(f)}
+                />
               ))}
             </ul>
           )}

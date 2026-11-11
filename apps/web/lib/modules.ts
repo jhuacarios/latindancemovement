@@ -112,11 +112,13 @@ export const MODULES: AppModule[] = [
   {
     key: 'studio',
     title: 'Estudio',
-    description: 'Estudia tus bachatas: el 1 de cada frase, energía, loop y velocidad.',
+    description: 'Estudia tus canciones: el 1 de cada frase, instrumentos, secciones, loop y velocidad.',
     href: '/studio',
     icon: '🎚️',
     roles: ALL,
     status: 'ready',
+    // Una sección por estilo: cada uno tiene su conteo, sus instrumentos y sus reglas (salsa vendrá aparte).
+    children: [{ label: 'Bachata', key: 'studio.bachata', href: '/studio/bachata' }],
   },
   {
     key: 'sales',

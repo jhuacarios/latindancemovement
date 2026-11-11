@@ -4,18 +4,25 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/lib/api';
-import { IN_PROGRESS, formatDuration, studioApi } from '@/lib/studio';
+import { INSTRUMENTS_IN_PROGRESS, IN_PROGRESS, formatDuration, studioApi } from '@/lib/studio';
 import { Button, Card, Spinner } from '@/components/ui';
 import { StudioPlayer } from '@/components/studio-player';
 
-export default function StudioSongPage() {
+export default function StudioBachataSongPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
 
   const study = useQuery({
     queryKey: ['studio', 'audio-file', id],
     queryFn: () => studioApi.get(id),
-    refetchInterval: (q) => (q.state.data && IN_PROGRESS.has(q.state.data.status) ? 3000 : false),
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return false;
+      if (IN_PROGRESS.has(d.status)) return 3000;
+      // La detección de instrumentos tarda un par de minutos: se consulta más espaciado.
+      if (d.instrumentsStatus && INSTRUMENTS_IN_PROGRESS.has(d.instrumentsStatus)) return 10_000;
+      return false;
+    },
   });
 
   // La URL firmada dura 1 h: se reutiliza 50 min y no se refresca sola (cortaría la reproducción).
@@ -43,8 +50,8 @@ export default function StudioSongPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link href="/studio" className="text-sm text-neutral-400 hover:text-clave">
-            ← Estudio
+          <Link href="/studio/bachata" className="text-sm text-neutral-400 hover:text-clave">
+            ← Estudio · Bachata
           </Link>
           <h1 className="mt-1 truncate text-2xl font-bold">{s?.originalName ?? 'Canción'}</h1>
           {s && (
