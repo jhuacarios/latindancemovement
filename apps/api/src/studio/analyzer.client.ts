@@ -45,6 +45,11 @@ export class AnalyzerClient {
     return result;
   }
 
+  /** Separa y sube las pistas a las URLs firmadas que se le pasan. */
+  async stems(audioUrl: string, uploads: Record<string, string>): Promise<void> {
+    await this.post('/stems', { audioUrl, uploads }, INSTRUMENTS_TIMEOUT_MS);
+  }
+
   private async post(path: string, payload: unknown, timeoutMs: number): Promise<unknown> {
     if (!this.config) throw new Error('Estudio no está configurado.');
     const res = await fetch(`${this.config.analyzer.url}${path}`, {

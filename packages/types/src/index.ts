@@ -942,6 +942,13 @@ export const BEATS_PER_PHRASE = 8;
 export const INSTRUMENT_KEYS = ['vocals', 'bass', 'guitar', 'guira', 'bongo', 'tumba', 'other'] as const;
 export type InstrumentKey = (typeof INSTRUMENT_KEYS)[number];
 
+/** Pistas separadas que se guardan para el mezclador ("other" = teclados, sintes y el resto). */
+export const STEM_KEYS = ['vocals', 'guitar', 'bass', 'drums', 'other'] as const;
+export type StemKey = (typeof STEM_KEYS)[number];
+
+/** URLs firmadas (de corta duración) de las pistas del mezclador. */
+export type StemUrls = Record<StemKey, string>;
+
 /** Actividad 0..1 de cada instrumento, un valor cada `stepMs`. */
 export interface SongInstruments {
   stepMs: number;
@@ -999,6 +1006,8 @@ export interface SongStudy extends AudioFileSummary {
   /** Estado de la detección de instrumentos (null = no aplica a este estilo). */
   instrumentsStatus: AnalysisStatus | null;
   instruments: SongInstruments | null;
+  /** Pistas para el mezclador: null = no se pidieron (son privadas de este archivo). */
+  stemsStatus: AnalysisStatus | null;
   /**
    * Secciones: las del usuario y, si no marcó ninguna, las automáticas (derivadas
    * de los instrumentos, con `origin: 'AUTOMATICO'` e id `auto-N`).

@@ -11,9 +11,8 @@ interface AnalysisJob {
   audioFileId: string;
 }
 
-interface InstrumentsJob {
-  recordingId: string;
-}
+/** Trabajos pesados (separación con Demucs): de a uno, en la misma cola. */
+type HeavyJob = { kind: 'instruments'; recordingId: string } | { kind: 'stems'; audioFileId: string };
 
 /** redis://user:pass@host:port/db → opciones de ioredis (BullMQ exige maxRetriesPerRequest: null). */
 export function redisConnection(url: string): ConnectionOptions {
@@ -33,16 +32,17 @@ export function redisConnection(url: string): ConnectionOptions {
  * Colas del Estudio. Los workers corren en el mismo proceso de la API con
  * concurrencia 1: el trabajo pesado lo hace el analizador Python.
  *  - studio-analysis: pulso, frases y energía de cada archivo (segundos).
- *  - studio-instruments: separación de instrumentos de cada grabación (minutos);
- *    va aparte para que el estudio de la canción no espere a la separación.
+ *  - studio-instruments: trabajos con Demucs (minutos), de a uno para no saturar
+ *    la CPU: la actividad de instrumentos de cada grabación y las pistas del
+ *    mezclador que pide un usuario. Va aparte para que el estudio no espere.
  */
 @Injectable()
 export class StudioQueue implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StudioQueue.name);
   private queue?: Queue<AnalysisJob>;
   private worker?: Worker<AnalysisJob>;
-  private instrumentsQueue?: Queue<InstrumentsJob>;
-  private instrumentsWorker?: Worker<InstrumentsJob>;
+  private instrumentsQueue?: Queue<HeavyJob>;
+  private instrumentsWorker?: Worker<HeavyJob>;
 
   constructor(
     @Inject(STUDIO_CONFIG) private readonly config: StudioConfig | null,
@@ -73,21 +73,26 @@ export class StudioQueue implements OnModuleInit, OnModuleDestroy {
     });
     this.worker.on('error', (err) => this.logger.error(`Worker de análisis: ${err.message}`));
 
-    this.instrumentsQueue = new Queue<InstrumentsJob>(INSTRUMENTS_QUEUE_NAME, { connection });
-    this.instrumentsWorker = new Worker<InstrumentsJob>(
+    this.instrumentsQueue = new Queue<HeavyJob>(INSTRUMENTS_QUEUE_NAME, { connection });
+    this.instrumentsWorker = new Worker<HeavyJob>(
       INSTRUMENTS_QUEUE_NAME,
-      (job) => this.analysis.processInstruments(job.data.recordingId),
+      (job) =>
+        job.data.kind === 'stems'
+          ? this.analysis.processStems(job.data.audioFileId)
+          : this.analysis.processInstruments(job.data.recordingId),
       // La separación puede tardar varios minutos: el lock se renueva solo, pero con margen.
       { connection, concurrency: 1, lockDuration: 5 * 60 * 1000 },
     );
     this.instrumentsWorker.on('failed', (job, err) => {
       if (!job) return;
-      this.logger.warn(`Instrumentos ${job.data.recordingId} falló (intento ${job.attemptsMade}): ${err.message}`);
-      if (job.attemptsMade >= ATTEMPTS) {
-        void this.analysis.markInstrumentsFailed(
-          job.data.recordingId,
-          'No se pudieron detectar los instrumentos.',
-        );
+      const d = job.data;
+      const what = d.kind === 'stems' ? `Pistas ${d.audioFileId}` : `Instrumentos ${d.recordingId}`;
+      this.logger.warn(`${what} falló (intento ${job.attemptsMade}): ${err.message}`);
+      if (job.attemptsMade < ATTEMPTS) return;
+      if (d.kind === 'stems') {
+        void this.analysis.markStemsFailed(d.audioFileId, 'No se pudieron separar las pistas.');
+      } else {
+        void this.analysis.markInstrumentsFailed(d.recordingId, 'No se pudieron detectar los instrumentos.');
       }
     });
     this.instrumentsWorker.on('error', (err) => this.logger.error(`Worker de instrumentos: ${err.message}`));
@@ -117,11 +122,21 @@ export class StudioQueue implements OnModuleInit, OnModuleDestroy {
   /** Encola la separación de una grabación. Si ya está en cola o corriendo, no la duplica. */
   async enqueueInstruments(recordingId: string): Promise<void> {
     if (!this.instrumentsQueue) throw new Error('Cola de instrumentos no disponible.');
+    await this.addHeavy({ kind: 'instruments', recordingId }, `instruments-${recordingId}`);
+  }
+
+  /** Encola la separación en pistas de un archivo (mezclador). No la duplica. */
+  async enqueueStems(audioFileId: string): Promise<void> {
+    await this.addHeavy({ kind: 'stems', audioFileId }, `stems-${audioFileId}`);
+  }
+
+  private async addHeavy(data: HeavyJob, jobId: string): Promise<void> {
+    if (!this.instrumentsQueue) throw new Error('Cola de instrumentos no disponible.');
     await this.instrumentsQueue.add(
-      'instruments',
-      { recordingId },
+      data.kind,
+      data,
       {
-        jobId: `instruments-${recordingId}`,
+        jobId,
         attempts: ATTEMPTS,
         backoff: { type: 'exponential', delay: 30_000 },
         // Se borran al terminar: si no, el jobId fijo impediría volver a encolarla.

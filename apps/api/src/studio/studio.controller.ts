@@ -50,6 +50,19 @@ export class StudioController {
     return this.studio.reanalyze(user, id);
   }
 
+  /** Pide separar el audio en pistas para el mezclador (tarda un par de minutos). */
+  @Post('audio-files/:id/stems')
+  @HttpCode(200)
+  requestStems(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.studio.requestStems(user, id);
+  }
+
+  /** URLs firmadas de las pistas del mezclador. */
+  @Get('audio-files/:id/stems')
+  stemUrls(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.studio.stemUrls(user, id);
+  }
+
   /** Corrige el "1" (o lo vuelve al automático con `timeMs: null`). */
   @Patch('audio-files/:id/first-beat')
   setFirstBeat(

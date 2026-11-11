@@ -54,6 +54,12 @@ class FakeStorage {
   async analyzerUrl(key: string) {
     return `memory://analyze/${key}`;
   }
+  async analyzerUploadUrl(key: string) {
+    return `memory://upload/${key}`;
+  }
+  has(key: string) {
+    return this.objects.has(key);
+  }
   async size(key: string) {
     return this.objects.get(key) ?? null;
   }
@@ -113,6 +119,10 @@ class FakeAnalyzer {
     this.instrumentsCalls++;
     return instrumentsResult();
   }
+  stemUploads: Record<string, string> = {};
+  async stems(_audioUrl: string, uploads: Record<string, string>) {
+    this.stemUploads = uploads;
+  }
 }
 
 /** Cola simulada: procesa en línea (sin Redis), incluida la detección de instrumentos. */
@@ -121,6 +131,9 @@ class InlineQueue {
   async enqueue(id: string) {
     const recordingId = await this.analysis.process(id);
     if (recordingId) await this.analysis.processInstruments(recordingId);
+  }
+  async enqueueStems(id: string) {
+    await this.analysis.processStems(id);
   }
 }
 
@@ -274,6 +287,32 @@ describe('Estudio (e2e)', () => {
     const calls = analyzer.instrumentsCalls;
     await uploadAndAnalyze(owner().token, 'otra-copia.mp3');
     expect(analyzer.instrumentsCalls).toBe(calls);
+  });
+
+  it('mezclador: separa en pistas a pedido, privadas del dueño, y se borran con el audio', async () => {
+    const study = await uploadAndAnalyze(owner().token);
+    expect(study.stemsStatus).toBeNull();
+    expect((await call('GET', `/audio-files/${study.id}/stems`, owner().token)).statusCode).toBe(409);
+
+    const req = await call('POST', `/audio-files/${study.id}/stems`, owner().token);
+    expect(req.statusCode).toBe(200);
+    expect(Object.keys(analyzer.stemUploads).sort()).toEqual(['bass', 'drums', 'guitar', 'other', 'vocals']);
+    for (const url of Object.values(analyzer.stemUploads)) storage.put(url.replace('memory://upload/', ''), MB);
+
+    const after = (await call('GET', `/audio-files/${study.id}`, owner().token)).json<SongStudy>();
+    expect(after.stemsStatus).toBe('DONE');
+    const urls = await call('GET', `/audio-files/${study.id}/stems`, owner().token);
+    expect(urls.statusCode).toBe(200);
+    expect(Object.keys(urls.json()).sort()).toEqual(['bass', 'drums', 'guitar', 'other', 'vocals']);
+
+    // Otro usuario no ve ni pide las pistas.
+    expect((await call('GET', `/audio-files/${study.id}/stems`, other().token)).statusCode).toBe(404);
+    expect((await call('POST', `/audio-files/${study.id}/stems`, other().token)).statusCode).toBe(404);
+
+    await call('DELETE', `/audio-files/${study.id}`, owner().token);
+    for (const url of Object.values(analyzer.stemUploads)) {
+      expect(storage.has(url.replace('memory://upload/', ''))).toBe(false);
+    }
   });
 
   it('salsa: no usa los instrumentos de bachata y la lista filtra por estilo', async () => {

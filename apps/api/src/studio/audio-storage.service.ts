@@ -15,6 +15,8 @@ import { STUDIO_CONFIG, type StudioConfig } from './studio.config';
 const UPLOAD_URL_TTL_SEC = 15 * 60;
 const PLAYBACK_URL_TTL_SEC = 60 * 60;
 const ANALYZER_URL_TTL_SEC = 15 * 60;
+/** La separación tarda un par de minutos antes de subir: margen amplio. */
+const ANALYZER_UPLOAD_URL_TTL_SEC = 60 * 60;
 
 /**
  * Storage S3-compatible del audio de Estudio (Cloudflare R2 en prod, SeaweedFS en
@@ -86,6 +88,15 @@ export class AudioStorageService implements OnModuleInit {
     );
   }
 
+  /** URL de subida para el analizador (pistas del mezclador). */
+  analyzerUploadUrl(key: string, mimeType: string): Promise<string> {
+    return getSignedUrl(
+      this.analyzerSigner,
+      new PutObjectCommand({ Bucket: this.config.s3.bucket, Key: key, ContentType: mimeType }),
+      { expiresIn: ANALYZER_UPLOAD_URL_TTL_SEC },
+    );
+  }
+
   /** Tamaño del objeto subido, o null si no existe. */
   async size(key: string): Promise<number | null> {
     try {
@@ -102,3 +113,10 @@ export class AudioStorageService implements OnModuleInit {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.config.s3.bucket, Key: key }));
   }
 }
+
+/** Dónde se guarda cada pista del mezclador: junto al audio del usuario (mismo prefijo privado). */
+export function stemStorageKey(audioKey: string, stem: string): string {
+  return `${audioKey}.stems/${stem}.m4a`;
+}
+
+export const STEM_MIME_TYPE = 'audio/mp4';

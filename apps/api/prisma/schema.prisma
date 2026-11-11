@@ -415,6 +415,8 @@ model AudioFile {
   recording         RecordingAnalysis? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
   alignOffsetMs     Int                @default(0) // tiempo en ESTE archivo = tiempo en la grabación + alignOffsetMs
   firstBeatOffsetMs Int? // el "1" corregido por el usuario (null = el automático)
+  stemsStatus       String? // pistas para el mezclador (AnalysisStatus); null = no se pidieron
+  stemsError        String?
   rightsAcceptedAt  DateTime // declaró tener derecho a usar el archivo para su práctica
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt

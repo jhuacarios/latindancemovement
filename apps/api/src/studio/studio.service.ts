@@ -23,12 +23,14 @@ import {
   type SongMarkerType,
   type SongSectionType,
   type SongStudy,
+  type StemUrls,
   type StudioUploadTicket,
+  STEM_KEYS,
 } from '@baile-latino/types';
 import type { AuthUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { TracksService } from '../music/tracks/tracks.service';
-import { AudioStorageService } from './audio-storage.service';
+import { AudioStorageService, stemStorageKey } from './audio-storage.service';
 import { StudioAnalysisService } from './studio-analysis.service';
 import { StudioQueue } from './studio.queue';
 import { STUDIO_CONFIG, type StudioConfig } from './studio.config';
@@ -140,6 +142,31 @@ export class StudioService {
     return this.toSummary(updated);
   }
 
+  /** Pide las pistas del mezclador. Idempotente mientras están en curso o listas. */
+  async requestStems(user: AuthUser, id: string): Promise<SongStudy> {
+    const file = await this.ownedFull(user, id);
+    if (file.status !== 'READY') throw new ConflictException('Espera a que termine el análisis.');
+    if (file.stemsStatus === 'DONE' || file.stemsStatus === 'PENDING' || file.stemsStatus === 'PROCESSING') {
+      return this.toStudy(file);
+    }
+    const updated = await this.prisma.audioFile.update({
+      where: { id: file.id },
+      data: { stemsStatus: 'PENDING', stemsError: null },
+      include: FILE_FULL,
+    });
+    await this.queue.enqueueStems(file.id);
+    return this.toStudy(updated);
+  }
+
+  async stemUrls(user: AuthUser, id: string): Promise<StemUrls> {
+    const file = await this.owned(user, id);
+    if (file.stemsStatus !== 'DONE') throw new ConflictException('Las pistas todavía no están listas.');
+    const entries = await Promise.all(
+      STEM_KEYS.map(async (k) => [k, await this.storage.playbackUrl(stemStorageKey(file.storageKey, k))]),
+    );
+    return Object.fromEntries(entries) as StemUrls;
+  }
+
   /** Corrige el "1": se ajusta al beat más cercano y toda la grilla de frases se recalcula. */
   async setFirstBeat(user: AuthUser, id: string, dto: SetFirstBeatDto): Promise<SongStudy> {
     const file = await this.ownedFull(user, id);
@@ -167,11 +194,17 @@ export class StudioService {
   // --- helpers -------------------------------------------------------------
 
   private async removeFile(file: AudioFile) {
-    try {
-      await this.storage.remove(file.storageKey);
-    } catch (err) {
-      // No bloquea el borrado del usuario; queda en el log para limpiar a mano.
-      this.logger.error(`No se pudo borrar ${file.storageKey} del storage: ${(err as Error).message}`);
+    const keys = [
+      file.storageKey,
+      ...(file.stemsStatus ? STEM_KEYS.map((k) => stemStorageKey(file.storageKey, k)) : []),
+    ];
+    for (const key of keys) {
+      try {
+        await this.storage.remove(key);
+      } catch (err) {
+        // No bloquea el borrado del usuario; queda en el log para limpiar a mano.
+        this.logger.error(`No se pudo borrar ${key} del storage: ${(err as Error).message}`);
+      }
     }
     await this.prisma.audioFile.delete({ where: { id: file.id } });
     if (file.recordingId) await this.analysis.deleteRecordingIfOrphan(file.recordingId);
@@ -279,6 +312,7 @@ export class StudioService {
       energy,
       instrumentsStatus: usesInstruments ? (rec.instrumentsStatus as AnalysisStatus) : null,
       instruments,
+      stemsStatus: (file.stemsStatus as AnalysisStatus | null) ?? null,
       sections,
       markers,
     };

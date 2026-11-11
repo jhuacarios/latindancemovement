@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { AudioStorageService } from './audio-storage.service';
+import { STEM_KEYS } from '@baile-latino/types';
+import { AudioStorageService, STEM_MIME_TYPE, stemStorageKey } from './audio-storage.service';
 import { AnalyzerClient, AnalyzerFileError } from './analyzer.client';
 import type { AnalyzerResultDto } from './dto/analyzer-result.dto';
 import {
@@ -199,6 +200,47 @@ export class StudioAnalysisService {
       },
     });
     this.logger.log(`Instrumentos listos: grabación ${recordingId}`);
+  }
+
+  /** Separa el archivo de un usuario en pistas para el mezclador (privadas de ese archivo). */
+  async processStems(audioFileId: string): Promise<void> {
+    const file = await this.prisma.audioFile.findUnique({ where: { id: audioFileId } });
+    if (!file || file.stemsStatus === null) return; // borrado mientras esperaba
+
+    await this.prisma.audioFile.update({
+      where: { id: file.id },
+      data: { stemsStatus: 'PROCESSING', stemsError: null },
+    });
+    const uploads = Object.fromEntries(
+      await Promise.all(
+        STEM_KEYS.map(async (k) => [
+          k,
+          await this.storage.analyzerUploadUrl(stemStorageKey(file.storageKey, k), STEM_MIME_TYPE),
+        ]),
+      ),
+    ) as Record<string, string>;
+
+    try {
+      await this.analyzer.stems(await this.storage.analyzerUrl(file.storageKey), uploads);
+    } catch (err) {
+      if (err instanceof AnalyzerFileError) {
+        await this.markStemsFailed(file.id, err.message);
+        return;
+      }
+      throw err; // BullMQ reintenta
+    }
+    await this.prisma.audioFile.updateMany({
+      where: { id: file.id },
+      data: { stemsStatus: 'DONE', stemsError: null },
+    });
+    this.logger.log(`Pistas listas: archivo ${file.id}`);
+  }
+
+  async markStemsFailed(audioFileId: string, message: string): Promise<void> {
+    await this.prisma.audioFile.updateMany({
+      where: { id: audioFileId },
+      data: { stemsStatus: 'ERROR', stemsError: message.slice(0, 500) },
+    });
   }
 
   async markInstrumentsFailed(recordingId: string, message: string): Promise<void> {
