@@ -82,18 +82,45 @@ function analyzerResult(overrides: Partial<AnalyzerResultDto> = {}): AnalyzerRes
 }
 
 /** Analizador simulado: lo que se le encole a `next` es lo que devuelve. */
+/** Actividad simulada: la primera frase sin percusión (intro), el resto con voz y percusión. */
+function instrumentsResult() {
+  const steps = 128;
+  const level = (fromStep: number) => Array.from({ length: steps }, (_, i) => (i >= fromStep ? 0.8 : 0));
+  const intro = 18; // 4,5 s ≈ fin de la primera frase (beats 400..4400 ms)
+  return {
+    analyzerVersion: '0.1.1',
+    durationMs: 32_000,
+    stepMs: 250,
+    tracks: {
+      vocals: new Array(steps).fill(0.8),
+      guitar: new Array(steps).fill(0.6),
+      bass: level(intro),
+      guira: level(intro),
+      bongo: level(intro),
+      tumba: level(intro),
+      other: new Array(steps).fill(0),
+    },
+  };
+}
+
 class FakeAnalyzer {
   next: () => AnalyzerResultDto = () => analyzerResult();
+  instrumentsCalls = 0;
   async analyze() {
     return this.next();
   }
+  async instruments() {
+    this.instrumentsCalls++;
+    return instrumentsResult();
+  }
 }
 
-/** Cola simulada: procesa en línea (sin Redis). */
+/** Cola simulada: procesa en línea (sin Redis), incluida la detección de instrumentos. */
 class InlineQueue {
   constructor(private readonly analysis: StudioAnalysisService) {}
   async enqueue(id: string) {
-    await this.analysis.process(id);
+    const recordingId = await this.analysis.process(id);
+    if (recordingId) await this.analysis.processInstruments(recordingId);
   }
 }
 
@@ -179,12 +206,13 @@ describe('Estudio (e2e)', () => {
     });
   }
 
-  async function uploadAndAnalyze(token: string, name = 'bachata.mp3'): Promise<SongStudy> {
+  async function uploadAndAnalyze(token: string, name = 'bachata.mp3', style?: string): Promise<SongStudy> {
     const ticket = await call('POST', '/uploads', token, {
       fileName: name,
       mimeType: 'audio/mpeg',
       sizeBytes: 4 * MB,
       rightsAccepted: true,
+      ...(style ? { style } : {}),
     });
     expect(ticket.statusCode).toBe(201);
     const { audioFileId, uploadUrl } = ticket.json<StudioUploadTicket>();
@@ -229,6 +257,37 @@ describe('Estudio (e2e)', () => {
 
     const list = await call('GET', '/audio-files', owner().token);
     expect(list.json<{ id: string }[]>().map((f) => f.id)).toContain(study.id);
+  });
+
+  it('bachata: detecta instrumentos y propone secciones automáticas', async () => {
+    const study = await uploadAndAnalyze(owner().token);
+    expect(study.style).toBe('BACHATA');
+    expect(study.instrumentsStatus).toBe('DONE');
+    expect(study.instruments?.tracks.vocals).toHaveLength(128);
+    expect(study.sections.map((x) => [x.type, x.origin])).toEqual([
+      ['INTRO', 'AUTOMATICO'],
+      ['DERECHO', 'AUTOMATICO'],
+    ]);
+    expect(study.sections[1].startMs).toBe(4400);
+
+    // La grabación ya tiene instrumentos: otro archivo igual no vuelve a separar.
+    const calls = analyzer.instrumentsCalls;
+    await uploadAndAnalyze(owner().token, 'otra-copia.mp3');
+    expect(analyzer.instrumentsCalls).toBe(calls);
+  });
+
+  it('salsa: no usa los instrumentos de bachata y la lista filtra por estilo', async () => {
+    const study = await uploadAndAnalyze(owner().token, 'salsa.mp3', 'SALSA');
+    expect(study.style).toBe('SALSA');
+    expect(study.instrumentsStatus).toBeNull();
+    expect(study.instruments).toBeNull();
+    expect(study.sections).toEqual([]);
+
+    const salsa = (await call('GET', '/audio-files?style=SALSA', owner().token)).json<{ id: string }[]>();
+    const bachata = (await call('GET', '/audio-files?style=BACHATA', owner().token)).json<{ id: string }[]>();
+    expect(salsa.map((f) => f.id)).toEqual([study.id]);
+    expect(bachata.map((f) => f.id)).not.toContain(study.id);
+    expect((await call('GET', '/audio-files?style=TANGO', owner().token)).statusCode).toBe(400);
   });
 
   it('corrige el "1": se ajusta al beat más cercano y recalcula, y se puede volver al automático', async () => {

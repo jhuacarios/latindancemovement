@@ -11,8 +11,13 @@ import type { AudioFile, RecordingAnalysis, SongMarker, SongSection } from '@pri
 import {
   nearestBeatIndex,
   phraseStartIndexes,
+  type AnalysisStatus,
   type AudioFileStatus,
   type AudioFileSummary,
+  type DanceStyle,
+  type SongInstruments,
+  type SongMarkerDto,
+  type SongSectionDto,
   type MarkOrigin,
   type SongEnergy,
   type SongMarkerType,
@@ -28,7 +33,8 @@ import { StudioAnalysisService } from './studio-analysis.service';
 import { StudioQueue } from './studio.queue';
 import { STUDIO_CONFIG, type StudioConfig } from './studio.config';
 import type { CreateUploadDto, SetFirstBeatDto } from './dto/studio.dto';
-import { shiftEnergy, shiftTimes } from './timeline.util';
+import { shiftEnergy, shiftInstruments, shiftTimes } from './timeline.util';
+import { deriveBachataSections } from './bachata-sections.util';
 
 type FileWithRecording = AudioFile & { recording: RecordingAnalysis | null };
 type FileFull = FileWithRecording & { sections: SongSection[]; markers: SongMarker[] };
@@ -66,6 +72,7 @@ export class StudioService {
         userId: user.id,
         trackId: dto.trackId ?? null,
         storageKey: `audio/${user.id}/${randomUUID()}`,
+        style: dto.style ?? 'BACHATA',
         originalName: dto.fileName,
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
@@ -100,9 +107,9 @@ export class StudioService {
     return this.toSummary(updated);
   }
 
-  async list(user: AuthUser): Promise<AudioFileSummary[]> {
+  async list(user: AuthUser, style?: DanceStyle): Promise<AudioFileSummary[]> {
     const files = await this.prisma.audioFile.findMany({
-      where: { userId: user.id, status: { not: 'UPLOADING' } },
+      where: { userId: user.id, status: { not: 'UPLOADING' }, ...(style ? { style } : {}) },
       include: { recording: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -198,6 +205,7 @@ export class StudioService {
   private toSummary(file: FileWithRecording): AudioFileSummary {
     return {
       id: file.id,
+      style: file.style as DanceStyle,
       originalName: file.originalName,
       status: file.status as AudioFileStatus,
       error: file.error,
@@ -220,6 +228,45 @@ export class StudioService {
     const autoFirst = rec?.firstBeatOffsetMs != null ? rec.firstBeatOffsetMs + align : null;
     const firstBeatOffsetMs = file.firstBeatOffsetMs ?? autoFirst;
     const energy = rec?.energy ? shiftEnergy(rec.energy as unknown as SongEnergy, align) : null;
+    const phraseStarts = phraseStartIndexes(beatsMs, firstBeatOffsetMs);
+
+    // Instrumentos: por ahora solo el estudio de bachata los usa.
+    const usesInstruments = file.style === 'BACHATA' && rec !== null;
+    const instruments =
+      usesInstruments && rec.instrumentsStatus === 'DONE' && rec.instruments
+        ? shiftInstruments(rec.instruments as unknown as SongInstruments, align)
+        : null;
+
+    const sections: SongSectionDto[] = file.sections.map((s) => ({
+      id: s.id,
+      type: s.type as SongSectionType,
+      startMs: s.startMs,
+      endMs: s.endMs,
+      label: s.label,
+      origin: s.origin as MarkOrigin,
+    }));
+    const markers: SongMarkerDto[] = file.markers.map((m) => ({
+      id: m.id,
+      type: m.type as SongMarkerType,
+      timeMs: m.timeMs,
+      text: m.text,
+      origin: m.origin as MarkOrigin,
+    }));
+
+    // Secciones automáticas: se calculan al vuelo (siguen al "1" si el usuario lo corrige)
+    // y solo si el usuario no marcó las suyas.
+    if (instruments && file.durationMs) {
+      const auto = deriveBachataSections(beatsMs, phraseStarts, instruments, file.durationMs);
+      if (sections.length === 0) {
+        sections.push(
+          ...auto.sections.map((s, i) => ({ id: `auto-${i}`, ...s, label: null, origin: 'AUTOMATICO' as const })),
+        );
+      }
+      markers.push(
+        ...auto.markers.map((m, i) => ({ id: `auto-${i}`, ...m, text: null, origin: 'AUTOMATICO' as const })),
+      );
+      markers.sort((a, b) => a.timeMs - b.timeMs);
+    }
 
     return {
       ...this.toSummary(file),
@@ -228,23 +275,12 @@ export class StudioService {
       downbeatsMs,
       firstBeatOffsetMs,
       firstBeatCorrected: file.firstBeatOffsetMs !== null,
-      phraseStartIndexes: phraseStartIndexes(beatsMs, firstBeatOffsetMs),
+      phraseStartIndexes: phraseStarts,
       energy,
-      sections: file.sections.map((s) => ({
-        id: s.id,
-        type: s.type as SongSectionType,
-        startMs: s.startMs,
-        endMs: s.endMs,
-        label: s.label,
-        origin: s.origin as MarkOrigin,
-      })),
-      markers: file.markers.map((m) => ({
-        id: m.id,
-        type: m.type as SongMarkerType,
-        timeMs: m.timeMs,
-        text: m.text,
-        origin: m.origin as MarkOrigin,
-      })),
+      instrumentsStatus: usesInstruments ? (rec.instrumentsStatus as AnalysisStatus) : null,
+      instruments,
+      sections,
+      markers,
     };
   }
 }

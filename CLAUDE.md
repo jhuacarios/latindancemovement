@@ -558,6 +558,7 @@ región (qué suena dónde — el moat de "data premium DJs").
 - Audio de usuarios en bucket S3-compatible PRIVADO (R2 en prod, SeaweedFS en local), solo por URL firmada. Nunca compartir audio entre usuarios.
 - `RecordingAnalysis` es compartido por huella acústica; la capa del usuario (`AudioFile`, secciones, marcas, el "1" corregido) es privada.
 - Subir `ANALYZER_VERSION` en cada cambio que altere resultados.
+- Estudio se divide **por estilo** (`AudioFile.style`, menú Estudio → Bachata; Salsa tendrá sus propias reglas). La actividad de instrumentos (Demucs, cola `studio-instruments`) se guarda en `RecordingAnalysis` (solo datos, compartible); las secciones de bachata se derivan al vuelo en `bachata-sections.util.ts`.
 - Tests API: `pnpm --filter @baile-latino/api test` y `test:e2e` (requiere `docker compose up -d db`).
 
 ---

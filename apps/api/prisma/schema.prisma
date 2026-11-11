@@ -367,21 +367,25 @@ model ChatMessage {
  * borra cuando ya ningún AudioFile lo referencia.
  */
 model RecordingAnalysis {
-  id                String   @id @default(cuid())
-  status            String   @default("PENDING") // AnalysisStatus: PENDING | PROCESSING | DONE | ERROR
-  analyzerVersion   String?
-  durationMs        Int?
-  fingerprint       Json? // number[] (Chromaprint crudo)
-  bpm               Float?
-  firstBeatOffsetMs Int? // el "1" automático de la frase de 8
-  beatsMs           Json? // number[]
-  downbeatsMs       Json? // number[]
-  energy            Json? // { stepMs, values }
-  sections          Json? // automáticas [{ type, startMs, endMs }] (Fase 2)
-  markers           Json? // automáticas [{ type, timeMs }] (Fase 2)
-  error             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  status             String   @default("PENDING") // AnalysisStatus: PENDING | PROCESSING | DONE | ERROR
+  analyzerVersion    String?
+  durationMs         Int?
+  fingerprint        Json? // number[] (Chromaprint crudo)
+  bpm                Float?
+  firstBeatOffsetMs  Int? // el "1" automático de la frase de 8
+  beatsMs            Json? // number[]
+  downbeatsMs        Json? // number[]
+  energy             Json? // { stepMs, values }
+  sections           Json? // automáticas [{ type, startMs, endMs }] (Fase 2)
+  markers            Json? // automáticas [{ type, timeMs }] (Fase 2)
+  error              String?
+  instrumentsStatus  String   @default("PENDING") // AnalysisStatus
+  instrumentsVersion String? // versión del analizador que midió los instrumentos
+  instruments        Json? // { stepMs, tracks: { vocals: number[], ... } } (SongInstruments)
+  instrumentsError   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   audioFiles AudioFile[]
 
@@ -400,6 +404,7 @@ model AudioFile {
   trackId           String? // vínculo opcional con el catálogo
   track             Track?             @relation(fields: [trackId], references: [id], onDelete: SetNull)
   storageKey        String             @unique
+  style             String             @default("BACHATA") // DanceStyle: define las reglas de secciones
   originalName      String
   mimeType          String
   sizeBytes         Int

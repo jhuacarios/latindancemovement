@@ -10,7 +10,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { STUDIO_AUDIO_MIME_TYPES } from '@baile-latino/types';
+import { DANCE_STYLES, STUDIO_AUDIO_MIME_TYPES, type DanceStyle } from '@baile-latino/types';
 
 export class CreateUploadDto {
   @IsString()
@@ -29,6 +29,11 @@ export class CreateUploadDto {
   @IsString()
   trackId?: string;
 
+  /** Estilo con que se va a estudiar (Estudio → Bachata / Salsa). Por defecto bachata. */
+  @IsOptional()
+  @IsIn(DANCE_STYLES)
+  style?: DanceStyle;
+
   /** El usuario declara tener derecho a usar el archivo para su práctica personal. */
   @IsBoolean()
   @Equals(true, { message: 'Debes declarar que tienes derecho a usar este archivo.' })
@@ -41,4 +46,10 @@ export class SetFirstBeatDto {
   @IsInt()
   @Min(0)
   timeMs!: number | null;
+}
+
+export class ListAudioFilesQueryDto {
+  @IsOptional()
+  @IsIn(DANCE_STYLES)
+  style?: DanceStyle;
 }

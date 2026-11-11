@@ -3,6 +3,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsObject,
   IsNumber,
   IsPositive,
   IsString,
@@ -10,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  type InstrumentKey,
   SONG_MARKER_TYPES,
   SONG_SECTION_TYPES,
   type SongMarkerType,
@@ -51,4 +53,12 @@ export class AnalyzerResultDto {
   markers!: AnalyzerMarkerDto[];
 
   @IsArray() @IsInt({ each: true }) fingerprint!: number[];
+}
+
+/** Respuesta de /instruments. Las pistas se validan una por una en AnalyzerClient. */
+export class AnalyzerInstrumentsDto {
+  @IsString() analyzerVersion!: string;
+  @IsInt() @Min(0) durationMs!: number;
+  @IsInt() @IsPositive() stepMs!: number;
+  @IsObject() tracks!: Record<InstrumentKey, number[]>;
 }

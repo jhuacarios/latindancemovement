@@ -1,4 +1,4 @@
-import { shiftEnergy, shiftTimes } from './timeline.util';
+import { shiftEnergy, shiftInstruments, shiftTimes } from './timeline.util';
 
 describe('shiftTimes', () => {
   it('corre los tiempos y descarta los negativos o pasados del final', () => {
@@ -19,6 +19,15 @@ describe('shiftEnergy', () => {
   });
 
   it('desfases menores a medio paso no cambian la curva', () => {
-    expect(shiftEnergy(energy, 100)).toBe(energy);
+    expect(shiftEnergy(energy, 100)).toEqual(energy);
+  });
+});
+
+describe('shiftInstruments', () => {
+  it('corre todas las pistas igual', () => {
+    const out = shiftInstruments({ stepMs: 250, tracks: { vocals: [1, 2], bass: [3, 4] } as never }, 250);
+    expect(out.tracks).toEqual({ vocals: [0, 1, 2], bass: [0, 3, 4] });
+    const back = shiftInstruments(out, -250);
+    expect(back.tracks).toEqual({ vocals: [1, 2], bass: [3, 4] });
   });
 });

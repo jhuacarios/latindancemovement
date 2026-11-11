@@ -11,7 +11,7 @@ import {
   alignOffsetMs,
   compareFingerprints,
 } from './fingerprint.util';
-import { shiftEnergy, shiftTimes } from './timeline.util';
+import { shiftEnergy, shiftInstruments, shiftTimes } from './timeline.util';
 
 interface RecordingMatch {
   id: string;
@@ -19,6 +19,9 @@ interface RecordingMatch {
   beatsMs: number[];
   coarseOffsetMs: number;
 }
+
+/** Estilos cuyo estudio usa la actividad de instrumentos (salsa tendrá sus propias reglas). */
+const STYLES_WITH_INSTRUMENTS = new Set(['BACHATA']);
 
 /** Compara versiones "x.y.z". */
 function isNewerVersion(a: string, b: string | null): boolean {
@@ -47,9 +50,13 @@ export class StudioAnalysisService {
     private readonly analyzer: AnalyzerClient,
   ) {}
 
-  async process(audioFileId: string): Promise<void> {
+  /**
+   * Analiza un archivo. Devuelve el id de la grabación si hay que (re)detectar
+   * sus instrumentos (lo encola quien llama, para no acoplar este servicio a la cola).
+   */
+  async process(audioFileId: string): Promise<string | null> {
     const file = await this.prisma.audioFile.findUnique({ where: { id: audioFileId } });
-    if (!file) return; // lo borraron mientras esperaba en la cola
+    if (!file) return null; // lo borraron mientras esperaba en la cola
 
     await this.prisma.audioFile.update({
       where: { id: file.id },
@@ -63,7 +70,7 @@ export class StudioAnalysisService {
       if (err instanceof AnalyzerFileError) {
         // Problema del archivo: reintentar no sirve.
         await this.markFailed(file.id, err.message);
-        return;
+        return null;
       }
       throw err; // BullMQ reintenta
     }
@@ -129,6 +136,76 @@ export class StudioAnalysisService {
       `Análisis listo: archivo ${file.id} → grabación ${recordingId}` +
         (match ? ` (reutilizada, desfase ${align} ms)` : ' (nueva)'),
     );
+
+    if (!STYLES_WITH_INSTRUMENTS.has(file.style)) return null;
+    return (await this.needsInstruments(recordingId, result.analyzerVersion)) ? recordingId : null;
+  }
+
+  /** ¿Falta (o está desactualizada) la actividad de instrumentos de la grabación? La deja en PENDING. */
+  private async needsInstruments(recordingId: string, analyzerVersion: string): Promise<boolean> {
+    const rec = await this.prisma.recordingAnalysis.findUnique({
+      where: { id: recordingId },
+      select: { instrumentsStatus: true, instrumentsVersion: true },
+    });
+    if (!rec || rec.instrumentsStatus === 'PROCESSING') return false;
+    const needed =
+      rec.instrumentsStatus !== 'DONE' || isNewerVersion(analyzerVersion, rec.instrumentsVersion);
+    if (needed) {
+      await this.prisma.recordingAnalysis.update({
+        where: { id: recordingId },
+        data: { instrumentsStatus: 'PENDING', instrumentsError: null },
+      });
+    }
+    return needed;
+  }
+
+  /**
+   * Detecta los instrumentos de una grabación (lo llama el worker de instrumentos).
+   * Usa cualquier archivo listo de esa grabación solo para que el analizador lo
+   * lea; el resultado (datos, no audio) queda en la grabación compartida.
+   */
+  async processInstruments(recordingId: string): Promise<void> {
+    const file = await this.prisma.audioFile.findFirst({
+      where: { recordingId, status: 'READY' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!file) return; // la grabación se quedó sin archivos
+
+    await this.prisma.recordingAnalysis.updateMany({
+      where: { id: recordingId },
+      data: { instrumentsStatus: 'PROCESSING', instrumentsError: null },
+    });
+
+    let result;
+    try {
+      result = await this.analyzer.instruments(await this.storage.analyzerUrl(file.storageKey));
+    } catch (err) {
+      if (err instanceof AnalyzerFileError) {
+        await this.markInstrumentsFailed(recordingId, err.message);
+        return;
+      }
+      throw err; // BullMQ reintenta
+    }
+
+    // El archivo usado puede estar desfasado respecto de la grabación: se lleva a su línea de tiempo.
+    const instruments = shiftInstruments({ stepMs: result.stepMs, tracks: result.tracks }, -file.alignOffsetMs);
+    await this.prisma.recordingAnalysis.updateMany({
+      where: { id: recordingId },
+      data: {
+        instrumentsStatus: 'DONE',
+        instrumentsVersion: result.analyzerVersion,
+        instruments: instruments as unknown as Prisma.InputJsonValue,
+        instrumentsError: null,
+      },
+    });
+    this.logger.log(`Instrumentos listos: grabación ${recordingId}`);
+  }
+
+  async markInstrumentsFailed(recordingId: string, message: string): Promise<void> {
+    await this.prisma.recordingAnalysis.updateMany({
+      where: { id: recordingId },
+      data: { instrumentsStatus: 'ERROR', instrumentsError: message.slice(0, 500) },
+    });
   }
 
   async markFailed(audioFileId: string, message: string): Promise<void> {

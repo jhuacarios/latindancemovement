@@ -1,10 +1,10 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/auth.types';
 import { StudioService } from './studio.service';
 import { StudioEnabledGuard } from './studio-enabled.guard';
-import { CreateUploadDto, SetFirstBeatDto } from './dto/studio.dto';
+import { CreateUploadDto, ListAudioFilesQueryDto, SetFirstBeatDto } from './dto/studio.dto';
 
 /**
  * Módulo Estudio: el usuario sube su audio y estudia la canción (grilla de
@@ -29,8 +29,8 @@ export class StudioController {
   }
 
   @Get('audio-files')
-  list(@CurrentUser() user: AuthUser) {
-    return this.studio.list(user);
+  list(@CurrentUser() user: AuthUser, @Query() query: ListAudioFilesQueryDto) {
+    return this.studio.list(user, query.style);
   }
 
   @Get('audio-files/:id')

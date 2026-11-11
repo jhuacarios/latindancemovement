@@ -905,6 +905,7 @@ export const SONG_SECTION_TYPES = [
   'INTRO',
   'VERSO',
   'CORO',
+  'DERECHO',
   'MAJAO',
   'MAMBO',
   'PUENTE',
@@ -934,9 +935,24 @@ export const STUDIO_AUDIO_MIME_TYPES = [
 /** Tiempos de una frase de bachata (2 compases de 4). */
 export const BEATS_PER_PHRASE = 8;
 
+/**
+ * Instrumentos cuya actividad se mide. La percusión (güira, bongó, tumba) es una
+ * aproximación por bandas de frecuencia; "other" junta teclados, sintes y el resto.
+ */
+export const INSTRUMENT_KEYS = ['vocals', 'bass', 'guitar', 'guira', 'bongo', 'tumba', 'other'] as const;
+export type InstrumentKey = (typeof INSTRUMENT_KEYS)[number];
+
+/** Actividad 0..1 de cada instrumento, un valor cada `stepMs`. */
+export interface SongInstruments {
+  stepMs: number;
+  tracks: Record<InstrumentKey, number[]>;
+}
+
 /** Fila de la lista de audios del usuario. */
 export interface AudioFileSummary {
   id: string;
+  /** Estilo con que se estudia (define las reglas de secciones). */
+  style: DanceStyle;
   originalName: string;
   status: AudioFileStatus;
   error: string | null;
@@ -980,6 +996,13 @@ export interface SongStudy extends AudioFileSummary {
   /** Índice en `beatsMs` del "1" de cada frase de 8. */
   phraseStartIndexes: number[];
   energy: SongEnergy | null;
+  /** Estado de la detección de instrumentos (null = no aplica a este estilo). */
+  instrumentsStatus: AnalysisStatus | null;
+  instruments: SongInstruments | null;
+  /**
+   * Secciones: las del usuario y, si no marcó ninguna, las automáticas (derivadas
+   * de los instrumentos, con `origin: 'AUTOMATICO'` e id `auto-N`).
+   */
   sections: SongSectionDto[];
   markers: SongMarkerDto[];
 }
