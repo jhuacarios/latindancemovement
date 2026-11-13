@@ -311,6 +311,13 @@ export function permTree(): PermNode[] {
  * hereda del módulo raíz.
  */
 export function defaultRolesForKey(key: string): UserRole[] {
+  const roles = baseRolesForKey(key);
+  // PILOTO: por defecto todos los módulos, salvo Administración (solo SUPER_ADMIN).
+  if (key.split('.')[0] === 'admin' || roles.includes('PILOTO')) return roles;
+  return [...roles, 'PILOTO'];
+}
+
+function baseRolesForKey(key: string): UserRole[] {
   const rootKey = key.split('.')[0];
   const mod = MODULES.find((m) => m.key === rootKey);
   if (!mod) return [];

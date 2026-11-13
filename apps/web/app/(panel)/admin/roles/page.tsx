@@ -17,8 +17,7 @@ import { useViewAsRole } from '@/lib/view-as-role';
 import { Button, Card, Select, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 
-// SUPER_ADMIN y PILOTO tienen acceso fijo (todo / todo menos Administración): no se editan.
-const EDITABLE_ROLES = USER_ROLES.filter((r) => r !== 'SUPER_ADMIN' && r !== 'PILOTO');
+const EDITABLE_ROLES = USER_ROLES.filter((r) => r !== 'SUPER_ADMIN');
 
 function defaultPerms(role: UserRole, key: string): ModulePerms {
   const allowed = defaultRolesForKey(key).includes(role);

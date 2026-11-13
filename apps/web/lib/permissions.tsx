@@ -63,8 +63,8 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
         return false;
       }
       if (role === 'SUPER_ADMIN') return true;
-      // PILOTO: todos los módulos, salvo Administración (solo SUPER_ADMIN).
-      if (role === 'PILOTO') return key !== 'admin' && !key.startsWith('admin.');
+      // Administración es solo de SUPER_ADMIN, aunque la matriz diga otra cosa.
+      if (role === 'PILOTO' && (key === 'admin' || key.startsWith('admin.'))) return false;
       // Camino de claves: 'a.b.c' -> 'a.b' -> 'a'. Gana el permiso explícito más específico.
       let k = key;
       for (;;) {
