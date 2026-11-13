@@ -11,6 +11,8 @@
 // Roles
 // ---------------------------------------------------------------------------
 export const USER_ROLES = [
+  /** Rol por defecto del piloto: accede a todos los módulos salvo Administración. */
+  'PILOTO',
   'BAILARIN',
   'ORGANIZADOR',
   'PROFESOR',

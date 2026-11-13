@@ -34,6 +34,7 @@ export default function DiscoverPage() {
         <div className="flex flex-wrap items-center gap-1.5 lg:gap-3">
           <h1 className="text-base font-bold lg:text-2xl">🔥 Descubre</h1>
           {(user?.role === 'DJ' ||
+            user?.role === 'PILOTO' ||
             user?.role === 'ORGANIZADOR' ||
             user?.role === 'SUPER_ADMIN') && (
             <>

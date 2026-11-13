@@ -28,6 +28,9 @@ export class RolesGuard implements CanActivate {
     // SUPER_ADMIN siempre pasa.
     if (user.role === 'SUPER_ADMIN') return true;
 
+    // PILOTO pasa en todo lo que no sea exclusivo de SUPER_ADMIN (administración).
+    if (user.role === 'PILOTO' && required.some((r) => r !== 'SUPER_ADMIN')) return true;
+
     if (!required.includes(user.role)) {
       throw new ForbiddenException(
         `Requiere uno de los roles: ${required.join(', ')}`,

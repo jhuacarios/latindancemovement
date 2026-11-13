@@ -15,6 +15,7 @@ import { DANCE_STYLES, type DanceStyle, type UserRole } from '@baile-latino/type
  * (habilitan funciones con costo, como leer flyers con IA).
  */
 export const SELF_REGISTER_ROLES = [
+  'PILOTO',
   'BAILARIN',
   'PROFESOR',
   'DJ',

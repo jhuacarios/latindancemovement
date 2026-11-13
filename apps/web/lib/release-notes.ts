@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.12.0',
+    date: '2026-11-13',
+    module: 'general',
+    type: 'feature',
+    title: 'Acceso completo durante el piloto',
+    description:
+      'Las cuentas nuevas entran como Piloto: puedes usar gratis todos los módulos de la plataforma mientras dure el piloto.',
+  },
+  {
     version: '0.11.1',
     date: '2026-11-13',
     module: 'general',

@@ -89,7 +89,7 @@ export class AuthService {
     // El DTO ya valida el rol; se revisa de nuevo como defensa en profundidad.
     const selfRole = (SELF_REGISTER_ROLES as readonly string[]).includes(dto.role ?? '')
       ? dto.role!
-      : 'BAILARIN';
+      : 'PILOTO';
     const role = this.isSuperAdminEmail(dto.email) ? 'SUPER_ADMIN' : selfRole;
     const user = await this.prisma.user.create({
       data: {
@@ -303,8 +303,8 @@ export class AuthService {
     }
 
     // 3) No existe -> cuenta nueva solo-Google (sin contraseña, email verificado).
-    // Por defecto entran como DJ (salvo que el email esté en la allowlist de super admin).
-    const role = this.isSuperAdminEmail(email) ? 'SUPER_ADMIN' : 'DJ';
+    // Por defecto entran como PILOTO (salvo que el email esté en la allowlist de super admin).
+    const role = this.isSuperAdminEmail(email) ? 'SUPER_ADMIN' : 'PILOTO';
     const created = await this.prisma.user.create({
       data: { email, name, googleId, emailVerified: true, role, styles: '' },
     });
