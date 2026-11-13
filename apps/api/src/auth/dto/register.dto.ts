@@ -7,12 +7,22 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import {
-  DANCE_STYLES,
-  USER_ROLES,
-  type DanceStyle,
-  type UserRole,
-} from '@baile-latino/types';
+import { DANCE_STYLES, type DanceStyle, type UserRole } from '@baile-latino/types';
+
+/**
+ * Roles que una persona puede elegir al registrarse. SUPER_ADMIN solo lo da la
+ * allowlist `SUPER_ADMIN_EMAILS`; ORGANIZADOR y VENUE los asigna un admin
+ * (habilitan funciones con costo, como leer flyers con IA).
+ */
+export const SELF_REGISTER_ROLES = [
+  'BAILARIN',
+  'PROFESOR',
+  'DJ',
+  'ARTISTA',
+  'COREOGRAFO',
+  'FILMMAKER',
+] as const satisfies readonly UserRole[];
+export type SelfRegisterRole = (typeof SELF_REGISTER_ROLES)[number];
 
 export class RegisterDto {
   @IsEmail()
@@ -29,8 +39,8 @@ export class RegisterDto {
   name!: string;
 
   @IsOptional()
-  @IsIn(USER_ROLES)
-  role?: UserRole;
+  @IsIn(SELF_REGISTER_ROLES, { message: 'Rol no permitido en el registro' })
+  role?: SelfRegisterRole;
 
   @IsOptional()
   @IsString()

@@ -17,7 +17,7 @@ import type {
   UserRole,
 } from '@baile-latino/types';
 import { PrismaService } from '../prisma/prisma.service';
-import { RegisterDto } from './dto/register.dto';
+import { RegisterDto, SELF_REGISTER_ROLES } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
 type UserRecord = {
@@ -58,22 +58,25 @@ export class AuthService {
   }
 
   /**
-   * Si el email está en la allowlist y el rol aún no es SUPER_ADMIN, lo promueve.
-   * Devuelve el rol vigente (ya actualizado). Idempotente.
+   * Hace cumplir la allowlist en ambos sentidos: si el email está en
+   * `SUPER_ADMIN_EMAILS` lo promueve; si es SUPER_ADMIN y NO está, lo degrada a
+   * BAILARIN (nadie más puede ser super admin). Devuelve el rol vigente. Idempotente.
    */
   private async ensureSuperAdmin(user: {
     id: string;
     email: string;
     role: string;
   }): Promise<string> {
-    if (this.isSuperAdminEmail(user.email) && user.role !== 'SUPER_ADMIN') {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { role: 'SUPER_ADMIN' },
-      });
-      return 'SUPER_ADMIN';
+    const allowed = this.isSuperAdminEmail(user.email);
+    const target = allowed
+      ? 'SUPER_ADMIN'
+      : user.role === 'SUPER_ADMIN'
+        ? 'BAILARIN'
+        : user.role;
+    if (target !== user.role) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { role: target } });
     }
-    return user.role;
+    return target;
   }
 
   async register(dto: RegisterDto): Promise<{ user: PublicUser; tokens: AuthTokens }> {
@@ -83,9 +86,11 @@ export class AuthService {
     if (existing) throw new ConflictException('El email ya está registrado');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const role = this.isSuperAdminEmail(dto.email)
-      ? 'SUPER_ADMIN'
-      : (dto.role ?? 'BAILARIN');
+    // El DTO ya valida el rol; se revisa de nuevo como defensa en profundidad.
+    const selfRole = (SELF_REGISTER_ROLES as readonly string[]).includes(dto.role ?? '')
+      ? dto.role!
+      : 'BAILARIN';
+    const role = this.isSuperAdminEmail(dto.email) ? 'SUPER_ADMIN' : selfRole;
     const user = await this.prisma.user.create({
       data: {
         email: dto.email.toLowerCase(),
@@ -136,7 +141,8 @@ export class AuthService {
     const matches = await bcrypt.compare(refreshToken, user.refreshTokenHash);
     if (!matches) throw new UnauthorizedException('Refresh token no reconocido');
 
-    return this.issueTokens(user.id, user.email, user.role as UserRole);
+    const role = await this.ensureSuperAdmin(user);
+    return this.issueTokens(user.id, user.email, role as UserRole);
   }
 
   async me(userId: string): Promise<PublicUser> {
