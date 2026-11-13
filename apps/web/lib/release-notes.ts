@@ -24,6 +24,67 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.11.1',
+    date: '2026-11-13',
+    module: 'general',
+    type: 'improvement',
+    title: 'Roles de organizador y venue aprobados por un administrador',
+    description:
+      'Al crear tu cuenta eliges tu perfil (bailarín, DJ, profesor, artista, coreógrafo o filmmaker). Los perfiles de organizador y venue ahora los habilita un administrador; si los necesitas, escríbenos.',
+  },
+  {
+    version: '0.11.0',
+    date: '2026-11-11',
+    module: 'studio.bachata',
+    type: 'feature',
+    title: 'Mezclador de instrumentos',
+    description:
+      'En el reproductor del Estudio puedes subir o bajar el volumen de cada instrumento (voz, requinto, segunda guitarra, bajo, bongó, güira y tumba) para escuchar con claridad lo que quieres practicar. Las pistas se preparan la primera vez que las pides.',
+  },
+  {
+    version: '0.11.0',
+    date: '2026-11-10',
+    module: 'studio.bachata',
+    type: 'feature',
+    title: 'Instrumentos y secciones automáticas en bachata',
+    description:
+      'Al analizar una bachata, el Estudio muestra en qué momentos suena cada instrumento y marca solo las secciones de la canción (intro, derecho, mambo, puente, outro) y los breaks.',
+  },
+  {
+    version: '0.11.0',
+    date: '2026-11-03',
+    module: 'studio',
+    type: 'feature',
+    title: 'Nuevo: Estudio',
+    description:
+      'Sube una canción y el Estudio detecta los tiempos y las frases. Practica con loop de fragmentos, control de velocidad sin cambiar el tono y la grilla de conteos sobre la onda.',
+  },
+  {
+    version: '0.10.0',
+    date: '2026-10-28',
+    module: 'events',
+    type: 'feature',
+    title: 'Eventos, con lectura automática del flyer',
+    description:
+      'Nueva sección de eventos con listado y mapa. Al crear un evento puedes subir el flyer y los datos (fecha, lugar, precios) se completan solos.',
+  },
+  {
+    version: '0.10.0',
+    date: '2026-10-28',
+    module: 'community',
+    type: 'feature',
+    title: 'Comunidad: sociales y salsotecas',
+    description: 'Encuentra los sociales al aire libre y las salsotecas de tu ciudad en un solo lugar.',
+  },
+  {
+    version: '0.10.0',
+    date: '2026-10-28',
+    module: 'chat',
+    type: 'feature',
+    title: 'Mensajes',
+    description: 'Conversa directamente con otros miembros de la comunidad, también con imágenes.',
+  },
+  {
     version: '0.9.24',
     date: '2026-07-25',
     module: 'music.artists',
