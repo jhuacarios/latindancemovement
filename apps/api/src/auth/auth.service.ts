@@ -17,7 +17,7 @@ import type {
   UserRole,
 } from '@baile-latino/types';
 import { PrismaService } from '../prisma/prisma.service';
-import { RegisterDto, SELF_REGISTER_ROLES } from './dto/register.dto';
+import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
 type UserRecord = {
@@ -86,11 +86,8 @@ export class AuthService {
     if (existing) throw new ConflictException('El email ya está registrado');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    // El DTO ya valida el rol; se revisa de nuevo como defensa en profundidad.
-    const selfRole = (SELF_REGISTER_ROLES as readonly string[]).includes(dto.role ?? '')
-      ? dto.role!
-      : 'PILOTO';
-    const role = this.isSuperAdminEmail(dto.email) ? 'SUPER_ADMIN' : selfRole;
+    // El rol nunca lo elige el usuario: PILOTO, o SUPER_ADMIN si está en la allowlist.
+    const role = this.isSuperAdminEmail(dto.email) ? 'SUPER_ADMIN' : 'PILOTO';
     const user = await this.prisma.user.create({
       data: {
         email: dto.email.toLowerCase(),
