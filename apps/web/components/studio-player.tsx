@@ -330,7 +330,7 @@ export function StudioPlayer({
           </div>
         )}
         {ready && study.instruments && durationMs > 0 && (
-          <InstrumentLanes instruments={study.instruments} durationMs={durationMs} currentMs={currentMs} />
+          <InstrumentLanes style={study.style} instruments={study.instruments} durationMs={durationMs} currentMs={currentMs} />
         )}
         {ready && (study.instrumentsStatus === 'PENDING' || study.instrumentsStatus === 'PROCESSING') && (
           <p className="mt-2 animate-pulse text-xs text-neutral-400">

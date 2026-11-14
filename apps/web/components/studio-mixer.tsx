@@ -19,45 +19,84 @@ import { clsx } from './clsx';
  * las franjas de instrumentos).
  */
 
-type ChannelKey = Exclude<StemKey, 'drums'> | 'tumba' | 'bongo' | 'guira';
+/** Un canal del mezclador: suma de una o más pistas, opcionalmente filtradas a una banda (Hz). */
+interface Channel {
+  key: string;
+  label: string;
+  group?: string;
+  sources: { stem: StemKey; band?: [number, number] }[];
+}
 
-const CHANNELS: { key: ChannelKey; label: string; group?: string }[] = [
-  { key: 'vocals', label: 'Voz principal', group: 'Voces' },
-  { key: 'coros', label: 'Coros', group: 'Voces' },
-  { key: 'requinto', label: 'Requinto', group: 'Guitarras' },
-  { key: 'segunda', label: 'Segunda', group: 'Guitarras' },
-  { key: 'bass', label: 'Bajo' },
-  { key: 'bongo', label: 'Bongó', group: 'Percusión' },
-  { key: 'campana', label: 'Campana', group: 'Percusión' },
-  { key: 'guira', label: 'Güira', group: 'Percusión' },
-  { key: 'tumba', label: 'Tumba', group: 'Percusión' },
-  { key: 'keys', label: 'Teclados' },
-  { key: 'other', label: 'Otros' },
-];
+interface MixerLayout {
+  channels: Channel[];
+  presets: { label: string; off: string[] }[];
+}
 
-const MELODIC: ChannelKey[] = ['vocals', 'coros', 'requinto', 'segunda', 'keys', 'other'];
-const PERCUSSION: ChannelKey[] = ['bongo', 'campana', 'guira', 'tumba'];
-const off = (keys: ChannelKey[]) => Object.fromEntries(keys.map((k) => [k, 0])) as Partial<Record<ChannelKey, number>>;
+const one = (stem: StemKey) => [{ stem }];
+const drumsBand = (lo: number, hi: number) => [{ stem: 'drums' as const, band: [lo, hi] as [number, number] }];
+const NYQUIST = 24000;
 
-const PRESETS: { label: string; levels: Partial<Record<ChannelKey, number>> }[] = [
-  { label: 'Todo', levels: {} },
-  { label: 'Sin voz', levels: off(['vocals', 'coros']) },
-  { label: 'Sin voz principal', levels: off(['vocals']) },
-  { label: 'Solo percusión', levels: off([...MELODIC, 'bass']) },
-  { label: 'Bajo + percusión', levels: off(MELODIC) },
-  { label: 'Solo guitarras', levels: off(['vocals', 'coros', 'bass', 'keys', 'other', ...PERCUSSION]) },
-];
+/** Bachata: la percusión sin campana se parte en tumba / bongó / güira (cruces en 200 Hz y 4 kHz). */
+const BACHATA: MixerLayout = {
+  channels: [
+    { key: 'vocals', label: 'Voz principal', group: 'Voces', sources: one('vocals') },
+    { key: 'coros', label: 'Coros', group: 'Voces', sources: one('coros') },
+    { key: 'requinto', label: 'Requinto', group: 'Guitarras', sources: one('requinto') },
+    { key: 'segunda', label: 'Segunda', group: 'Guitarras', sources: one('segunda') },
+    { key: 'bass', label: 'Bajo', sources: one('bass') },
+    { key: 'bongo', label: 'Bongó', group: 'Percusión', sources: drumsBand(200, 4000) },
+    { key: 'campana', label: 'Campana', group: 'Percusión', sources: one('campana') },
+    { key: 'guira', label: 'Güira', group: 'Percusión', sources: drumsBand(4000, NYQUIST) },
+    { key: 'tumba', label: 'Tumba', group: 'Percusión', sources: drumsBand(0, 200) },
+    { key: 'keys', label: 'Teclados', sources: one('keys') },
+    { key: 'other', label: 'Otros', sources: one('other') },
+  ],
+  presets: [
+    { label: 'Todo', off: [] },
+    { label: 'Sin voz', off: ['vocals', 'coros'] },
+    { label: 'Sin voz principal', off: ['vocals'] },
+    { label: 'Solo percusión', off: ['vocals', 'coros', 'requinto', 'segunda', 'keys', 'other', 'bass'] },
+    { label: 'Bajo + percusión', off: ['vocals', 'coros', 'requinto', 'segunda', 'keys', 'other'] },
+    { label: 'Solo guitarras', off: ['vocals', 'coros', 'bass', 'keys', 'other', 'bongo', 'campana', 'guira', 'tumba'] },
+  ],
+};
+
+/** Salsa: piano, metales y guitarra/tres; la percusión se parte en congas / bongó-timbal / güiro (400 Hz y 4 kHz). */
+const SALSA: MixerLayout = {
+  channels: [
+    { key: 'vocals', label: 'Sonero', group: 'Voces', sources: one('vocals') },
+    { key: 'coros', label: 'Coros', group: 'Voces', sources: one('coros') },
+    { key: 'keys', label: 'Piano', sources: one('keys') },
+    { key: 'other', label: 'Metales', sources: one('other') },
+    { key: 'guitar', label: 'Guitarra / tres', sources: [{ stem: 'requinto' }, { stem: 'segunda' }] },
+    { key: 'bass', label: 'Bajo', sources: one('bass') },
+    { key: 'conga', label: 'Congas', group: 'Percusión', sources: drumsBand(0, 400) },
+    { key: 'bongo', label: 'Bongó / timbal', group: 'Percusión', sources: drumsBand(400, 4000) },
+    { key: 'campana', label: 'Campana', group: 'Percusión', sources: one('campana') },
+    { key: 'guira', label: 'Güiro / maracas', group: 'Percusión', sources: drumsBand(4000, NYQUIST) },
+  ],
+  presets: [
+    { label: 'Todo', off: [] },
+    { label: 'Sin voz', off: ['vocals', 'coros'] },
+    { label: 'Solo percusión', off: ['vocals', 'coros', 'keys', 'other', 'guitar', 'bass'] },
+    { label: 'Bajo + percusión', off: ['vocals', 'coros', 'keys', 'other', 'guitar'] },
+    { label: 'Piano + bajo', off: ['vocals', 'coros', 'other', 'guitar', 'conga', 'bongo', 'campana', 'guira'] },
+    { label: 'Sin metales', off: ['other'] },
+  ],
+};
+
+const LAYOUTS: Record<string, MixerLayout> = { BACHATA, SALSA };
+const layoutFor = (style: string) => LAYOUTS[style] ?? BACHATA;
+const fullLevels = (layout: MixerLayout) => Object.fromEntries(layout.channels.map((c) => [c.key, 1]));
 
 /** Desfase tolerado entre una pista y el reloj antes de corregirla (segundos). */
 const MAX_DRIFT_SEC = 0.06;
 const SYNC_EVERY_MS = 250;
 
-const FULL = Object.fromEntries(CHANNELS.map((c) => [c.key, 1])) as Record<ChannelKey, number>;
-
 interface Engine {
   ctx: AudioContext;
   elements: HTMLAudioElement[];
-  gains: Record<ChannelKey, GainNode>;
+  gains: Record<string, GainNode>;
   dispose: () => void;
 }
 
@@ -67,26 +106,25 @@ function withPitch(el: HTMLAudioElement) {
   el.preservesPitch = true;
 }
 
-/** Arma el grafo de audio: una pista por instrumento y la percusión partida en 3 bandas. */
-function buildEngine(urls: StemUrls): Engine {
+/** Arma el grafo de audio: un <audio> por pista, y cada canal suma sus pistas (o una banda de ellas). */
+function buildEngine(urls: StemUrls, layout: MixerLayout): Engine {
   const ctx = new AudioContext();
   const elements: HTMLAudioElement[] = [];
-  const gains = {} as Record<ChannelKey, GainNode>;
+  const gains: Record<string, GainNode> = {};
+  const sources = new Map<StemKey, MediaElementAudioSourceNode>();
 
-  const source = (url: string) => {
+  const source = (stem: StemKey) => {
+    const existing = sources.get(stem);
+    if (existing) return existing;
     const el = new Audio();
     el.crossOrigin = 'anonymous'; // sin esto Web Audio entrega silencio (URL firmada de otro origen)
     el.preload = 'auto';
-    el.src = url;
+    el.src = urls[stem];
     withPitch(el);
     elements.push(el);
-    return ctx.createMediaElementSource(el);
-  };
-  const gain = (key: ChannelKey) => {
-    const g = ctx.createGain();
-    g.connect(ctx.destination);
-    gains[key] = g;
-    return g;
+    const node = ctx.createMediaElementSource(el);
+    sources.set(stem, node);
+    return node;
   };
   const filter = (type: BiquadFilterType, freq: number) => {
     const f = ctx.createBiquadFilter();
@@ -95,17 +133,17 @@ function buildEngine(urls: StemUrls): Engine {
     return f;
   };
 
-  for (const key of ['vocals', 'coros', 'requinto', 'segunda', 'bass', 'campana', 'keys', 'other'] as const) {
-    source(urls[key]).connect(gain(key));
+  for (const channel of layout.channels) {
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+    gains[channel.key] = g;
+    for (const { stem, band } of channel.sources) {
+      let node: AudioNode = source(stem);
+      if (band && band[0] > 0) node = node.connect(filter('highpass', band[0]));
+      if (band && band[1] < NYQUIST) node = node.connect(filter('lowpass', band[1]));
+      node.connect(g);
+    }
   }
-
-  // Resto de la percusión: cruce en 200 Hz y 4 kHz → tumba / bongó / güira (las 3 suman ≈ la pista original).
-  const drums = source(urls.drums);
-  drums.connect(filter('lowpass', 200)).connect(gain('tumba'));
-  const midLow = filter('highpass', 200);
-  drums.connect(midLow);
-  midLow.connect(filter('lowpass', 4000)).connect(gain('bongo'));
-  drums.connect(filter('highpass', 4000)).connect(gain('guira'));
 
   return {
     ctx,
@@ -150,9 +188,10 @@ export function StudioMixer({
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [levels, setLevels] = useState<Record<ChannelKey, number>>(FULL);
-  const [muted, setMuted] = useState<Set<ChannelKey>>(new Set());
-  const [solo, setSolo] = useState<Set<ChannelKey>>(new Set());
+  const layout = layoutFor(study.style);
+  const [levels, setLevels] = useState<Record<string, number>>(() => fullLevels(layout));
+  const [muted, setMuted] = useState<Set<string>>(new Set());
+  const [solo, setSolo] = useState<Set<string>>(new Set());
   const engineRef = useRef<Engine | null>(null);
   const qc = useQueryClient();
 
@@ -177,7 +216,7 @@ export function StudioMixer({
   useEffect(() => {
     if (!enabled || !ws || !urls.data) return;
     const media = ws.getMediaElement();
-    const engine = buildEngine(urls.data);
+    const engine = buildEngine(urls.data, layout);
     engineRef.current = engine;
     let cancelled = false;
     setLoading(true);
@@ -236,20 +275,20 @@ export function StudioMixer({
       engineRef.current = null;
       ws.setMuted(false);
     };
-  }, [enabled, ws, urls.data]);
+  }, [enabled, ws, urls.data, layout]);
 
   // Volúmenes: nivel × silencio × solo.
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    for (const { key } of CHANNELS) {
+    for (const { key } of layout.channels) {
       const audible = !muted.has(key) && (solo.size === 0 || solo.has(key));
       engine.gains[key].gain.setTargetAtTime(audible ? levels[key] : 0, engine.ctx.currentTime, 0.02);
     }
   }, [levels, muted, solo, loading]);
 
   const toggleIn = useCallback(
-    (set: (fn: (s: Set<ChannelKey>) => Set<ChannelKey>) => void, key: ChannelKey) =>
+    (set: (fn: (s: Set<string>) => Set<string>) => void, key: string) =>
       set((s) => {
         const next = new Set(s);
         if (next.has(key)) next.delete(key);
@@ -259,8 +298,8 @@ export function StudioMixer({
     [],
   );
 
-  const applyPreset = (p: (typeof PRESETS)[number]) => {
-    setLevels({ ...FULL, ...p.levels });
+  const applyPreset = (p: MixerLayout['presets'][number]) => {
+    setLevels({ ...fullLevels(layout), ...Object.fromEntries(p.off.map((k) => [k, 0])) });
     setMuted(new Set());
     setSolo(new Set());
   };
@@ -321,16 +360,16 @@ export function StudioMixer({
       {enabled && !loading && !error && urls.data && (
         <>
           <div className="flex flex-wrap gap-2">
-            {PRESETS.map((p) => (
+            {layout.presets.map((p) => (
               <Button key={p.label} size="sm" variant="ghost" onClick={() => applyPreset(p)}>
                 {p.label}
               </Button>
             ))}
           </div>
           <div className="space-y-2">
-            {CHANNELS.map(({ key, label, group }, i) => (
+            {layout.channels.map(({ key, label, group }, i) => (
               <div key={key}>
-                {group && group !== CHANNELS[i - 1]?.group && (
+                {group && group !== layout.channels[i - 1]?.group && (
                   <p className="pb-1 pt-1 text-[11px] uppercase tracking-wide text-neutral-500">{group}</p>
                 )}
               <div className={clsx('flex items-center gap-3 text-sm', group && 'pl-3')}>
@@ -377,8 +416,8 @@ export function StudioMixer({
             ))}
           </div>
           <p className="text-[11px] text-neutral-500">
-            Coros, requinto, segunda, campana, güira, bongó y tumba son aproximados: se separan a partir
-            de la voz, la guitarra y la percusión. M = silenciar, S = escuchar solo ese.
+            Los coros, las guitarras y cada instrumento de percusión son aproximados: se separan a partir de
+            la voz, la guitarra y la percusión. M = silenciar, S = escuchar solo ese.
           </p>
         </>
       )}

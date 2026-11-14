@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.15.0',
+    date: '2026-11-13',
+    module: 'studio.salsa',
+    type: 'feature',
+    title: 'Analizador de salsa: instrumentos, montuno, mambo y solos',
+    description:
+      'El Analizador de salsa ahora muestra cuándo suenan el sonero, los coros, el piano, los metales, la guitarra o el tres, el bajo, las congas, el bongó y el timbal, la campana y el güiro, y marca solo la intro, el tema, el coro, el montuno, el mambo y los solos. El mezclador también funciona con estos instrumentos. Además, el tempo de las salsas lentas ya no sale a la mitad.',
+  },
+  {
     version: '0.14.0',
     date: '2026-11-13',
     module: 'studio',

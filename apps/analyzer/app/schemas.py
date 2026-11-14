@@ -5,7 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-SectionType = Literal["INTRO", "VERSO", "CORO", "DERECHO", "MAJAO", "MAMBO", "PUENTE", "OUTRO", "OTRO"]
+SectionType = Literal[
+    "INTRO", "VERSO", "CORO", "DERECHO", "MAJAO", "MONTUNO", "MAMBO", "SOLO", "PUENTE", "OUTRO", "OTRO"
+]
 MarkerType = Literal["BREAK", "ACENTO", "CORTE", "NOTA"]
 
 
@@ -30,13 +32,15 @@ class FingerprintResponse(BaseModel):
 
 # Instrumentos que se miden (calza con INSTRUMENT_KEYS de @baile-latino/types).
 # "vocals" = voz principal (sin coros); "guitar" = todas las guitarras juntas.
+# Salsa usa las mismas pistas con otro nombre: keys = piano, other = metales,
+# guira = güiro/maracas, bongo = bongó/timbal; y suma las congas.
 INSTRUMENT_KEYS = (
     "vocals", "coros", "guitar", "requinto", "segunda", "bass",
-    "guira", "bongo", "campana", "tumba", "keys", "other",
+    "guira", "bongo", "campana", "conga", "tumba", "keys", "other",
 )
 InstrumentKey = Literal[
     "vocals", "coros", "guitar", "requinto", "segunda", "bass",
-    "guira", "bongo", "campana", "tumba", "keys", "other",
+    "guira", "bongo", "campana", "conga", "tumba", "keys", "other",
 ]
 
 

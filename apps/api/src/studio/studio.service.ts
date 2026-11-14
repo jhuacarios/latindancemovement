@@ -37,6 +37,7 @@ import { STUDIO_CONFIG, type StudioConfig } from './studio.config';
 import type { CreateUploadDto, SetFirstBeatDto } from './dto/studio.dto';
 import { shiftEnergy, shiftInstruments, shiftTimes } from './timeline.util';
 import { deriveBachataSections } from './bachata-sections.util';
+import { deriveSalsaSections } from './salsa-sections.util';
 
 type FileWithRecording = AudioFile & { recording: RecordingAnalysis | null };
 type FileFull = FileWithRecording & { sections: SongSection[]; markers: SongMarker[] };
@@ -46,6 +47,12 @@ const FILE_FULL = {
   sections: { orderBy: { startMs: 'asc' } },
   markers: { orderBy: { timeMs: 'asc' } },
 } as const;
+
+/** Reglas de secciones automáticas por estilo. */
+const SECTION_RULES: Record<string, typeof deriveBachataSections | undefined> = {
+  BACHATA: deriveBachataSections,
+  SALSA: deriveSalsaSections,
+};
 
 /** Pistas que generaban versiones anteriores del analizador (para limpiarlas al borrar). */
 const LEGACY_STEM_KEYS = ['guitar'] as const;
@@ -278,8 +285,9 @@ export class StudioService {
     const energy = rec?.energy ? shiftEnergy(rec.energy as unknown as SongEnergy, align) : null;
     const phraseStarts = phraseStartIndexes(beatsMs, firstBeatOffsetMs);
 
-    // Instrumentos: por ahora solo el estudio de bachata los usa.
-    const usesInstruments = file.style === 'BACHATA' && rec !== null;
+    // Instrumentos: los estilos con reglas de secciones propias (bachata, salsa).
+    const deriveSections = SECTION_RULES[file.style];
+    const usesInstruments = deriveSections !== undefined && rec !== null;
     const instruments =
       usesInstruments && rec.instrumentsStatus === 'DONE' && rec.instruments
         ? shiftInstruments(rec.instruments as unknown as SongInstruments, align)
@@ -303,8 +311,8 @@ export class StudioService {
 
     // Secciones automáticas: se calculan al vuelo (siguen al "1" si el usuario lo corrige)
     // y solo si el usuario no marcó las suyas.
-    if (instruments && file.durationMs) {
-      const auto = deriveBachataSections(beatsMs, phraseStarts, instruments, file.durationMs);
+    if (deriveSections && instruments && file.durationMs) {
+      const auto = deriveSections(beatsMs, phraseStarts, instruments, file.durationMs);
       if (sections.length === 0) {
         sections.push(
           ...auto.sections.map((s, i) => ({ id: `auto-${i}`, ...s, label: null, origin: 'AUTOMATICO' as const })),

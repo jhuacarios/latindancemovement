@@ -36,6 +36,8 @@ DEMUCS_MODEL = "htdemucs_6s"
 # Bandas (Hz) de la pista de percusión (sin la campana).
 PERCUSSION_BANDS = {
     "tumba": (30, 150),
+    # Congas (tumbadoras) de salsa: tonos abiertos ~180-350 Hz.
+    "conga": (150, 400),
     "bongo": (250, 2500),
     "guira": (5000, 16000),
 }

@@ -327,12 +327,13 @@ describe('Estudio (e2e)', () => {
     }
   });
 
-  it('salsa: no usa los instrumentos de bachata y la lista filtra por estilo', async () => {
+  it('salsa: usa sus propias reglas de secciones y la lista filtra por estilo', async () => {
     const study = await uploadAndAnalyze(owner().token, 'salsa.mp3', 'SALSA');
     expect(study.style).toBe('SALSA');
-    expect(study.instrumentsStatus).toBeNull();
-    expect(study.instruments).toBeNull();
-    expect(study.sections).toEqual([]);
+    expect(study.instrumentsStatus).toBe('DONE');
+    const types = study.sections.map((s) => s.type);
+    expect(types).toEqual(['INTRO', 'VERSO']); // voz desde el inicio; la base entra después
+    expect(types).not.toContain('DERECHO');
 
     const salsa = (await call('GET', '/audio-files?style=SALSA', owner().token)).json<{ id: string }[]>();
     const bachata = (await call('GET', '/audio-files?style=BACHATA', owner().token)).json<{ id: string }[]>();

@@ -21,8 +21,8 @@ interface RecordingMatch {
   coarseOffsetMs: number;
 }
 
-/** Estilos cuyo estudio usa la actividad de instrumentos (salsa tendrá sus propias reglas). */
-const STYLES_WITH_INSTRUMENTS = new Set(['BACHATA']);
+/** Estilos cuyo estudio usa la actividad de instrumentos (cada uno con sus reglas de secciones). */
+const STYLES_WITH_INSTRUMENTS = new Set(['BACHATA', 'SALSA']);
 
 /** Compara versiones "x.y.z". */
 function isNewerVersion(a: string, b: string | null): boolean {

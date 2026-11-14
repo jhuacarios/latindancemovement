@@ -23,12 +23,22 @@ class Beats:
     downbeats: np.ndarray  # segundos (subconjunto de beats)
 
 
+# Rango de tempo aceptado (BPM).
+MIN_BPM = 100
+MAX_BPM = 230
+
+
 @lru_cache(maxsize=1)
 def _madmom_processors():
     # Cargar las redes de madmom tarda; se hace una vez por proceso.
     from madmom.features.downbeats import DBNDownBeatTrackingProcessor, RNNDownBeatProcessor
 
-    return RNNDownBeatProcessor(), DBNDownBeatTrackingProcessor(beats_per_bar=[4], fps=100)
+    # Bachata y salsa van de ~110 a ~220 BPM: con el mínimo por defecto (55) madmom
+    # a veces toma la mitad del tempo en salsas (ej: 94 en vez de 185) y las frases
+    # de 8 salen al doble de largo.
+    return RNNDownBeatProcessor(), DBNDownBeatTrackingProcessor(
+        beats_per_bar=[4], fps=100, min_bpm=MIN_BPM, max_bpm=MAX_BPM
+    )
 
 
 def detect_beats(wav: Path) -> Beats:

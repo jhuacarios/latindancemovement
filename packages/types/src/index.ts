@@ -909,7 +909,11 @@ export const SONG_SECTION_TYPES = [
   'CORO',
   'DERECHO',
   'MAJAO',
+  /** Salsa: coro-pregón (coro y sonero se turnan). */
+  'MONTUNO',
   'MAMBO',
+  /** Salsa: solo instrumental (timbal, congas…). */
+  'SOLO',
   'PUENTE',
   'OUTRO',
   'OTRO',
@@ -955,6 +959,8 @@ export const INSTRUMENT_KEYS = [
   'guira',
   'bongo',
   'campana',
+  /** Congas (tumbadoras) de salsa. */
+  'conga',
   'tumba',
   'keys',
   'other',

@@ -9,12 +9,18 @@ import type {
   SongSectionType,
 } from '@baile-latino/types';
 
+interface Lane {
+  key: InstrumentKey;
+  label: string;
+  color: string;
+}
+
 /**
- * Orden y nombre de las franjas (de lo melódico a la percusión). Se muestran solo
- * las que trae el análisis: los de versiones anteriores no tienen coros, requinto,
- * segunda, campana ni teclados (y ahí la guitarra va junta).
+ * Franjas por estilo (de lo melódico a la percusión). Se muestran solo las que trae
+ * el análisis: los de versiones anteriores no tienen coros, requinto, segunda,
+ * campana, congas ni teclados (y ahí la guitarra va junta).
  */
-const LANES: { key: InstrumentKey; label: string; color: string }[] = [
+const BACHATA_LANES: Lane[] = [
   { key: 'vocals', label: 'Voz', color: '#b6f0d0' }, // néctar
   { key: 'coros', label: 'Coros', color: '#8fe0b8' },
   { key: 'requinto', label: 'Requinto', color: '#4ec990' }, // clave
@@ -29,9 +35,24 @@ const LANES: { key: InstrumentKey; label: string; color: string }[] = [
   { key: 'other', label: 'Otros', color: '#8aa39a' },
 ];
 
-function visibleLanes(tracks: SongInstruments['tracks']) {
+/** En salsa las mismas pistas son otros instrumentos: "other" = metales, "keys" = piano. */
+const SALSA_LANES: Lane[] = [
+  { key: 'vocals', label: 'Sonero', color: '#b6f0d0' },
+  { key: 'coros', label: 'Coros', color: '#8fe0b8' },
+  { key: 'keys', label: 'Piano', color: '#a5b4fc' },
+  { key: 'other', label: 'Metales', color: '#fca5a5' },
+  { key: 'guitar', label: 'Guitarra / tres', color: '#4ec990' },
+  { key: 'bass', label: 'Bajo', color: '#7baf8e' },
+  { key: 'conga', label: 'Congas', color: '#f59e0b' },
+  { key: 'bongo', label: 'Bongó / timbal', color: '#fbbf24' },
+  { key: 'campana', label: 'Campana', color: '#fde68a' },
+  { key: 'guira', label: 'Güiro / maracas', color: '#d97706' },
+];
+
+function visibleLanes(style: string, tracks: SongInstruments['tracks']): Lane[] {
+  if (style === 'SALSA') return SALSA_LANES.filter((l) => tracks[l.key] !== undefined);
   const split = tracks.requinto !== undefined; // análisis nuevo: guitarra en requinto + segunda
-  return LANES.filter((l) => tracks[l.key] !== undefined && !(split && l.key === 'guitar')).map((l) =>
+  return BACHATA_LANES.filter((l) => tracks[l.key] !== undefined && !(split && l.key === 'guitar')).map((l) =>
     l.key === 'vocals' && tracks.coros !== undefined ? { ...l, label: 'Voz principal' } : l,
   );
 }
@@ -42,7 +63,9 @@ export const SECTION_LABEL: Record<SongSectionType, string> = {
   CORO: 'Coro',
   DERECHO: 'Derecho',
   MAJAO: 'Majao',
+  MONTUNO: 'Montuno',
   MAMBO: 'Mambo',
+  SOLO: 'Solo',
   PUENTE: 'Puente',
   OUTRO: 'Outro',
   OTRO: 'Otro',
@@ -54,7 +77,9 @@ const SECTION_COLOR: Record<SongSectionType, string> = {
   CORO: 'bg-son/70 text-sabor',
   DERECHO: 'bg-son/50 text-sabor',
   MAJAO: 'bg-amber-600/50 text-amber-50',
+  MONTUNO: 'bg-emerald-700/60 text-emerald-50',
   MAMBO: 'bg-amber-500/60 text-amber-50',
+  SOLO: 'bg-rose-700/50 text-rose-50',
   PUENTE: 'bg-sky-800/60 text-sky-100',
   OUTRO: 'bg-neutral-800 text-neutral-300',
   OTRO: 'bg-neutral-700 text-neutral-200',
@@ -85,17 +110,19 @@ const Lane = memo(function Lane({
 
 /** Qué instrumento suena en cada momento, alineado con la forma de onda. */
 export function InstrumentLanes({
+  style,
   instruments,
   durationMs,
   currentMs,
 }: {
+  style: string;
   instruments: SongInstruments;
   durationMs: number;
   currentMs: number;
 }) {
   return (
     <div className="relative mt-2 space-y-0.5" role="img" aria-label="Instrumentos a lo largo de la canción">
-      {visibleLanes(instruments.tracks).map((lane) => (
+      {visibleLanes(style, instruments.tracks).map((lane) => (
         <div key={lane.key} className="relative rounded-sm bg-neutral-950/40">
           <Lane
             values={instruments.tracks[lane.key] ?? []}
@@ -113,8 +140,8 @@ export function InstrumentLanes({
         style={{ left: `${Math.min(100, (currentMs / durationMs) * 100)}%` }}
       />
       <p className="pt-1 text-[10px] text-neutral-600">
-        Instrumentos (aprox.): coros, requinto, segunda, campana, güira, bongó y tumba se estiman a partir de la
-        voz, la guitarra y la percusión separadas.
+        Instrumentos (aprox.): los coros, las guitarras y cada instrumento de percusión se estiman a partir de
+        la voz, la guitarra y la percusión separadas.
       </p>
     </div>
   );

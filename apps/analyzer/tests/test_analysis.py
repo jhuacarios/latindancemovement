@@ -7,7 +7,7 @@ TOLERANCE_MS = 30
 
 
 # 124 y 127: periodos que no son múltiplo de 10 ms (la resolución de madmom).
-@pytest.mark.parametrize("bpm", [120, 124, 127, 130])
+@pytest.mark.parametrize("bpm", [120, 124, 127, 130, 185])
 def test_bpm_and_beats_on_click_track(make_clicks, bpm):
     path, truth = make_clicks(bpm)
     result = analyze_file(path)
