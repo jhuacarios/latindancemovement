@@ -47,6 +47,9 @@ const FILE_FULL = {
   markers: { orderBy: { timeMs: 'asc' } },
 } as const;
 
+/** Pistas que generaban versiones anteriores del analizador (para limpiarlas al borrar). */
+const LEGACY_STEM_KEYS = ['guitar'] as const;
+
 @Injectable()
 export class StudioService {
   private readonly logger = new Logger(StudioService.name);
@@ -146,9 +149,8 @@ export class StudioService {
   async requestStems(user: AuthUser, id: string): Promise<SongStudy> {
     const file = await this.ownedFull(user, id);
     if (file.status !== 'READY') throw new ConflictException('Espera a que termine el análisis.');
-    if (file.stemsStatus === 'DONE' || file.stemsStatus === 'PENDING' || file.stemsStatus === 'PROCESSING') {
-      return this.toStudy(file);
-    }
+    if (file.stemsStatus === 'PENDING' || file.stemsStatus === 'PROCESSING') return this.toStudy(file);
+    if (file.stemsStatus === 'DONE' && (await this.stemsComplete(file.storageKey))) return this.toStudy(file);
     const updated = await this.prisma.audioFile.update({
       where: { id: file.id },
       data: { stemsStatus: 'PENDING', stemsError: null },
@@ -161,10 +163,21 @@ export class StudioService {
   async stemUrls(user: AuthUser, id: string): Promise<StemUrls> {
     const file = await this.owned(user, id);
     if (file.stemsStatus !== 'DONE') throw new ConflictException('Las pistas todavía no están listas.');
+    if (!(await this.stemsComplete(file.storageKey))) {
+      // Pistas de una versión anterior (sin los instrumentos nuevos): hay que prepararlas de nuevo.
+      await this.prisma.audioFile.update({ where: { id: file.id }, data: { stemsStatus: null, stemsError: null } });
+      throw new ConflictException('Hay instrumentos nuevos en el mezclador: vuelve a preparar las pistas.');
+    }
     const entries = await Promise.all(
       STEM_KEYS.map(async (k) => [k, await this.storage.playbackUrl(stemStorageKey(file.storageKey, k))]),
     );
     return Object.fromEntries(entries) as StemUrls;
+  }
+
+  /** ¿Están todas las pistas actuales? (las de versiones anteriores traen menos). */
+  private async stemsComplete(storageKey: string): Promise<boolean> {
+    const sizes = await Promise.all(STEM_KEYS.map((k) => this.storage.size(stemStorageKey(storageKey, k))));
+    return sizes.every((n) => n !== null);
   }
 
   /** Corrige el "1": se ajusta al beat más cercano y toda la grilla de frases se recalcula. */
@@ -194,9 +207,11 @@ export class StudioService {
   // --- helpers -------------------------------------------------------------
 
   private async removeFile(file: AudioFile) {
+    // Las pistas se borran siempre (aunque stemsStatus sea null: pudieron quedar de una
+    // versión anterior), incluidas las que ya no se generan. Borrar una que no existe no falla.
     const keys = [
       file.storageKey,
-      ...(file.stemsStatus ? STEM_KEYS.map((k) => stemStorageKey(file.storageKey, k)) : []),
+      ...[...STEM_KEYS, ...LEGACY_STEM_KEYS].map((k) => stemStorageKey(file.storageKey, k)),
     ];
     for (const key of keys) {
       try {

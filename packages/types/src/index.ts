@@ -941,11 +941,41 @@ export const BEATS_PER_PHRASE = 8;
  * Instrumentos cuya actividad se mide. La percusión (güira, bongó, tumba) es una
  * aproximación por bandas de frecuencia; "other" junta teclados, sintes y el resto.
  */
-export const INSTRUMENT_KEYS = ['vocals', 'bass', 'guitar', 'guira', 'bongo', 'tumba', 'other'] as const;
+/**
+ * Instrumentos cuya actividad se mide. "vocals" = voz principal (sin coros);
+ * "guitar" = todas las guitarras juntas (requinto + segunda); "keys" = teclados y sintes.
+ */
+export const INSTRUMENT_KEYS = [
+  'vocals',
+  'coros',
+  'guitar',
+  'requinto',
+  'segunda',
+  'bass',
+  'guira',
+  'bongo',
+  'campana',
+  'tumba',
+  'keys',
+  'other',
+] as const;
 export type InstrumentKey = (typeof INSTRUMENT_KEYS)[number];
 
-/** Pistas separadas que se guardan para el mezclador ("other" = teclados, sintes y el resto). */
-export const STEM_KEYS = ['vocals', 'guitar', 'bass', 'drums', 'other'] as const;
+/**
+ * Pistas separadas que se guardan para el mezclador. "vocals" = voz principal;
+ * "drums" = percusión sin la campana; "other" = lo que no es ninguna de las demás.
+ */
+export const STEM_KEYS = [
+  'vocals',
+  'coros',
+  'requinto',
+  'segunda',
+  'bass',
+  'drums',
+  'campana',
+  'keys',
+  'other',
+] as const;
 export type StemKey = (typeof STEM_KEYS)[number];
 
 /** URLs firmadas (de corta duración) de las pistas del mezclador. */
@@ -954,7 +984,8 @@ export type StemUrls = Record<StemKey, string>;
 /** Actividad 0..1 de cada instrumento, un valor cada `stepMs`. */
 export interface SongInstruments {
   stepMs: number;
-  tracks: Record<InstrumentKey, number[]>;
+  /** Análisis de versiones anteriores pueden no traer los instrumentos más nuevos. */
+  tracks: Partial<Record<InstrumentKey, number[]>>;
 }
 
 /** Fila de la lista de audios del usuario. */

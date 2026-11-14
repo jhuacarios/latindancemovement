@@ -1,3 +1,5 @@
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { Inject, Injectable } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -7,7 +9,7 @@ import { AnalyzerInstrumentsDto, AnalyzerResultDto } from './dto/analyzer-result
 
 /** El análisis de una canción completa puede tardar. */
 const ANALYZE_TIMEOUT_MS = 5 * 60 * 1000;
-/** La separación de instrumentos es más lenta (~2 min por canción con 4 CPU; hasta 10 min de audio). */
+/** La separación de instrumentos es más lenta (~5 min por canción con 2 CPU; hasta 10 min de audio). */
 const INSTRUMENTS_TIMEOUT_MS = 20 * 60 * 1000;
 
 /** Error del archivo (el analizador respondió 422): no tiene sentido reintentar. */
@@ -52,21 +54,60 @@ export class AnalyzerClient {
 
   private async post(path: string, payload: unknown, timeoutMs: number): Promise<unknown> {
     if (!this.config) throw new Error('Estudio no está configurado.');
-    const res = await fetch(`${this.config.analyzer.url}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.analyzer.token}`,
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const body: unknown = await res.json().catch(() => null);
+    const res = await postJson(
+      `${this.config.analyzer.url}${path}`,
+      payload,
+      { Authorization: `Bearer ${this.config.analyzer.token}` },
+      timeoutMs,
+    );
     if (res.status === 422) {
-      const detail = (body as { detail?: unknown } | null)?.detail;
+      const detail = (res.body as { detail?: unknown } | null)?.detail;
       throw new AnalyzerFileError(typeof detail === 'string' ? detail : 'Audio inválido.');
     }
-    if (!res.ok) throw new Error(`El analizador respondió HTTP ${res.status}.`);
-    return body;
+    if (res.status < 200 || res.status >= 300) throw new Error(`El analizador respondió HTTP ${res.status}.`);
+    return res.body;
   }
+}
+
+/**
+ * POST JSON con node:http. No se usa `fetch` porque su cliente (undici) corta
+ * cualquier respuesta que tarde más de 5 min en llegar (headersTimeout), aunque se
+ * le pase un AbortSignal más largo; la separación de instrumentos tarda más que eso.
+ */
+function postJson(
+  url: string,
+  payload: unknown,
+  headers: Record<string, string>,
+  timeoutMs: number,
+): Promise<{ status: number; body: unknown }> {
+  const data = Buffer.from(JSON.stringify(payload));
+  const target = new URL(url);
+  const request = target.protocol === 'https:' ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    const req = request(
+      target,
+      {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json', 'Content-Length': data.length },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => {
+          let body: unknown = null;
+          try {
+            body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          } catch {
+            body = null;
+          }
+          resolve({ status: res.statusCode ?? 0, body });
+        });
+        res.on('error', reject);
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error(`El analizador no respondió en ${Math.round(timeoutMs / 60000)} min.`)));
+    req.on('error', reject);
+    req.end(data);
+  });
 }

@@ -8,7 +8,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import type { SongStudy, StudioUploadTicket } from '@baile-latino/types';
+import { STEM_KEYS, type SongStudy, type StudioUploadTicket } from '@baile-latino/types';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { JwtStrategy } from '../src/auth/strategies/jwt.strategy';
 import { TracksService } from '../src/music/tracks/tracks.service';
@@ -296,20 +296,32 @@ describe('Estudio (e2e)', () => {
 
     const req = await call('POST', `/audio-files/${study.id}/stems`, owner().token);
     expect(req.statusCode).toBe(200);
-    expect(Object.keys(analyzer.stemUploads).sort()).toEqual(['bass', 'drums', 'guitar', 'other', 'vocals']);
+    expect(Object.keys(analyzer.stemUploads).sort()).toEqual([...STEM_KEYS].sort());
     for (const url of Object.values(analyzer.stemUploads)) storage.put(url.replace('memory://upload/', ''), MB);
 
     const after = (await call('GET', `/audio-files/${study.id}`, owner().token)).json<SongStudy>();
     expect(after.stemsStatus).toBe('DONE');
     const urls = await call('GET', `/audio-files/${study.id}/stems`, owner().token);
     expect(urls.statusCode).toBe(200);
-    expect(Object.keys(urls.json()).sort()).toEqual(['bass', 'drums', 'guitar', 'other', 'vocals']);
+    expect(Object.keys(urls.json()).sort()).toEqual([...STEM_KEYS].sort());
 
     // Otro usuario no ve ni pide las pistas.
     expect((await call('GET', `/audio-files/${study.id}/stems`, other().token)).statusCode).toBe(404);
     expect((await call('POST', `/audio-files/${study.id}/stems`, other().token)).statusCode).toBe(404);
 
+    // Pistas de una versión anterior (falta una de las nuevas): se piden de nuevo.
+    const legacy = `${Object.values(analyzer.stemUploads)[0].replace('memory://upload/', '').replace(/\/[^/]+$/, '')}/guitar.m4a`;
+    storage.put(legacy, MB);
+    storage.remove(analyzer.stemUploads.coros.replace('memory://upload/', ''));
+    const outdated = await call('GET', `/audio-files/${study.id}/stems`, owner().token);
+    expect(outdated.statusCode).toBe(409);
+    expect((await call('GET', `/audio-files/${study.id}`, owner().token)).json<SongStudy>().stemsStatus).toBeNull();
+    expect((await call('POST', `/audio-files/${study.id}/stems`, owner().token)).statusCode).toBe(200);
+    for (const url of Object.values(analyzer.stemUploads)) storage.put(url.replace('memory://upload/', ''), MB);
+    expect((await call('GET', `/audio-files/${study.id}/stems`, owner().token)).statusCode).toBe(200);
+
     await call('DELETE', `/audio-files/${study.id}`, owner().token);
+    expect(storage.has(legacy)).toBe(false);
     for (const url of Object.values(analyzer.stemUploads)) {
       expect(storage.has(url.replace('memory://upload/', ''))).toBe(false);
     }

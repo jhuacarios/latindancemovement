@@ -559,6 +559,8 @@ región (qué suena dónde — el moat de "data premium DJs").
 - `RecordingAnalysis` es compartido por huella acústica; la capa del usuario (`AudioFile`, secciones, marcas, el "1" corregido) es privada.
 - Subir `ANALYZER_VERSION` en cada cambio que altere resultados.
 - Estudio se divide **por estilo** (`AudioFile.style`, menú Estudio → Bachata; Salsa tendrá sus propias reglas). La actividad de instrumentos (Demucs, cola `studio-instruments`) se guarda en `RecordingAnalysis` (solo datos, compartible); las secciones de bachata se derivan al vuelo en `bachata-sections.util.ts`.
+- Instrumentos de bachata (analizador 0.3.0): Demucs htdemucs_6s + modelo karaoke UVR_MDXNET_KARA_2 (ONNX, inferencia propia en `karaoke.py`, necesita audio ESTÉREO) para coros vs. voz principal; requinto/segunda (registro de la guitarra, CQT), campana (parte tonal de la percusión, HPSS), teclados (= "piano" de Demucs). El analizador procesa un trabajo pesado a la vez (~5 min y ~2,8 GB de RAM por canción con 2 CPU).
+- La API llama al analizador con `node:http`, NO con `fetch`: undici corta a los 5 min (headersTimeout) aunque se le pase un timeout mayor.
 - Tests API: `pnpm --filter @baile-latino/api test` y `test:e2e` (requiere `docker compose up -d db`).
 
 ---

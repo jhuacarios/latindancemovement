@@ -54,6 +54,24 @@ describe('deriveBachataSections', () => {
     expect(sections.map((x) => x.type)).toEqual(['INTRO', 'DERECHO', 'OUTRO']);
   });
 
+  it('mambo con coros y campana: los coros no cuentan como voz principal', () => {
+    const MAMBO_COROS: Levels = { vocals: 0.1, coros: 0.9, guitar: 0.3, campana: 0.7, bongo: 0.5, bass: 0.7, tumba: 0.7 };
+    const { sections } = derive(song([DERECHO, DERECHO, MAMBO_COROS, MAMBO_COROS, DERECHO, DERECHO]));
+    expect(sections.map((x) => x.type)).toEqual(['DERECHO', 'MAMBO', 'DERECHO']);
+  });
+
+  it('mambo marcado por el requinto aunque la guitarra total no suba tanto', () => {
+    const MAMBO_REQ: Levels = { vocals: 0.1, guitar: 0.4, requinto: 0.8, guira: 0.4, bongo: 0.6, bass: 0.7, tumba: 0.7 };
+    const { sections } = derive(song([DERECHO, DERECHO, MAMBO_REQ, MAMBO_REQ, DERECHO, DERECHO]));
+    expect(sections.map((x) => x.type)).toEqual(['DERECHO', 'MAMBO', 'DERECHO']);
+  });
+
+  it('un análisis anterior sin los instrumentos nuevos sigue funcionando', () => {
+    const s = song([INTRO, INTRO, DERECHO, DERECHO, MAMBO, MAMBO, DERECHO, INTRO]);
+    for (const k of ['coros', 'requinto', 'segunda', 'campana', 'keys'] as const) delete s.instruments.tracks[k];
+    expect(derive(s).sections.map((x) => x.type)).toEqual(['INTRO', 'DERECHO', 'MAMBO', 'DERECHO', 'OUTRO']);
+  });
+
   it('sin percusión en medio de la canción es PUENTE', () => {
     const { sections } = derive(song([DERECHO, DERECHO, INTRO, DERECHO, DERECHO]));
     expect(sections.map((x) => x.type)).toEqual(['DERECHO', 'PUENTE', 'DERECHO']);
