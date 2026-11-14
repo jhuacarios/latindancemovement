@@ -334,7 +334,7 @@ export function StudioPlayer({
         )}
         {ready && (study.instrumentsStatus === 'PENDING' || study.instrumentsStatus === 'PROCESSING') && (
           <p className="mt-2 animate-pulse text-xs text-neutral-400">
-            Detectando instrumentos y secciones… (un par de minutos; ya puedes ir estudiando)
+            Detectando instrumentos y secciones… (varios minutos; ya puedes ir estudiando)
           </p>
         )}
         {ready && study.instrumentsStatus === 'ERROR' && (

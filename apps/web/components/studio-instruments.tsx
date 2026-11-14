@@ -9,16 +9,32 @@ import type {
   SongSectionType,
 } from '@baile-latino/types';
 
-/** Orden y nombre de las franjas (de lo melódico a la percusión). */
+/**
+ * Orden y nombre de las franjas (de lo melódico a la percusión). Se muestran solo
+ * las que trae el análisis: los de versiones anteriores no tienen coros, requinto,
+ * segunda, campana ni teclados (y ahí la guitarra va junta).
+ */
 const LANES: { key: InstrumentKey; label: string; color: string }[] = [
   { key: 'vocals', label: 'Voz', color: '#b6f0d0' }, // néctar
-  { key: 'guitar', label: 'Guitarra', color: '#4ec990' }, // clave
+  { key: 'coros', label: 'Coros', color: '#8fe0b8' },
+  { key: 'requinto', label: 'Requinto', color: '#4ec990' }, // clave
+  { key: 'segunda', label: 'Segunda', color: '#3aa877' },
+  { key: 'guitar', label: 'Guitarra', color: '#4ec990' },
   { key: 'bass', label: 'Bajo', color: '#7baf8e' }, // muted
   { key: 'bongo', label: 'Bongó', color: '#f59e0b' }, // bachata
+  { key: 'campana', label: 'Campana', color: '#fde68a' },
   { key: 'guira', label: 'Güira', color: '#fbbf24' },
   { key: 'tumba', label: 'Tumba', color: '#d97706' },
+  { key: 'keys', label: 'Teclados', color: '#a5b4fc' },
   { key: 'other', label: 'Otros', color: '#8aa39a' },
 ];
+
+function visibleLanes(tracks: SongInstruments['tracks']) {
+  const split = tracks.requinto !== undefined; // análisis nuevo: guitarra en requinto + segunda
+  return LANES.filter((l) => tracks[l.key] !== undefined && !(split && l.key === 'guitar')).map((l) =>
+    l.key === 'vocals' && tracks.coros !== undefined ? { ...l, label: 'Voz principal' } : l,
+  );
+}
 
 export const SECTION_LABEL: Record<SongSectionType, string> = {
   INTRO: 'Intro',
@@ -79,7 +95,7 @@ export function InstrumentLanes({
 }) {
   return (
     <div className="relative mt-2 space-y-0.5" role="img" aria-label="Instrumentos a lo largo de la canción">
-      {LANES.map((lane) => (
+      {visibleLanes(instruments.tracks).map((lane) => (
         <div key={lane.key} className="relative rounded-sm bg-neutral-950/40">
           <Lane
             values={instruments.tracks[lane.key] ?? []}
@@ -97,7 +113,8 @@ export function InstrumentLanes({
         style={{ left: `${Math.min(100, (currentMs / durationMs) * 100)}%` }}
       />
       <p className="pt-1 text-[10px] text-neutral-600">
-        Instrumentos (aprox.): la güira, el bongó y la tumba se estiman por frecuencia dentro de la percusión.
+        Instrumentos (aprox.): coros, requinto, segunda, campana, güira, bongó y tumba se estiman a partir de la
+        voz, la guitarra y la percusión separadas.
       </p>
     </div>
   );

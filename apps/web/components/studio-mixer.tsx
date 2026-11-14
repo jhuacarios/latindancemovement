@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SongStudy, StemKey, StemUrls } from '@baile-latino/types';
 import { studioApi } from '@/lib/studio';
 import { Button } from './ui';
@@ -14,43 +14,45 @@ import { clsx } from './clsx';
  * wavesurfer sigue siendo el reloj: se silencia y las pistas lo siguen, con
  * resincronización si se desfasan.
  *
- * La percusión llega como una sola pista; güira, bongó y tumba se ajustan con
- * filtros por banda (aproximado, igual que las franjas de instrumentos).
+ * La campana llega como pista propia; el resto de la percusión llega junto y
+ * güira, bongó y tumba se ajustan con filtros por banda (aproximado, igual que
+ * las franjas de instrumentos).
  */
 
 type ChannelKey = Exclude<StemKey, 'drums'> | 'tumba' | 'bongo' | 'guira';
 
-const CHANNELS: { key: ChannelKey; label: string; sub?: boolean }[] = [
-  { key: 'vocals', label: 'Voz' },
-  { key: 'guitar', label: 'Guitarra' },
+const CHANNELS: { key: ChannelKey; label: string; group?: string }[] = [
+  { key: 'vocals', label: 'Voz principal', group: 'Voces' },
+  { key: 'coros', label: 'Coros', group: 'Voces' },
+  { key: 'requinto', label: 'Requinto', group: 'Guitarras' },
+  { key: 'segunda', label: 'Segunda', group: 'Guitarras' },
   { key: 'bass', label: 'Bajo' },
-  { key: 'guira', label: 'Güira', sub: true },
-  { key: 'bongo', label: 'Bongó', sub: true },
-  { key: 'tumba', label: 'Tumba', sub: true },
+  { key: 'bongo', label: 'Bongó', group: 'Percusión' },
+  { key: 'campana', label: 'Campana', group: 'Percusión' },
+  { key: 'guira', label: 'Güira', group: 'Percusión' },
+  { key: 'tumba', label: 'Tumba', group: 'Percusión' },
+  { key: 'keys', label: 'Teclados' },
   { key: 'other', label: 'Otros' },
 ];
 
+const MELODIC: ChannelKey[] = ['vocals', 'coros', 'requinto', 'segunda', 'keys', 'other'];
+const PERCUSSION: ChannelKey[] = ['bongo', 'campana', 'guira', 'tumba'];
+const off = (keys: ChannelKey[]) => Object.fromEntries(keys.map((k) => [k, 0])) as Partial<Record<ChannelKey, number>>;
+
 const PRESETS: { label: string; levels: Partial<Record<ChannelKey, number>> }[] = [
   { label: 'Todo', levels: {} },
-  { label: 'Sin voz', levels: { vocals: 0 } },
-  { label: 'Solo percusión', levels: { vocals: 0, guitar: 0, bass: 0, other: 0 } },
-  { label: 'Bajo + percusión', levels: { vocals: 0, guitar: 0, other: 0 } },
-  { label: 'Solo guitarra', levels: { vocals: 0, bass: 0, other: 0, guira: 0, bongo: 0, tumba: 0 } },
+  { label: 'Sin voz', levels: off(['vocals', 'coros']) },
+  { label: 'Sin voz principal', levels: off(['vocals']) },
+  { label: 'Solo percusión', levels: off([...MELODIC, 'bass']) },
+  { label: 'Bajo + percusión', levels: off(MELODIC) },
+  { label: 'Solo guitarras', levels: off(['vocals', 'coros', 'bass', 'keys', 'other', ...PERCUSSION]) },
 ];
 
 /** Desfase tolerado entre una pista y el reloj antes de corregirla (segundos). */
 const MAX_DRIFT_SEC = 0.06;
 const SYNC_EVERY_MS = 250;
 
-const FULL: Record<ChannelKey, number> = {
-  vocals: 1,
-  guitar: 1,
-  bass: 1,
-  other: 1,
-  tumba: 1,
-  bongo: 1,
-  guira: 1,
-};
+const FULL = Object.fromEntries(CHANNELS.map((c) => [c.key, 1])) as Record<ChannelKey, number>;
 
 interface Engine {
   ctx: AudioContext;
@@ -93,11 +95,11 @@ function buildEngine(urls: StemUrls): Engine {
     return f;
   };
 
-  for (const key of ['vocals', 'guitar', 'bass', 'other'] as const) {
+  for (const key of ['vocals', 'coros', 'requinto', 'segunda', 'bass', 'campana', 'keys', 'other'] as const) {
     source(urls[key]).connect(gain(key));
   }
 
-  // Percusión: cruce en 200 Hz y 4 kHz → tumba / bongó / güira (las 3 suman ≈ la pista original).
+  // Resto de la percusión: cruce en 200 Hz y 4 kHz → tumba / bongó / güira (las 3 suman ≈ la pista original).
   const drums = source(urls.drums);
   drums.connect(filter('lowpass', 200)).connect(gain('tumba'));
   const midLow = filter('highpass', 200);
@@ -152,6 +154,7 @@ export function StudioMixer({
   const [muted, setMuted] = useState<Set<ChannelKey>>(new Set());
   const [solo, setSolo] = useState<Set<ChannelKey>>(new Set());
   const engineRef = useRef<Engine | null>(null);
+  const qc = useQueryClient();
 
   // Las URLs firmadas duran 1 h: se piden al activar y se reutilizan 50 min.
   const urls = useQuery({
@@ -161,6 +164,14 @@ export function StudioMixer({
     staleTime: 50 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
+
+  // Pistas de una versión anterior (sin los instrumentos nuevos): la API las marca para
+  // prepararlas de nuevo; se refresca el estudio para que aparezca el botón.
+  useEffect(() => {
+    if (!urls.isError) return;
+    setEnabled(false);
+    void qc.invalidateQueries({ queryKey: ['studio', 'audio-file', study.id] });
+  }, [urls.isError, qc, study.id]);
 
   // Arma / desarma el motor.
   useEffect(() => {
@@ -279,15 +290,16 @@ export function StudioMixer({
 
       {status === null && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
+          {urls.error && <p className="w-full text-xs text-amber-300">{urls.error.message}</p>}
           <Button size="sm" onClick={onRequestStems} disabled={requesting}>
             Separar instrumentos para mezclar
           </Button>
-          <span className="text-xs text-neutral-500">Tarda un par de minutos; puedes seguir estudiando.</span>
+          <span className="text-xs text-neutral-500">Tarda varios minutos (hasta ~10); puedes seguir estudiando.</span>
         </div>
       )}
       {(status === 'PENDING' || status === 'PROCESSING') && (
         <p className="animate-pulse text-sm text-neutral-400">
-          Separando instrumentos… (un par de minutos)
+          Separando instrumentos… (varios minutos, hasta ~10)
         </p>
       )}
       {status === 'ERROR' && (
@@ -316,11 +328,13 @@ export function StudioMixer({
             ))}
           </div>
           <div className="space-y-2">
-            {CHANNELS.map(({ key, label, sub }) => (
-              <div key={key} className={clsx('flex items-center gap-3 text-sm', sub && 'pl-4')}>
-                <span className={clsx('w-20 shrink-0', sub ? 'text-neutral-400' : 'text-neutral-200')}>
-                  {sub ? `↳ ${label}` : label}
-                </span>
+            {CHANNELS.map(({ key, label, group }, i) => (
+              <div key={key}>
+                {group && group !== CHANNELS[i - 1]?.group && (
+                  <p className="pb-1 pt-1 text-[11px] uppercase tracking-wide text-neutral-500">{group}</p>
+                )}
+              <div className={clsx('flex items-center gap-3 text-sm', group && 'pl-3')}>
+                <span className="w-24 shrink-0 text-neutral-200">{label}</span>
                 <input
                   type="range"
                   min={0}
@@ -359,11 +373,12 @@ export function StudioMixer({
                   S
                 </button>
               </div>
+              </div>
             ))}
           </div>
           <p className="text-[11px] text-neutral-500">
-            Güira, bongó y tumba se ajustan por frecuencia dentro de la percusión (aproximado). M =
-            silenciar, S = escuchar solo ese.
+            Coros, requinto, segunda, campana, güira, bongó y tumba son aproximados: se separan a partir
+            de la voz, la guitarra y la percusión. M = silenciar, S = escuchar solo ese.
           </p>
         </>
       )}

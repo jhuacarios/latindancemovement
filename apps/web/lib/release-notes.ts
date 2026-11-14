@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.13.0',
+    date: '2026-11-13',
+    module: 'studio.bachata',
+    type: 'feature',
+    title: 'Más instrumentos en el Estudio: coros, requinto, segunda, campana y teclados',
+    description:
+      'El Estudio de bachata ahora distingue la voz principal de los coros, el requinto de la segunda guitarra, la campana del bongó y los teclados, en las franjas y en el mezclador. Además detecta mejor el mambo. Para verlo en una canción que ya subiste, usa "Re-analizar"; el mezclador te pedirá preparar las pistas de nuevo.',
+  },
+  {
     version: '0.12.0',
     date: '2026-11-13',
     module: 'general',
