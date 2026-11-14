@@ -29,13 +29,20 @@ class FingerprintResponse(BaseModel):
 
 
 # Instrumentos que se miden (calza con INSTRUMENT_KEYS de @baile-latino/types).
-INSTRUMENT_KEYS = ("vocals", "bass", "guitar", "guira", "bongo", "tumba", "other")
-InstrumentKey = Literal["vocals", "bass", "guitar", "guira", "bongo", "tumba", "other"]
+# "vocals" = voz principal (sin coros); "guitar" = todas las guitarras juntas.
+INSTRUMENT_KEYS = (
+    "vocals", "coros", "guitar", "requinto", "segunda", "bass",
+    "guira", "bongo", "campana", "tumba", "keys", "other",
+)
+InstrumentKey = Literal[
+    "vocals", "coros", "guitar", "requinto", "segunda", "bass",
+    "guira", "bongo", "campana", "tumba", "keys", "other",
+]
 
 
-# Pistas que se guardan para el mezclador ("other" incluye lo que Demucs llama "piano").
-STEM_KEYS = ("vocals", "guitar", "bass", "drums", "other")
-StemKey = Literal["vocals", "guitar", "bass", "drums", "other"]
+# Pistas que se guardan para el mezclador ("drums" = percusión sin la campana).
+STEM_KEYS = ("vocals", "coros", "requinto", "segunda", "bass", "drums", "campana", "keys", "other")
+StemKey = Literal["vocals", "coros", "requinto", "segunda", "bass", "drums", "campana", "keys", "other"]
 
 
 class StemsRequest(BaseModel):

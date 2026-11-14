@@ -14,3 +14,5 @@ madmom @ git+https://github.com/CPJKU/madmom@27f032e8947204902c675e5e341a3faf5dc
 torch==2.5.1+cpu
 torchaudio==2.5.1+cpu
 demucs==4.0.1
+# Coros vs. voz principal: modelo karaoke MDX-Net (ONNX) de UVR, inferencia en CPU.
+onnxruntime==1.32.0

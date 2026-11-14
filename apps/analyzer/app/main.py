@@ -4,6 +4,7 @@ archivos; baja el audio de una URL firmada, lo analiza y devuelve JSON."""
 import hmac
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -27,6 +28,12 @@ from .schemas import (
 )
 
 app = FastAPI(title="Nectason analyzer", version=ANALYZER_VERSION)
+
+# Separación (Demucs + karaoke): una a la vez. Cada una usa ~2-3 GB de RAM y todas las
+# CPU asignadas; dos en paralelo no terminan antes y pueden agotar la memoria del
+# servidor. Las demás peticiones esperan su turno (la API ya las encola de a una, pero
+# un reintento puede llegar mientras la anterior sigue corriendo).
+HEAVY = threading.Lock()
 
 
 def require_token(authorization: str | None = Header(default=None)) -> None:
@@ -68,13 +75,15 @@ def analyze_endpoint(body: AnalyzeRequest) -> AnalyzeResponse:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-# Separación de instrumentos: lenta (~1-2 min por canción con 4 CPU), por eso va aparte de /analyze.
+# Separación de instrumentos: lenta (~5 min por canción con 2 CPU), por eso va aparte de /analyze.
+# En estéreo: el modelo karaoke distingue coros de voz principal por la imagen estéreo.
 @app.post("/instruments", response_model=InstrumentsResponse, dependencies=[Depends(require_token)])
 def instruments_endpoint(body: InstrumentsRequest) -> InstrumentsResponse:
     with tempfile.TemporaryDirectory() as tmp:
         try:
-            wav = _prepare(body.audioUrl, Path(tmp))
-            return analyze_instruments(wav)
+            wav = _prepare(body.audioUrl, Path(tmp), channels=2)
+            with HEAVY:
+                return analyze_instruments(wav)
         except AudioError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -88,7 +97,8 @@ def stems_endpoint(body: StemsRequest) -> StemsResponse:
     with tempfile.TemporaryDirectory() as tmp:
         try:
             wav = _prepare(body.audioUrl, Path(tmp), channels=2)
-            return make_stems(wav, body.uploads, Path(tmp))
+            with HEAVY:
+                return make_stems(wav, body.uploads, Path(tmp))
         except AudioError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except StemUploadError as exc:

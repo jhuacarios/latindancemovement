@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from app.schemas import INSTRUMENT_KEYS, AnalyzeResponse, FingerprintResponse, InstrumentsResponse
+from app.schemas import INSTRUMENT_KEYS, STEM_KEYS, AnalyzeResponse, FingerprintResponse, InstrumentsResponse
 
 TOKEN = "test-token"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -68,7 +68,7 @@ def test_instruments_contract(client, monkeypatch):
     # Sin correr Demucs (eso lo cubre test_instruments): pistas falsas.
     from app import instruments
 
-    monkeypatch.setattr(instruments, "separate", lambda y, sr: {"drums": y, "vocals": y * 0.5})
+    monkeypatch.setattr(instruments, "separate_all", lambda x, sr: {"drums": x, "vocals": x * 0.5, "guitar": x * 0.3})
     res = client.post("/instruments", json={"audioUrl": "https://storage.test/a"}, headers=AUTH)
     assert res.status_code == 200
     body = InstrumentsResponse.model_validate(res.json())
@@ -80,7 +80,9 @@ def test_instruments_contract(client, monkeypatch):
 def test_stems_uploads_every_stem(client, monkeypatch):
     from app import instruments, stems
 
-    monkeypatch.setattr(stems, "separate_stereo", lambda x, sr: {"vocals": x * 0.5, "drums": x * 0.2, "piano": x * 0.1})
+    monkeypatch.setattr(
+        stems, "separate_all", lambda x, sr: {"vocals": x * 0.5, "coros": x * 0.1, "drums": x * 0.2, "piano": x * 0.1}
+    )
     put = {}
 
     def fake_upload(path, url):
@@ -88,7 +90,7 @@ def test_stems_uploads_every_stem(client, monkeypatch):
         put[url] = path.name
 
     monkeypatch.setattr(stems, "upload", fake_upload)
-    keys = ["vocals", "guitar", "bass", "drums", "other"]
+    keys = list(STEM_KEYS)
     uploads = {k: f"https://storage.test/put/{k}" for k in keys}
     res = client.post("/stems", json={"audioUrl": "https://storage.test/a", "uploads": uploads}, headers=AUTH)
     assert res.status_code == 200, res.text
@@ -108,12 +110,12 @@ def test_stems_requires_every_upload_url(client):
 def test_stems_upload_failure_is_502(client, monkeypatch):
     from app import stems
 
-    monkeypatch.setattr(stems, "separate_stereo", lambda x, sr: {})
+    monkeypatch.setattr(stems, "separate_all", lambda x, sr: {})
 
     def failing(path, url):
         raise stems.StemUploadError("El storage rechazó la pista (HTTP 403).")
 
     monkeypatch.setattr(stems, "upload", failing)
-    uploads = {k: "https://storage.test/put" for k in ["vocals", "guitar", "bass", "drums", "other"]}
+    uploads = {k: "https://storage.test/put" for k in STEM_KEYS}
     res = client.post("/stems", json={"audioUrl": "https://storage.test/a", "uploads": uploads}, headers=AUTH)
     assert res.status_code == 502

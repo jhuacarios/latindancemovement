@@ -14,7 +14,7 @@ import soundfile as sf
 
 from . import ANALYZER_VERSION
 from .audio import MAX_DURATION_SEC, SAMPLE_RATE, AudioError
-from .instruments import separate_stereo
+from .instruments import separate_all, split_drums, split_guitar
 from .schemas import STEM_KEYS, StemsResponse
 
 STEM_BITRATE = "128k"
@@ -61,15 +61,21 @@ def make_stems(wav: Path, uploads: dict[str, str], workdir: Path) -> StemsRespon
     if duration_sec > MAX_DURATION_SEC:
         raise AudioError("El audio supera la duración máxima de 10 minutos.")
 
-    sources = separate_stereo(stereo, sr)
+    sources = separate_all(stereo, sr)
     zeros = np.zeros_like(stereo)
+    requinto, segunda = split_guitar(sources.get("guitar", zeros), sr)
+    campana, drums = split_drums(sources.get("drums", zeros), sr)
     stems = {
-        "vocals": sources.get("vocals", zeros),
-        "guitar": sources.get("guitar", zeros),
+        "vocals": sources.get("vocals", zeros),  # voz principal
+        "coros": sources.get("coros", zeros),
+        "requinto": requinto,
+        "segunda": segunda,
         "bass": sources.get("bass", zeros),
-        "drums": sources.get("drums", zeros),
-        # "piano" casi nunca es piano en bachata: va con "otros".
-        "other": sources.get("other", zeros) + sources.get("piano", zeros),
+        "drums": drums,  # percusión sin la campana
+        "campana": campana,
+        # "piano" casi nunca es piano en bachata: teclados y sintes.
+        "keys": sources.get("piano", zeros),
+        "other": sources.get("other", zeros),
     }
     for key in STEM_KEYS:
         upload(encode_m4a(stems[key], sr, workdir / f"{key}.m4a"), uploads[key])
