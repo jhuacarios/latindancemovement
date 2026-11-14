@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.14.0',
+    date: '2026-11-13',
+    module: 'studio',
+    type: 'feature',
+    title: 'Estudio por estilo: Analizador de bachata y de salsa',
+    description:
+      'El Estudio ahora se ordena por estilo: Estudio → Bachata → Analizador y Estudio → Salsa → Analizador. En salsa ya puedes subir canciones y estudiar el 1 de cada frase con loop y velocidad; los instrumentos y secciones de salsa vienen pronto.',
+  },
+  {
     version: '0.13.0',
     date: '2026-11-13',
     module: 'studio.bachata',

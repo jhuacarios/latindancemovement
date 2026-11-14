@@ -117,8 +117,20 @@ export const MODULES: AppModule[] = [
     icon: '🎚️',
     roles: ALL,
     status: 'ready',
-    // Una sección por estilo: cada uno tiene su conteo, sus instrumentos y sus reglas (salsa vendrá aparte).
-    children: [{ label: 'Bachata', key: 'studio.bachata', href: '/studio/bachata' }],
+    // Una sección por estilo (cada uno con su conteo, sus instrumentos y sus reglas), y
+    // dentro de cada estilo sus herramientas: por ahora el Analizador.
+    children: [
+      {
+        label: 'Bachata',
+        key: 'studio.bachata',
+        children: [{ label: 'Analizador', key: 'studio.bachata.analizador', href: '/studio/bachata/analizador' }],
+      },
+      {
+        label: 'Salsa',
+        key: 'studio.salsa',
+        children: [{ label: 'Analizador', key: 'studio.salsa.analizador', href: '/studio/salsa/analizador' }],
+      },
+    ],
   },
   {
     key: 'sales',
