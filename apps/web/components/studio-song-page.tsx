@@ -97,6 +97,7 @@ export function StudioSongPage({ backHref, backLabel }: { backHref: string; back
           savingFirstBeat={firstBeat.isPending}
           onRequestStems={() => stems.mutate()}
           requestingStems={stems.isPending}
+          requestStemsError={stems.error?.message ?? null}
         />
       )}
     </div>

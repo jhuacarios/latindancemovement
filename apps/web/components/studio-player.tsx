@@ -62,6 +62,7 @@ export function StudioPlayer({
   savingFirstBeat,
   onRequestStems,
   requestingStems,
+  requestStemsError,
 }: {
   study: SongStudy;
   audioUrl: string;
@@ -70,6 +71,7 @@ export function StudioPlayer({
   savingFirstBeat: boolean;
   onRequestStems: () => void;
   requestingStems: boolean;
+  requestStemsError: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
@@ -386,6 +388,7 @@ export function StudioPlayer({
         study={study}
         onRequestStems={onRequestStems}
         requesting={requestingStems}
+        requestError={requestStemsError}
       />
 
       {/* Corregir el "1" */}

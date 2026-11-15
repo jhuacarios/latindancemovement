@@ -179,11 +179,13 @@ export function StudioMixer({
   study,
   onRequestStems,
   requesting,
+  requestError,
 }: {
   ws: WaveSurfer | null;
   study: SongStudy;
   onRequestStems: () => void;
   requesting: boolean;
+  requestError: string | null;
 }) {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -330,20 +332,22 @@ export function StudioMixer({
       {status === null && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {urls.error && <p className="w-full text-xs text-amber-300">{urls.error.message}</p>}
+          {requestError && <p className="w-full text-xs text-amber-300">{requestError}</p>}
           <Button size="sm" onClick={onRequestStems} disabled={requesting}>
             Separar instrumentos para mezclar
           </Button>
-          <span className="text-xs text-neutral-500">Tarda varios minutos (hasta ~10); puedes seguir estudiando.</span>
+          <span className="text-xs text-neutral-500">Tarda varios minutos (hasta ~10). Sigue en segundo plano: puedes cerrar la pestaña y volver después. Una canción a la vez.</span>
         </div>
       )}
       {(status === 'PENDING' || status === 'PROCESSING') && (
         <p className="animate-pulse text-sm text-neutral-400">
-          Separando instrumentos… (varios minutos, hasta ~10)
+          Separando instrumentos… (varios minutos, hasta ~10). Puedes cerrar la pestaña: sigue en segundo plano.
         </p>
       )}
       {status === 'ERROR' && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-red-300">
           No se pudieron separar las pistas.
+          {requestError && <span className="w-full text-xs text-amber-300">{requestError}</span>}
           <Button size="sm" variant="ghost" onClick={onRequestStems} disabled={requesting}>
             Reintentar
           </Button>

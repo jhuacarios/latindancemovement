@@ -327,6 +327,29 @@ describe('Estudio (e2e)', () => {
     }
   });
 
+  it('mezclador: una separación a la vez por usuario', async () => {
+    const busy = await uploadAndAnalyze(owner().token, 'en-curso.mp3');
+    const next = await uploadAndAnalyze(owner().token, 'siguiente.mp3');
+    await prisma.audioFile.update({ where: { id: busy.id }, data: { stemsStatus: 'PROCESSING' } });
+
+    const blocked = await call('POST', `/audio-files/${next.id}/stems`, owner().token);
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json<{ message: string }>().message).toContain('en-curso.mp3');
+    // Pedir de nuevo la que ya está en curso no es error.
+    expect((await call('POST', `/audio-files/${busy.id}/stems`, owner().token)).statusCode).toBe(200);
+    // Otro usuario no queda bloqueado.
+    const others = await uploadAndAnalyze(other().token, 'de-otro.mp3');
+    expect((await call('POST', `/audio-files/${others.id}/stems`, other().token)).statusCode).toBe(200);
+
+    // Una separación perdida (sin avance en 30 min) no bloquea para siempre.
+    await prisma.$executeRaw`UPDATE "AudioFile" SET "updatedAt" = NOW() - INTERVAL '1 hour' WHERE id = ${busy.id}`;
+    expect((await call('POST', `/audio-files/${next.id}/stems`, owner().token)).statusCode).toBe(200);
+
+    await call('DELETE', `/audio-files/${busy.id}`, owner().token);
+    await call('DELETE', `/audio-files/${next.id}`, owner().token);
+    await call('DELETE', `/audio-files/${others.id}`, other().token);
+  });
+
   it('salsa: usa sus propias reglas de secciones y la lista filtra por estilo', async () => {
     const study = await uploadAndAnalyze(owner().token, 'salsa.mp3', 'SALSA');
     expect(study.style).toBe('SALSA');

@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.15.1',
+    date: '2026-11-14',
+    module: 'studio',
+    type: 'improvement',
+    title: 'Mezclador: una separación a la vez y en segundo plano',
+    description:
+      'La separación de instrumentos para el mezclador sigue en segundo plano: puedes cerrar la pestaña y volver cuando esté lista. Cada usuario separa una canción a la vez; si ya hay una en curso, te avisamos cuál es.',
+  },
+  {
     version: '0.15.0',
     date: '2026-11-13',
     module: 'studio.salsa',

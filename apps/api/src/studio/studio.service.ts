@@ -57,6 +57,9 @@ const SECTION_RULES: Record<string, typeof deriveBachataSections | undefined> = 
 /** Pistas que generaban versiones anteriores del analizador (para limpiarlas al borrar). */
 const LEGACY_STEM_KEYS = ['guitar'] as const;
 
+/** Una separación que no avanza en este tiempo se da por perdida y no bloquea otra. */
+const STEMS_STALE_MS = 30 * 60 * 1000;
+
 @Injectable()
 export class StudioService {
   private readonly logger = new Logger(StudioService.name);
@@ -158,6 +161,21 @@ export class StudioService {
     if (file.status !== 'READY') throw new ConflictException('Espera a que termine el análisis.');
     if (file.stemsStatus === 'PENDING' || file.stemsStatus === 'PROCESSING') return this.toStudy(file);
     if (file.stemsStatus === 'DONE' && (await this.stemsComplete(file.storageKey))) return this.toStudy(file);
+    // Una separación a la vez por usuario: es lo más pesado del servidor (~5 min de CPU cada una).
+    const busy = await this.prisma.audioFile.findFirst({
+      where: {
+        userId: user.id,
+        id: { not: file.id },
+        stemsStatus: { in: ['PENDING', 'PROCESSING'] },
+        updatedAt: { gt: new Date(Date.now() - STEMS_STALE_MS) },
+      },
+      select: { originalName: true },
+    });
+    if (busy) {
+      throw new ConflictException(
+        `Ya estás separando "${busy.originalName}". Cuando termine podrás separar otra canción.`,
+      );
+    }
     const updated = await this.prisma.audioFile.update({
       where: { id: file.id },
       data: { stemsStatus: 'PENDING', stemsError: null },
