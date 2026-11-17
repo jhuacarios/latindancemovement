@@ -13,6 +13,7 @@ import {
   formFromEvent,
   formatEventDateLong,
   formatEventTime,
+  instagramEmbedUrl,
   replaceFlyer,
   updateEvent,
   validateForm,
@@ -124,6 +125,7 @@ export default function EventDetailPage() {
   const img = flyerUrl(ev);
   const cancelled = ev.status === 'CANCELLED';
   const mapsLink = eventMapsLink(ev);
+  const embedUrl = instagramEmbedUrl(ev.instagramUrl);
 
   return (
     <div className="space-y-6">
@@ -162,14 +164,31 @@ export default function EventDetailPage() {
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-          <Card className="p-0">
-            {img ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={img} alt={ev.title} className="w-full rounded-xl" />
-            ) : (
-              <div className="flex h-64 items-center justify-center text-5xl">📅</div>
+          <div className="space-y-4">
+            {(img || !embedUrl) && (
+              <Card className="p-0">
+                {img ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={img} alt={ev.title} className="w-full rounded-xl" />
+                ) : (
+                  <div className="flex h-64 items-center justify-center text-5xl">📅</div>
+                )}
+              </Card>
             )}
-          </Card>
+            {embedUrl && (
+              <Card className="overflow-hidden p-0">
+                {/* Iframe oficial de Instagram: si el post es privado o se borró, Instagram muestra su aviso. */}
+                <iframe
+                  src={embedUrl}
+                  title="Publicación de Instagram"
+                  className="mx-auto block h-[640px] w-full max-w-[540px] border-0 bg-white"
+                  loading="lazy"
+                  allow="encrypted-media; picture-in-picture; clipboard-write"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                />
+              </Card>
+            )}
+          </div>
 
           <div className="space-y-4">
             <Card className="space-y-3">

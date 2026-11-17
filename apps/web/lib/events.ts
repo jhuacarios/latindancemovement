@@ -189,11 +189,27 @@ export function payloadFromForm(v: EventFormValues) {
   };
 }
 
+const INSTAGRAM_POST = /^https?:\/\/(?:www\.)?instagram\.com\/(?:[\w.]+\/)?(p|reels?|tv)\/([\w-]+)/i;
+
+/**
+ * Link de un post o reel público de Instagram → URL para mostrarlo embebido
+ * (el iframe oficial /embed de Instagram, sin SDK ni permisos). null si no es un post.
+ */
+export function instagramEmbedUrl(url: string | null | undefined): string | null {
+  const m = url?.trim().match(INSTAGRAM_POST);
+  if (!m) return null;
+  const kind = m[1].toLowerCase() === 'p' ? 'p' : m[1].toLowerCase() === 'tv' ? 'tv' : 'reel';
+  return `https://www.instagram.com/${kind}/${m[2]}/embed/captioned/`;
+}
+
 /** Errores de validación del formulario (antes de llamar a la API). */
 export function validateForm(v: EventFormValues): string | null {
   if (v.title.trim().length < 2) return 'Ponle un nombre al evento.';
   if (!fromLocalInput(v.startsAt)) return 'Indica fecha y hora de inicio.';
   if (!v.region) return 'Elige la región donde se realiza.';
+  if (v.instagramUrl.trim() && !instagramEmbedUrl(v.instagramUrl)) {
+    return 'El link de Instagram debe ser de un post o reel (instagram.com/p/… o instagram.com/reel/…).';
+  }
   const end = fromLocalInput(v.endsAt);
   if (end && end <= fromLocalInput(v.startsAt)!) {
     return 'La hora de término debe ser posterior al inicio.';
@@ -203,10 +219,11 @@ export function validateForm(v: EventFormValues): string | null {
 
 // --- llamadas a la API --------------------------------------------------------
 
-export function extractFlyer(file: File, text: string) {
+/** Lee el flyer y/o el texto del post (al menos uno). */
+export function extractFlyer(file: File | null, text: string) {
   const fd = new FormData();
   fd.append('text', text);
-  fd.append('file', file);
+  if (file) fd.append('file', file);
   return uploadForm<FlyerExtraction>('/events/extract', fd);
 }
 

@@ -27,6 +27,10 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { QueryEventsDto } from './dto/query-events.dto';
 import { readMultipart, validateJsonField } from '../common/multipart';
 
+/** Texto del post: bajo esto no hay nada que leer; sobre esto, no es un post (y cuesta tokens). */
+const MIN_POST_TEXT = 20;
+const MAX_POST_TEXT = 5000;
+
 @Controller('events')
 export class EventsController {
   constructor(
@@ -44,15 +48,21 @@ export class EventsController {
   /**
    * Lee un flyer (+ texto opcional del post) con Claude y devuelve los datos
    * para prellenar el formulario. No crea nada.
-   * multipart: `file` (imagen) + `text` (opcional).
+   * multipart: `file` (imagen, opcional) + `text` (opcional); al menos uno de los dos.
    */
   @Post('extract')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ORGANIZADOR', 'VENUE')
   async extract(@Req() req: FastifyRequest) {
     const { file, fields } = await readMultipart(req);
-    if (!file) throw new BadRequestException('Sube la imagen del flyer.');
-    return this.extractor.extract(file, fields.text);
+    const text = fields.text?.trim() ?? '';
+    if (!file && text.length < MIN_POST_TEXT) {
+      throw new BadRequestException('Sube el flyer o pega el texto del post para poder leerlo.');
+    }
+    if (text.length > MAX_POST_TEXT) {
+      throw new BadRequestException(`El texto del post no puede superar ${MAX_POST_TEXT} caracteres.`);
+    }
+    return this.extractor.extract(file ?? null, text);
   }
 
   /** Publica un evento. multipart: `data` (JSON de CreateEventDto) + `file` (flyer, opcional). */

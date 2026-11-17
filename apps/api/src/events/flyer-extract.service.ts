@@ -53,9 +53,11 @@ const ExtractionSchema = z.object({
 
 // Prompt estable (sin fecha ni datos variables) para que se cachee entre llamadas.
 const SYSTEM_PROMPT = `Eres el asistente de Nectason, una plataforma para la comunidad de baile social latino (bachata y salsa) en Chile.
-Tu tarea: leer el flyer de un evento (imagen) y, si viene, el texto del post de Instagram, y extraer los datos del evento en el formato pedido.
+Tu tarea: leer el flyer de un evento (imagen) y/o el texto del post de Instagram (puede venir solo uno de los dos) y extraer los datos del evento en el formato pedido.
 
 Reglas:
+- La imagen puede ser el flyer solo o una captura de pantalla del post de Instagram (flyer + texto del post al lado, comentarios, likes). Usa el flyer y el texto del post (el que escribió la cuenta que publica); IGNORA los comentarios de otras personas, los "me gusta" y las fechas de publicación ("1 sem", "1 de noviembre"), que no son la fecha del evento.
+- Las cuentas que aparecen como productoras ("Producen @x", "Organiza @x") o como cuenta que publica el post son el organizador; los @ de DJs, artistas, filmmakers o del venue van en la descripción, no como organizador.
 - Devuelve null en cualquier campo que no aparezca. NUNCA inventes datos.
 - Fechas: resuelve expresiones relativas ("este viernes", "mañana", "sábado 14") usando la fecha de hoy que te doy en el mensaje. Si el flyer no indica año, usa el próximo en que esa fecha aún no haya pasado. Formato YYYY-MM-DD.
 - Horas en formato 24h HH:mm. "22 hrs", "22:00", "10 pm" → "22:00".
@@ -104,7 +106,7 @@ export class FlyerExtractService {
   }
 
   async extract(
-    image: { buffer: Buffer; mime: string },
+    image: { buffer: Buffer; mime: string } | null,
     text?: string | null,
   ): Promise<FlyerExtraction> {
     const client = this.getClient();
@@ -117,8 +119,11 @@ export class FlyerExtractService {
       text?.trim()
         ? `Texto del post de Instagram:\n"""\n${text.trim()}\n"""`
         : 'No hay texto adicional: usa solo el flyer.',
+      image ? null : 'No hay flyer: usa solo el texto del post.',
       'Extrae los datos del evento.',
-    ].join('\n\n');
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
     try {
       const response = await client.messages.parse({
@@ -135,15 +140,19 @@ export class FlyerExtractService {
           {
             role: 'user',
             content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: image.mime as FlyerMime,
-                  data: image.buffer.toString('base64'),
-                },
-              },
-              { type: 'text', text: userText },
+              ...(image
+                ? [
+                    {
+                      type: 'image' as const,
+                      source: {
+                        type: 'base64' as const,
+                        media_type: image.mime as FlyerMime,
+                        data: image.buffer.toString('base64'),
+                      },
+                    },
+                  ]
+                : []),
+              { type: 'text' as const, text: userText },
             ],
           },
         ],

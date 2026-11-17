@@ -247,12 +247,12 @@ export function EventForm({
             placeholder="https://…"
           />
         </Field>
-        <Field label="Link del post de Instagram">
+        <Field label="Link del post o reel de Instagram">
           <Input
             type="url"
             value={values.instagramUrl}
             onChange={(e) => set('instagramUrl', e.target.value)}
-            placeholder="https://www.instagram.com/p/…"
+            placeholder="https://www.instagram.com/reel/…"
           />
         </Field>
       </div>

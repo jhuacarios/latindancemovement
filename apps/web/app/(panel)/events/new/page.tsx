@@ -62,8 +62,25 @@ export default function NewEventPage() {
     setFile(f);
   };
 
+  // Ctrl+V / Cmd+V con una captura en el portapapeles (ej. pantallazo del post de Instagram).
+  useEffect(() => {
+    if (step !== 'upload') return;
+    const onPaste = (e: ClipboardEvent) => {
+      const img = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
+      if (!img) return; // texto: que lo pegue el textarea
+      e.preventDefault();
+      pick(new File([img], img.name || 'captura.png', { type: img.type }));
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [step]);
+
+  /** Bajo esto el texto no alcanza para leer nada (mismo mínimo que la API). */
+  const hasText = text.trim().length >= 20;
+  const canRead = !!file || hasText;
+
   const read = async () => {
-    if (!file) return;
+    if (!canRead) return;
     setReading(true);
     setReadError(null);
     try {
@@ -73,7 +90,7 @@ export default function NewEventPage() {
       setStep('form');
     } catch (e) {
       setReadError(
-        e instanceof ApiError ? e.message : 'No se pudo leer el flyer.',
+        e instanceof ApiError ? e.message : 'No se pudo leer el post.',
       );
     } finally {
       setReading(false);
@@ -112,15 +129,15 @@ export default function NewEventPage() {
         </Link>
         <h1 className="mt-1 text-2xl font-bold">Publicar evento</h1>
         <p className="text-sm text-neutral-400">
-          Sube el flyer y, si quieres, pega el texto del post. Leemos los datos
-          y tú solo confirmas.
+          Sube el flyer o una captura del post (con su texto), o pega el texto del post. Leemos
+          los datos y tú solo confirmas.
         </p>
       </div>
 
       {step === 'upload' && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <Card className="space-y-3">
-            <div className="text-sm font-semibold">1. Flyer</div>
+            <div className="text-sm font-semibold">1. Flyer o captura del post</div>
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -151,7 +168,7 @@ export default function NewEventPage() {
                 <>
                   <div className="text-4xl">🖼️</div>
                   <div className="text-sm text-neutral-300">
-                    Arrastra el flyer aquí o toca para elegirlo
+                    Arrastra el flyer o un pantallazo del post, toca para elegirlo o pégalo con Ctrl+V
                   </div>
                   <div className="text-xs text-neutral-500">JPG, PNG o WEBP · máx. 5 MB</div>
                 </>
@@ -194,8 +211,16 @@ export default function NewEventPage() {
             />
             {readError && <div className="text-sm text-red-300">{readError}</div>}
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" onClick={read} disabled={!file || reading}>
-                {reading ? 'Leyendo el flyer…' : '✨ Leer flyer y continuar'}
+              <Button
+                type="button"
+                onClick={read}
+                disabled={!canRead || reading}
+              >
+                {reading
+                  ? 'Leyendo…'
+                  : file || !hasText
+                    ? '✨ Leer y continuar'
+                    : '✨ Leer texto y continuar'}
               </Button>
               <Button type="button" variant="ghost" onClick={manual} disabled={reading}>
                 Llenar a mano
@@ -203,7 +228,9 @@ export default function NewEventPage() {
             </div>
             {reading && <Spinner label="Extrayendo fecha, lugar y precios…" />}
             <p className="text-xs text-neutral-500">
-              Nada se publica hasta que revises y confirmes el formulario.
+              {canRead
+                ? 'Nada se publica hasta que revises y confirmes el formulario.'
+                : 'Sube el flyer o una captura, o pega el texto del post, para que leamos los datos.'}
             </p>
           </Card>
         </div>
