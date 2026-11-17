@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.17.2',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'improvement',
+    title: 'Academias con más espacio: 50 GB y videos de hasta 3 GB',
+    description:
+      'Cada academia tiene ahora 50 GB para sus fotos y videos (antes 20 GB), y cada video puede pesar hasta 3 GB (antes 2 GB), para subir clases completas.',
+  },
+  {
     version: '0.17.1',
     date: '2026-11-17',
     module: 'classes',

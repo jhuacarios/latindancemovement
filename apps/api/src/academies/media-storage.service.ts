@@ -11,7 +11,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MEDIA_CONFIG, type MediaConfig } from './media.config';
 
-/** Subir un video de 2 GB con mala conexión puede tardar: margen amplio. */
+/** Subir un video de 3 GB con mala conexión puede tardar: margen amplio. */
 const UPLOAD_URL_TTL_SEC = 6 * 60 * 60;
 const VIEW_URL_TTL_SEC = 60 * 60;
 

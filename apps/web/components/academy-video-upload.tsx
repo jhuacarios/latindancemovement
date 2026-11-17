@@ -200,7 +200,7 @@ export function AcademyVideoUpload({
       <div>
         <h2 className="font-semibold">Subir fotos y videos</h2>
         <p className="text-sm text-neutral-400">
-          Puedes elegir varios a la vez. Videos MP4, MOV o WEBM hasta 2 GB; fotos JPG, PNG o WEBP hasta 25 MB. Los ven
+          Puedes elegir varios a la vez. Videos MP4, MOV o WEBM hasta 3 GB; fotos JPG, PNG o WEBP hasta 25 MB. Los ven
           todos los usuarios con cuenta en Nectason: sube solo material donde las personas que aparecen estén de acuerdo.
         </p>
       </div>

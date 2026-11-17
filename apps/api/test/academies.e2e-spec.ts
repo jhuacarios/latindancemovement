@@ -147,7 +147,7 @@ describe('Academias (e2e)', () => {
     expect(a.myRole).toBe('OWNER');
     expect(a.instagramHandle).toBe('clave.vina');
     expect(a.members).toHaveLength(1);
-    expect(a.storage).toEqual({ usedBytes: 0, quotaBytes: 20480 * MB });
+    expect(a.storage).toEqual({ usedBytes: 0, quotaBytes: 51200 * MB });
 
     const seen = (await call('GET', `/${a.id}`, 'viewer')).json<AcademyDto>();
     expect(seen.myRole).toBeNull();
@@ -232,8 +232,12 @@ describe('Academias (e2e)', () => {
     // Formato y tamaño.
     expect((await call('POST', `/${a.id}/videos`, 'owner', { title: 'X', mimeType: 'video/avi', sizeBytes: MB })).statusCode).toBe(400);
     expect(
-      (await call('POST', `/${a.id}/videos`, 'owner', { title: 'X', mimeType: 'video/mp4', sizeBytes: 3 * 1024 * MB })).statusCode,
+      (await call('POST', `/${a.id}/videos`, 'owner', { title: 'X', mimeType: 'video/mp4', sizeBytes: 4 * 1024 * MB })).statusCode,
     ).toBe(400);
+    // Hasta 3 GB por video.
+    expect(
+      (await call('POST', `/${a.id}/videos`, 'owner', { title: 'Clase completa', mimeType: 'video/mp4', sizeBytes: 2.5 * 1024 * MB })).statusCode,
+    ).toBe(201);
 
     // Borrar la clase deja el video como contenido general.
     await call('DELETE', `/${a.id}/classes/${cls.id}`, 'owner');

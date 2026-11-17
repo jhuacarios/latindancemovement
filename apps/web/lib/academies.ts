@@ -280,7 +280,7 @@ const HASH_CHUNK = 8 * 1024 * 1024;
 
 /**
  * Huella SHA-256 (hex) del contenido del archivo, leyéndolo por partes (sirve
- * para videos de 2 GB sin cargarlos enteros en memoria). Dos archivos con la
+ * para videos de 3 GB sin cargarlos enteros en memoria). Dos archivos con la
  * misma huella son idénticos, aunque tengan otro nombre.
  */
 export async function fileHash(file: File, onProgress?: (fraction: number) => void): Promise<string> {

@@ -1074,7 +1074,7 @@ export type ClassLevel = (typeof CLASS_LEVELS)[number];
 /** Formatos de video que se pueden subir (se reproducen tal cual, sin convertir). */
 export const ACADEMY_VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'] as const;
 export type AcademyVideoMimeType = (typeof ACADEMY_VIDEO_MIME_TYPES)[number];
-export const ACADEMY_VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+export const ACADEMY_VIDEO_MAX_BYTES = 3 * 1024 * 1024 * 1024;
 /** Fotos de la academia (van en la misma galería que los videos). */
 export const ACADEMY_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const ACADEMY_PHOTO_MAX_BYTES = 25 * 1024 * 1024;

@@ -476,7 +476,7 @@ model Academy {
   instagramHandle String? // sin @
   logoData        String? // base64, sin prefijo data:
   logoMime        String?
-  storageQuotaMb  Int      @default(20480) // cupo de videos (20 GB en el piloto)
+  storageQuotaMb  Int      @default(51200) // cupo de fotos y videos (50 GB)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -144,7 +144,7 @@ export class CreateVideoUploadDto {
 
   @IsInt()
   @Min(1)
-  @Max(ACADEMY_VIDEO_MAX_BYTES, { message: 'El video no puede superar 2 GB.' })
+  @Max(ACADEMY_VIDEO_MAX_BYTES, { message: 'El video no puede superar 3 GB.' })
   sizeBytes!: number;
 
   @IsOptional()
