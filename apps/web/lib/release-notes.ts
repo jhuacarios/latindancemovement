@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.20.1',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'fix',
+    title: 'Visor de fotos y videos en el celular',
+    description:
+      'En el celular, el botón para cerrar el visor queda siempre visible arriba a la derecha (antes se escondía con los videos verticales), y la ventana se puede desplazar completa. Lo mismo para el formulario de clases.',
+  },
+  {
     version: '0.20.0',
     date: '2026-11-17',
     module: 'classes',
