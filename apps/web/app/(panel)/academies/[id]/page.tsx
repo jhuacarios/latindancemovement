@@ -17,6 +17,7 @@ import {
   classTimeRange,
   formatBytes,
   formatVideoDuration,
+  missingExtension,
   validateAcademy,
   type AcademyFormValues,
 } from '@/lib/academies';
@@ -254,7 +255,10 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
               )}
             </button>
             <div className="space-y-0.5 p-3">
-              <div className="line-clamp-2 text-sm font-medium">{v.title}</div>
+              <div className="line-clamp-2 break-all text-sm font-medium">
+                {v.title}
+                <span className="text-neutral-500">{missingExtension(v)}</span>
+              </div>
               <div className="text-xs text-neutral-400">
                 {[v.classTitle ?? 'Contenido general', v.recordedOn].filter(Boolean).join(' · ')}
               </div>

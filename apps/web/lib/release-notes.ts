@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.17.3',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'improvement',
+    title: 'Galería de academias: nombres con extensión',
+    description:
+      'Las fotos y videos de las academias muestran su nombre con la extensión del archivo (por ejemplo, clase-bachata.mp4). Al subir, el título propuesto es el nombre completo del archivo.',
+  },
+  {
     version: '0.17.2',
     date: '2026-11-17',
     module: 'classes',

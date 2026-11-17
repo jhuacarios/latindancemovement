@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AcademyVideoDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
-import { academiesApi, formatVideoDuration } from '@/lib/academies';
+import { academiesApi, formatVideoDuration, missingExtension } from '@/lib/academies';
 import { textareaClass } from './academy-form';
 import { Button, Spinner, StyleBadge } from './ui';
 
@@ -81,7 +81,10 @@ export function AcademyVideoPlayer({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold">{item.title}</h2>
+            <h2 className="truncate text-lg font-semibold">
+              {item.title}
+              <span className="font-normal text-neutral-500">{missingExtension(item)}</span>
+            </h2>
             <p className="text-xs text-neutral-400">
               {[
                 item.classTitle,

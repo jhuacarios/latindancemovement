@@ -193,6 +193,26 @@ export function mediaMimeType(file: File): string | null {
 
 export const isPhotoMime = (mime: string) => mime.startsWith('image/');
 
+const EXT_BY_MIME: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+const KNOWN_EXT = /\.(mp4|m4v|mov|webm|jpe?g|png|webp)$/i;
+
+/**
+ * Extensión que falta mostrar junto al título (".mp4"), o '' si el título ya
+ * termina en una extensión.
+ */
+export function missingExtension(v: { title: string; mimeType: string }): string {
+  if (KNOWN_EXT.test(v.title.trim())) return '';
+  const ext = EXT_BY_MIME[v.mimeType];
+  return ext ? `.${ext}` : '';
+}
+
 /** Tamaño máximo según el tipo. */
 export function mediaMaxBytes(mime: string): number {
   return isPhotoMime(mime) ? ACADEMY_PHOTO_MAX_BYTES : ACADEMY_VIDEO_MAX_BYTES;

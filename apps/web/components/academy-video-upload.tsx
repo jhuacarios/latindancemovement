@@ -122,7 +122,7 @@ export function AcademyVideoUpload({
         next.push({
           key: `${f.name}-${f.size}-${f.lastModified}-${Math.random()}`,
           file: f,
-          title: f.name.replace(/\.[^.]+$/, '').slice(0, 160),
+          title: f.name.slice(0, 160), // con extensión
           state: 'checking',
           progress: 0,
           error: null,
