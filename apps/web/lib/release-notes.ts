@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.19.0',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'feature',
+    title: 'Compartir los videos de una clase con un link',
+    description:
+      'Cada clase del horario tiene el botón "Compartir videos": crea un link que cualquier persona puede abrir, sin cuenta, para ver y descargar las fotos y videos de esa clase (por ejemplo, solo los de Bachata del lunes a las 20:00). Lo que se suba después a la clase aparece en el mismo link, y se puede cambiar o desactivar cuando quieras. Además, arriba en la academia ahora se ve cuánto espacio queda en la galería y en la bóveda.',
+  },
+  {
     version: '0.18.0',
     date: '2026-11-17',
     module: 'classes',

@@ -21,6 +21,9 @@ export function AcademyVideoPlayer({
   onClose,
   manages = false,
   onChanged,
+  urlFor,
+  onDownload,
+  allowReport = true,
 }: {
   academyId: string;
   items: AcademyVideoDto[];
@@ -31,13 +34,19 @@ export function AcademyVideoPlayer({
   manages?: boolean;
   /** Se llamó cuando cambió algo (p. ej. la miniatura). */
   onChanged?: () => void;
+  /** De dónde sacar la URL para ver (por defecto, la API de la academia con sesión). */
+  urlFor?: (videoId: string) => Promise<{ url: string }>;
+  /** Si viene, muestra el botón Descargar. */
+  onDownload?: (videoId: string) => Promise<void>;
+  allowReport?: boolean;
 }) {
+  const [downloading, setDownloading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [thumbState, setThumbState] = useState<'idle' | 'saving' | 'done' | string>('idle');
   const item = items[index];
   const url = useQuery({
-    queryKey: ['academies', 'media-url', item.id],
-    queryFn: () => academiesApi.videoUrl(academyId, item.id),
+    queryKey: ['academies', 'media-url', urlFor ? 'shared' : 'panel', item.id],
+    queryFn: () => (urlFor ? urlFor(item.id) : academiesApi.videoUrl(academyId, item.id)),
     staleTime: 50 * 60 * 1000, // la URL dura 1 h
     refetchOnWindowFocus: false,
   });
@@ -199,6 +208,27 @@ export function AcademyVideoPlayer({
           </div>
         )}
 
+        {onDownload && (
+          <div>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={downloading}
+              onClick={async () => {
+                setDownloading(true);
+                try {
+                  await onDownload(item.id);
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+            >
+              {downloading ? 'Preparando…' : `⬇ Descargar ${isPhoto ? 'foto' : 'video'} original`}
+            </Button>
+          </div>
+        )}
+
+        {allowReport && (
         <div className="border-t border-neutral-800 pt-3 text-xs">
           {reportState === 'sent' ? (
             <p className="text-neutral-400">Gracias. Lo revisaremos.</p>
@@ -227,6 +257,7 @@ export function AcademyVideoPlayer({
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );

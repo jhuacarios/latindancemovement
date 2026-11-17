@@ -23,6 +23,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { readMultipart, validateJsonField } from '../common/multipart';
 import { AcademiesService } from './academies.service';
 import { AcademyVideosService } from './academy-videos.service';
+import { AcademyShareService } from './academy-share.service';
 import {
   AddMemberDto,
   CheckDuplicatesDto,
@@ -48,6 +49,7 @@ export class AcademiesController {
   constructor(
     private readonly academies: AcademiesService,
     private readonly videos: AcademyVideosService,
+    private readonly share: AcademyShareService,
   ) {}
 
   @Get()
@@ -171,6 +173,29 @@ export class AcademiesController {
   @HttpCode(204)
   async removeClass(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('classId') classId: string) {
     await this.academies.removeClass(user, id, classId);
+  }
+
+  // --- link para compartir una clase (dueño y profesores) ---------------------------
+
+  /** Link activo de la clase, o null. */
+  @Get(':id/classes/:classId/share')
+  @UseGuards(JwtAuthGuard)
+  getShare(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('classId') classId: string) {
+    return this.share.get(user, id, classId);
+  }
+
+  /** Crea el link (si había uno, ese deja de funcionar). */
+  @Post(':id/classes/:classId/share')
+  @UseGuards(JwtAuthGuard)
+  createShare(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('classId') classId: string) {
+    return this.share.create(user, id, classId);
+  }
+
+  @Delete(':id/classes/:classId/share')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
+  async revokeShare(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('classId') classId: string) {
+    await this.share.revoke(user, id, classId);
   }
 
   // --- videos -------------------------------------------------------------------

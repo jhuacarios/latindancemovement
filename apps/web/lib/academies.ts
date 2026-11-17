@@ -4,6 +4,7 @@ import {
   ACADEMY_VIDEO_MAX_BYTES,
   type AcademyClassDto,
   type AcademyDto,
+  type AcademyShareLinkDto,
   type AcademySummaryDto,
   type AcademyVideoDto,
   type AcademyVideoReportDto,
@@ -11,6 +12,7 @@ import {
   type ChileRegion,
   type ClassLevel,
   type DanceStyle,
+  type SharedClassDto,
 } from '@baile-latino/types';
 import { api, API_BASE, ApiError, uploadForm } from './api';
 
@@ -517,8 +519,29 @@ export const academiesApi = {
     api<{ moved: number }>(`/academies/${id}/vault`, { method: 'POST', body: { videoIds } }),
   fromVault: (id: string, videoIds: string[]) =>
     api<{ moved: number }>(`/academies/${id}/vault/restore`, { method: 'POST', body: { videoIds } }),
+  getShare: (id: string, classId: string) => api<AcademyShareLinkDto | null>(`/academies/${id}/classes/${classId}/share`),
+  createShare: (id: string, classId: string) =>
+    api<AcademyShareLinkDto>(`/academies/${id}/classes/${classId}/share`, { method: 'POST' }),
+  revokeShare: (id: string, classId: string) =>
+    api<void>(`/academies/${id}/classes/${classId}/share`, { method: 'DELETE' }),
   reportVideo: (id: string, videoId: string, reason: string) =>
     api<void>(`/academies/${id}/videos/${videoId}/report`, { method: 'POST', body: { reason } }),
   reports: () => api<AcademyVideoReportDto[]>('/academies/reports'),
   resolveReport: (reportId: string) => api<void>(`/academies/reports/${reportId}/resolve`, { method: 'POST' }),
+};
+
+// --- links compartidos (sin sesión) ---------------------------------------------------
+
+/** Link público de una clase compartida. */
+export function shareUrl(token: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/v/${token}`;
+}
+
+export const sharedApi = {
+  get: (token: string) => api<SharedClassDto>(`/share/${encodeURIComponent(token)}`),
+  viewUrl: (token: string, videoId: string) =>
+    api<{ url: string }>(`/share/${encodeURIComponent(token)}/media/${videoId}/url`),
+  downloadUrl: (token: string, videoId: string) =>
+    api<{ url: string }>(`/share/${encodeURIComponent(token)}/media/${videoId}/download`),
 };

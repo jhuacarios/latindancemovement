@@ -28,6 +28,7 @@ import { AcademyClassModal } from '@/components/academy-class-modal';
 import { AcademyVideoUpload } from '@/components/academy-video-upload';
 import { AcademyVideoPlayer } from '@/components/academy-video-player';
 import { AcademyVault, StorageBar, downloadMedia } from '@/components/academy-vault';
+import { AcademyShareModal } from '@/components/academy-share-modal';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { InstagramLink } from '@/components/instagram-link';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
@@ -74,6 +75,12 @@ export default function AcademyPage() {
               {a.instagramHandle && <InstagramLink handle={a.instagramHandle} />}
             </div>
           </div>
+          {manages && a.storage && (
+            <div className="w-full space-y-2 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 sm:w-72">
+              <StorageBar label="Galería" used={a.storage.usedBytes} quota={a.storage.quotaBytes} />
+              <StorageBar label="🗄️ Bóveda" used={a.storage.vaultUsedBytes} quota={a.storage.vaultQuotaBytes} />
+            </div>
+          )}
         </div>
         {a.description && <p className="mt-3 max-w-3xl whitespace-pre-line text-sm text-neutral-300">{a.description}</p>}
       </div>
@@ -112,6 +119,7 @@ export default function AcademyPage() {
 
 function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean; onChanged: () => void }) {
   const [modal, setModal] = useState<AcademyClassDto | 'new' | null>(null);
+  const [sharing, setSharing] = useState<AcademyClassDto | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const byDay = WEEK_ORDER.map((d) => ({ day: d, classes: a.classes.filter((c) => c.weekday === d) })).filter(
     (x) => x.classes.length > 0,
@@ -158,6 +166,9 @@ function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean
                 {c.description && <div className="text-xs text-neutral-500">{c.description}</div>}
                 {manages && (
                   <div className="flex gap-3 pt-1 text-xs">
+                    <button type="button" onClick={() => setSharing(c)} className="text-brand hover:underline">
+                      🔗 Compartir videos
+                    </button>
                     <button type="button" onClick={() => setModal(c)} className="text-neutral-400 hover:text-neutral-200">
                       Editar
                     </button>
@@ -182,6 +193,7 @@ function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean
           }}
         />
       )}
+      {sharing && <AcademyShareModal academyId={a.id} cls={sharing} onClose={() => setSharing(null)} />}
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
@@ -351,6 +363,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
           onClose={() => setPlaying(null)}
           manages={manages}
           onChanged={onChanged}
+          onDownload={manages ? (vid) => downloadMedia(a.id, vid) : undefined}
         />
       )}
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />

@@ -33,23 +33,24 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  tracksCreated   Track[]               @relation("TrackCreatedBy")
-  tracksAsArtist  Track[]               @relation("TrackArtist")
-  ownedTracks     Track[]               @relation("TrackOwner")
-  library         UserTrack[]
-  trackTags       TrackTag[]
-  playlists       Playlist[]
-  songRequests    SongRequest[]
-  requestVotes    RequestVote[]
-  ytAccessRequest YoutubeAccessRequest?
-  events          Event[]               @relation("EventCreatedBy")
-  communityPlaces CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
-  chatMemberships ChatParticipant[]
-  chatMessages    ChatMessage[]         @relation("ChatMessageSender")
-  audioFiles      AudioFile[]
-  academies       AcademyMember[]
-  academyVideos   AcademyVideo[]        @relation("AcademyVideoUploadedBy")
-  videoReports    AcademyVideoReport[]
+  tracksCreated     Track[]               @relation("TrackCreatedBy")
+  tracksAsArtist    Track[]               @relation("TrackArtist")
+  ownedTracks       Track[]               @relation("TrackOwner")
+  library           UserTrack[]
+  trackTags         TrackTag[]
+  playlists         Playlist[]
+  songRequests      SongRequest[]
+  requestVotes      RequestVote[]
+  ytAccessRequest   YoutubeAccessRequest?
+  events            Event[]               @relation("EventCreatedBy")
+  communityPlaces   CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
+  chatMemberships   ChatParticipant[]
+  chatMessages      ChatMessage[]         @relation("ChatMessageSender")
+  audioFiles        AudioFile[]
+  academies         AcademyMember[]
+  academyVideos     AcademyVideo[]        @relation("AcademyVideoUploadedBy")
+  videoReports      AcademyVideoReport[]
+  academyShareLinks AcademyShareLink[]
 
   @@index([role])
 }
@@ -481,9 +482,10 @@ model Academy {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  members AcademyMember[]
-  classes AcademyClass[]
-  videos  AcademyVideo[]
+  members    AcademyMember[]
+  classes    AcademyClass[]
+  videos     AcademyVideo[]
+  shareLinks AcademyShareLink[]
 
   @@index([region])
 }
@@ -521,7 +523,8 @@ model AcademyClass {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  videos AcademyVideo[]
+  videos     AcademyVideo[]
+  shareLinks AcademyShareLink[]
 
   @@index([academyId])
 }
@@ -572,4 +575,23 @@ model AcademyVideoReport {
 
   @@unique([videoId, reporterId])
   @@index([resolvedAt])
+}
+
+/// Link para compartir las fotos y videos de UNA clase. Hoy es público (cualquiera
+/// con el link ve y descarga, sin cuenta); a futuro `access` = MEMBERS pedirá ser
+/// miembro de la academia. Se desactiva con revokedAt (el token deja de funcionar).
+model AcademyShareLink {
+  id          String       @id @default(cuid())
+  token       String       @unique
+  academyId   String
+  academy     Academy      @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  classId     String
+  class       AcademyClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  access      String       @default("PUBLIC") // AcademyShareAccess: PUBLIC | MEMBERS (futuro)
+  createdById String
+  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  revokedAt   DateTime?
+
+  @@index([classId, revokedAt])
 }

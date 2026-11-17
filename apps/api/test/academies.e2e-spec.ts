@@ -10,13 +10,22 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import fastifyMultipart from '@fastify/multipart';
 import { JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import type { AcademyDto, AcademyVideoDto, AcademyVideoUploadTicket, UserRole } from '@baile-latino/types';
+import type {
+  AcademyDto,
+  AcademyShareLinkDto,
+  AcademyVideoDto,
+  AcademyVideoUploadTicket,
+  SharedClassDto,
+  UserRole,
+} from '@baile-latino/types';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { JwtStrategy } from '../src/auth/strategies/jwt.strategy';
 import { RolesGuard } from '../src/auth/guards/roles.guard';
 import { AcademiesController } from '../src/academies/academies.controller';
 import { AcademiesService } from '../src/academies/academies.service';
 import { AcademyVideosService } from '../src/academies/academy-videos.service';
+import { AcademyShareService } from '../src/academies/academy-share.service';
+import { ShareController } from '../src/academies/share.controller';
 import { MediaStorageService } from '../src/academies/media-storage.service';
 
 process.env.JWT_SECRET = 'e2e-secret';
@@ -69,13 +78,14 @@ describe('Academias (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [PassportModule],
-      controllers: [AcademiesController],
+      controllers: [AcademiesController, ShareController],
       providers: [
         PrismaService,
         JwtStrategy,
         RolesGuard,
         AcademiesService,
         AcademyVideosService,
+        AcademyShareService,
         { provide: MediaStorageService, useValue: media },
       ],
     }).compile();
@@ -431,5 +441,47 @@ describe('Academias (e2e)', () => {
 
     await call('DELETE', `/${a.id}/videos/${v.id}`, 'owner');
     expect(media.has(newThumb)).toBe(false);
+  });
+  it('link compartido: solo los videos de esa clase, sin sesión, para ver y descargar; se puede desactivar', async () => {
+    const a = await createAcademy('Compartir');
+    const lunes = (await call('POST', `/${a.id}/classes`, 'owner', { title: 'Bachata lunes', weekday: 1, startTime: '20:00' })).json<{ id: string }>();
+    const martes = (await call('POST', `/${a.id}/classes`, 'owner', { title: 'Salsa martes', weekday: 2, startTime: '21:00' })).json<{ id: string }>();
+    const v1 = await uploadVideo(a.id, { classId: lunes.id, title: 'Figura 1' });
+    const v2 = await uploadVideo(a.id, { classId: lunes.id, title: 'Figura 2' });
+    const otra = await uploadVideo(a.id, { classId: martes.id });
+    // Uno del lunes va a la bóveda: no se comparte.
+    await call('POST', `/${a.id}/vault`, 'owner', { videoIds: [v2.id] });
+
+    // Solo quien administra crea y ve el link.
+    expect((await call('POST', `/${a.id}/classes/${lunes.id}/share`, 'viewer')).statusCode).toBe(403);
+    expect((await call('GET', `/${a.id}/classes/${lunes.id}/share`, 'owner')).body).toBe('null');
+    const link = (await call('POST', `/${a.id}/classes/${lunes.id}/share`, 'owner')).json<AcademyShareLinkDto>();
+    expect(link.access).toBe('PUBLIC');
+    expect(link.token.length).toBeGreaterThanOrEqual(20);
+
+    // Sin sesión.
+    const open = (url: string) => app.inject({ method: 'GET', url: `/api/v1/share/${url}` });
+    const shared = await open(link.token);
+    expect(shared.statusCode).toBe(200);
+    const body = shared.json<SharedClassDto>();
+    expect(body.academy.name).toBe('Compartir');
+    expect(body.class).toMatchObject({ title: 'Bachata lunes', weekday: 1, startTime: '20:00' });
+    expect(body.items.map((x) => x.id)).toEqual([v1.id]);
+    expect((await open(`${link.token}/media/${v1.id}/url`)).json<{ url: string }>().url).toMatch(/^memory:\/\/view\//);
+    expect((await open(`${link.token}/media/${v1.id}/download`)).json<{ url: string }>().url).toContain(
+      `name=${encodeURIComponent('Figura 1.mp4')}`,
+    );
+    // Ni de otra clase ni de la bóveda.
+    expect((await open(`${link.token}/media/${otra.id}/url`)).statusCode).toBe(404);
+    expect((await open(`${link.token}/media/${v2.id}/download`)).statusCode).toBe(404);
+    expect((await open('no-existe')).statusCode).toBe(404);
+
+    // Un link nuevo desactiva el anterior; desactivar lo corta.
+    const again = (await call('POST', `/${a.id}/classes/${lunes.id}/share`, 'owner')).json<AcademyShareLinkDto>();
+    expect(again.token).not.toBe(link.token);
+    expect((await open(link.token)).statusCode).toBe(404);
+    expect((await open(again.token)).statusCode).toBe(200);
+    expect((await call('DELETE', `/${a.id}/classes/${lunes.id}/share`, 'owner')).statusCode).toBe(204);
+    expect((await open(again.token)).statusCode).toBe(404);
   });
 });

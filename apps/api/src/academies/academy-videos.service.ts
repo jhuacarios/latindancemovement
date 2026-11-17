@@ -41,7 +41,7 @@ const EXT: Record<string, string> = {
 
 const kindOf = (mime: string): AcademyMediaKind => (mime.startsWith('image/') ? 'PHOTO' : 'VIDEO');
 
-const VIDEO_SELECT = {
+export const VIDEO_SELECT = {
   id: true,
   academyId: true,
   classId: true,
@@ -62,7 +62,13 @@ const VIDEO_SELECT = {
   createdAt: true,
 } satisfies Prisma.AcademyVideoSelect;
 
-type VideoRow = Prisma.AcademyVideoGetPayload<{ select: typeof VIDEO_SELECT }>;
+export type VideoRow = Prisma.AcademyVideoGetPayload<{ select: typeof VIDEO_SELECT }>;
+
+/** Nombre con que se descarga: el título, con la extensión si no la trae. */
+export function downloadName(v: { title: string; mimeType: string }): string {
+  const ext = EXT[v.mimeType];
+  return ext && !/\.[a-z0-9]{2,4}$/i.test(v.title) ? `${v.title}.${ext}` : v.title;
+}
 
 const toDate = (ymd: string | null | undefined) => (ymd ? new Date(`${ymd}T12:00:00Z`) : null);
 
@@ -79,7 +85,7 @@ export class AcademyVideosService {
     private readonly media: MediaStorageService,
   ) {}
 
-  private async toDto(v: VideoRow): Promise<AcademyVideoDto> {
+  async toDto(v: VideoRow): Promise<AcademyVideoDto> {
     return {
       id: v.id,
       academyId: v.academyId,
@@ -345,11 +351,7 @@ export class AcademyVideosService {
     await this.academies.assertMember(user, academyId);
     const v = await this.video(academyId, videoId);
     if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
-    const ext = EXT[v.mimeType];
-    const name = ext && !v.title.toLowerCase().endsWith(`.${ext}`) && !/\.[a-z0-9]{2,4}$/i.test(v.title)
-      ? `${v.title}.${ext}`
-      : v.title;
-    return { url: await this.media.downloadUrl(v.storageKey, name) };
+    return { url: await this.media.downloadUrl(v.storageKey, downloadName(v)) };
   }
 
   /**

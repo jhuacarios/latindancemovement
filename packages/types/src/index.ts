@@ -1165,6 +1165,33 @@ export interface AcademyVideoUploadTicket {
   thumbUploadHeaders: Record<string, string>;
 }
 
+/** PUBLIC = cualquiera con el link; MEMBERS = solo miembros de la academia (futuro). */
+export type AcademyShareAccess = 'PUBLIC' | 'MEMBERS';
+
+/** Link activo para compartir las fotos y videos de una clase. */
+export interface AcademyShareLinkDto {
+  id: string;
+  token: string;
+  classId: string;
+  access: AcademyShareAccess;
+  createdByName: string;
+  createdAt: string;
+}
+
+/** Lo que ve quien abre un link compartido (sin cuenta). */
+export interface SharedClassDto {
+  academy: {
+    id: string;
+    name: string;
+    hasLogo: boolean;
+    city: string | null;
+    region: ChileRegion;
+    instagramHandle: string | null;
+  };
+  class: Pick<AcademyClassDto, 'id' | 'title' | 'style' | 'level' | 'weekday' | 'startTime' | 'durationMin' | 'teacherName'>;
+  items: AcademyVideoDto[];
+}
+
 export interface AcademyVideoReportDto {
   id: string;
   videoId: string;
