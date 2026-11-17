@@ -14,6 +14,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { AcademiesService } from './academies.service';
 import { MediaStorageService } from './media-storage.service';
 import {
+  CheckDuplicatesDto,
   CompleteVideoUploadDto,
   CreateVideoUploadDto,
   ListVideosQueryDto,
@@ -22,6 +23,8 @@ import {
 } from './dto/academy.dto';
 
 const THUMB_MIME = 'image/jpeg';
+/** Inicio del mensaje de un archivo repetido (ver lib/academies.ts del web). */
+export const DUPLICATE_PREFIX = 'Ya está en la galería:';
 /** Una subida que no se confirmó en este tiempo se da por abandonada (libera el cupo). */
 const STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
 
@@ -126,6 +129,28 @@ export class AcademyVideosService {
     if (v.thumbKey) await this.media.remove(v.thumbKey);
   }
 
+  /**
+   * De las huellas dadas, cuáles ya están en la galería. Solo cuentan las subidas
+   * completas: una que quedó a medias no impide reintentarla.
+   */
+  async findDuplicates(
+    user: AuthUser,
+    academyId: string,
+    dto: CheckDuplicatesDto,
+  ): Promise<{ hash: string; videoId: string; title: string }[]> {
+    await this.academies.assertMember(user, academyId);
+    if (dto.hashes.length === 0) return [];
+    const rows = await this.prisma.academyVideo.findMany({
+      where: { academyId, status: 'READY', contentHash: { in: dto.hashes } },
+      select: { id: true, title: true, contentHash: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const seen = new Set<string>();
+    return rows
+      .filter((r) => r.contentHash && !seen.has(r.contentHash) && seen.add(r.contentHash))
+      .map((r) => ({ hash: r.contentHash!, videoId: r.id, title: r.title }));
+  }
+
   async createUpload(
     user: AuthUser,
     academyId: string,
@@ -139,6 +164,14 @@ export class AcademyVideosService {
     if (dto.classId) await this.academies.assertClass(academyId, dto.classId);
 
     await this.cleanStale(academyId);
+    if (dto.contentHash) {
+      const dup = await this.prisma.academyVideo.findFirst({
+        where: { academyId, status: 'READY', contentHash: dto.contentHash },
+        select: { title: true },
+      });
+      // El mensaje empieza igual siempre: el navegador lo usa para saltarlo sin cortar el lote.
+      if (dup) throw new ConflictException(`${DUPLICATE_PREFIX} "${dup.title}".`);
+    }
     const [used, quota] = await Promise.all([
       this.academies.usedBytes(academyId),
       this.academies.quotaBytes(academyId),
@@ -163,6 +196,7 @@ export class AcademyVideosService {
         thumbKey: `${base}.jpg`,
         mimeType: dto.mimeType,
         sizeBytes: BigInt(dto.sizeBytes),
+        contentHash: dto.contentHash ?? null,
         uploadedById: user.id,
       },
     });

@@ -276,8 +276,34 @@ function putWithProgress(
   });
 }
 
+const HASH_CHUNK = 8 * 1024 * 1024;
+
+/**
+ * Huella SHA-256 (hex) del contenido del archivo, leyéndolo por partes (sirve
+ * para videos de 2 GB sin cargarlos enteros en memoria). Dos archivos con la
+ * misma huella son idénticos, aunque tengan otro nombre.
+ */
+export async function fileHash(file: File, onProgress?: (fraction: number) => void): Promise<string> {
+  const { createSHA256 } = await import('hash-wasm');
+  const hasher = await createSHA256();
+  hasher.init();
+  for (let pos = 0; pos < file.size; pos += HASH_CHUNK) {
+    const buf = await file.slice(pos, pos + HASH_CHUNK).arrayBuffer();
+    hasher.update(new Uint8Array(buf));
+    onProgress?.(Math.min(1, (pos + HASH_CHUNK) / file.size));
+  }
+  return hasher.digest('hex');
+}
+
+/** Inicio del mensaje de la API cuando el archivo ya está (ver academy-videos.service.ts). */
+const DUPLICATE_PREFIX = 'Ya está en la galería:';
+export const isDuplicateError = (e: unknown) =>
+  e instanceof ApiError && e.status === 409 && e.message.startsWith(DUPLICATE_PREFIX);
+
 export interface VideoUploadInput {
   file: File;
+  /** SHA-256 del archivo (para que la API rechace un repetido). */
+  contentHash?: string;
   title: string;
   classId: string | null;
   style: DanceStyle | null;
@@ -306,6 +332,7 @@ export async function uploadAcademyVideo(
       style: input.style,
       recordedOn: input.recordedOn,
       description: input.description,
+      contentHash: input.contentHash,
     },
   });
   if (preview.thumb) {
@@ -364,6 +391,12 @@ export const academiesApi = {
   ) => api<AcademyVideoDto>(`/academies/${id}/videos/${videoId}`, { method: 'PATCH', body }),
   removeVideo: (id: string, videoId: string) =>
     api<void>(`/academies/${id}/videos/${videoId}`, { method: 'DELETE' }),
+  /** De las huellas dadas, cuáles ya están en la galería. */
+  duplicates: (id: string, hashes: string[]) =>
+    api<{ hash: string; videoId: string; title: string }[]>(`/academies/${id}/videos/duplicates`, {
+      method: 'POST',
+      body: { hashes },
+    }),
   reportVideo: (id: string, videoId: string, reason: string) =>
     api<void>(`/academies/${id}/videos/${videoId}/report`, { method: 'POST', body: { reason } }),
   reports: () => api<AcademyVideoReportDto[]>('/academies/reports'),

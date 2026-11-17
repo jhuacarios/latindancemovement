@@ -541,6 +541,7 @@ model AcademyVideo {
   mimeType     String
   sizeBytes    BigInt
   durationMs   Int?
+  contentHash  String? // SHA-256 del archivo (lo calcula el navegador): evita subir el mismo dos veces
   status       String        @default("UPLOADING") // AcademyVideoStatus: UPLOADING | READY
   uploadedById String
   uploadedBy   User          @relation("AcademyVideoUploadedBy", fields: [uploadedById], references: [id])
@@ -550,6 +551,7 @@ model AcademyVideo {
   reports AcademyVideoReport[]
 
   @@index([academyId, status])
+  @@index([academyId, contentHash])
   @@index([classId])
 }
 

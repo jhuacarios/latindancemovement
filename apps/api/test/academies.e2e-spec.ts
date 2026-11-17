@@ -316,4 +316,29 @@ describe('Academias (e2e)', () => {
     expect(list.map((x) => x.kind).sort()).toEqual(['PHOTO', 'VIDEO']);
     expect((await call('GET', `/${a.id}/videos/${photo.id}/url`, 'viewer')).json<{ url: string }>().url).toMatch(/\.jpg$/);
   });
+  it('duplicados: avisa cuáles ya están y rechaza subir el mismo archivo otra vez', async () => {
+    const a = await createAcademy('Duplicados');
+    const h1 = 'a'.repeat(64);
+    const h2 = 'b'.repeat(64);
+    const t = (
+      await call('POST', `/${a.id}/videos`, 'owner', { title: 'Original', mimeType: 'video/mp4', sizeBytes: 5 * MB, contentHash: h1 })
+    ).json<AcademyVideoUploadTicket>();
+
+    // A medias no cuenta: se puede reintentar.
+    expect((await call('POST', `/${a.id}/videos/duplicates`, 'owner', { hashes: [h1] })).json()).toEqual([]);
+
+    media.put(t.uploadUrl, 5 * MB);
+    await call('POST', `/${a.id}/videos/${t.videoId}/complete`, 'owner', {});
+    const dups = await call('POST', `/${a.id}/videos/duplicates`, 'owner', { hashes: [h1, h2] });
+    expect(dups.statusCode).toBe(200);
+    expect(dups.json()).toEqual([{ hash: h1, videoId: t.videoId, title: 'Original' }]);
+
+    const again = await call('POST', `/${a.id}/videos`, 'owner', { title: 'Copia', mimeType: 'video/mp4', sizeBytes: 5 * MB, contentHash: h1 });
+    expect(again.statusCode).toBe(409);
+    expect(again.json<{ message: string }>().message).toMatch(/^Ya está en la galería: "Original"/);
+    // Otro archivo sí pasa; huellas inválidas o de quien no administra, no.
+    expect((await call('POST', `/${a.id}/videos`, 'owner', { title: 'Otro', mimeType: 'video/mp4', sizeBytes: MB, contentHash: h2 })).statusCode).toBe(201);
+    expect((await call('POST', `/${a.id}/videos/duplicates`, 'owner', { hashes: ['xyz'] })).statusCode).toBe(400);
+    expect((await call('POST', `/${a.id}/videos/duplicates`, 'viewer', { hashes: [h1] })).statusCode).toBe(403);
+  });
 });

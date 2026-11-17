@@ -25,6 +25,7 @@ import { AcademiesService } from './academies.service';
 import { AcademyVideosService } from './academy-videos.service';
 import {
   AddMemberDto,
+  CheckDuplicatesDto,
   CompleteVideoUploadDto,
   CreateAcademyDto,
   CreateClassDto,
@@ -177,6 +178,14 @@ export class AcademiesController {
   @UseGuards(JwtAuthGuard)
   listVideos(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query() q: ListVideosQueryDto) {
     return this.videos.list(user, id, q);
+  }
+
+  /** De las huellas dadas, cuáles ya están en la galería (para no subirlas de nuevo). */
+  @Post(':id/videos/duplicates')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  duplicates(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CheckDuplicatesDto) {
+    return this.videos.findDuplicates(user, id, dto);
   }
 
   /** Pide subir un video: devuelve las URLs firmadas para el video y su miniatura. */

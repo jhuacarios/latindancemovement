@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.17.1',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'improvement',
+    title: 'Galería de academias: no se suben archivos repetidos',
+    description:
+      'Al elegir fotos y videos para subir, revisamos si cada archivo ya está en la galería de la academia (o repetido en la misma lista). Los que son idénticos, aunque tengan otro nombre, se marcan y se saltan; el resto se sube normal.',
+  },
+  {
     version: '0.17.0',
     date: '2026-11-16',
     module: 'classes',

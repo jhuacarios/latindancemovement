@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import {
+  ArrayMaxSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -165,6 +166,19 @@ export class CreateVideoUploadDto {
   @IsString()
   @MaxLength(2000)
   description?: string | null;
+
+  /** SHA-256 (hex) del archivo: si ya está en la galería de la academia, no se sube. */
+  @IsOptional()
+  @Matches(/^[a-f0-9]{64}$/, { message: 'Huella del archivo no válida.' })
+  contentHash?: string;
+}
+
+/** Huellas de los archivos que se van a subir, para saltar los que ya están. */
+export class CheckDuplicatesDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @Matches(/^[a-f0-9]{64}$/, { each: true, message: 'Huella del archivo no válida.' })
+  hashes!: string[];
 }
 
 export class CompleteVideoUploadDto {
