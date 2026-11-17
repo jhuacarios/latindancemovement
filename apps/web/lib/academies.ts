@@ -572,3 +572,61 @@ export const sharedApi = {
       `/share/${encodeURIComponent(token)}/media/${videoId}/download${format === 'mp4' ? '?format=mp4' : ''}`,
     ),
 };
+
+// --- orden de la galería --------------------------------------------------------------
+
+export const GALLERY_SORTS = [
+  ['class-date', 'Fecha de la clase'],
+  ['uploaded-desc', 'Subidos más recientes'],
+  ['uploaded-asc', 'Subidos más antiguos'],
+  ['duration-desc', 'Más largos primero'],
+  ['duration-asc', 'Más cortos primero'],
+] as const;
+export type GallerySort = (typeof GALLERY_SORTS)[number][0];
+
+/**
+ * Ordena la galería (copia nueva). "Fecha de la clase" es el orden que ya trae la
+ * API. En los órdenes por duración, las fotos (sin duración) van al final.
+ */
+export function sortGallery(items: readonly AcademyVideoDto[], sort: GallerySort): AcademyVideoDto[] {
+  const list = [...items];
+  const uploaded = (v: AcademyVideoDto) => Date.parse(v.createdAt);
+  switch (sort) {
+    case 'uploaded-desc':
+      return list.sort((a, b) => uploaded(b) - uploaded(a));
+    case 'uploaded-asc':
+      return list.sort((a, b) => uploaded(a) - uploaded(b));
+    case 'duration-desc':
+    case 'duration-asc': {
+      const dir = sort === 'duration-desc' ? -1 : 1;
+      return list.sort((a, b) => {
+        if (a.durationMs === null || b.durationMs === null) {
+          return (a.durationMs === null ? 1 : 0) - (b.durationMs === null ? 1 : 0);
+        }
+        return dir * (a.durationMs - b.durationMs);
+      });
+    }
+    default:
+      return list;
+  }
+}
+
+const SORT_KEY = 'nectason.academy.gallerySort';
+
+export function loadGallerySort(): GallerySort {
+  try {
+    const v = window.localStorage.getItem(SORT_KEY);
+    if (v && GALLERY_SORTS.some(([k]) => k === v)) return v as GallerySort;
+  } catch {
+    /* sin almacenamiento: orden por defecto */
+  }
+  return 'class-date';
+}
+
+export function saveGallerySort(sort: GallerySort): void {
+  try {
+    window.localStorage.setItem(SORT_KEY, sort);
+  } catch {
+    /* sin almacenamiento: no se recuerda */
+  }
+}

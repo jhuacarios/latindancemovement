@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +18,11 @@ import {
   formatBytes,
   formatVideoDuration,
   missingExtension,
+  GALLERY_SORTS,
+  loadGallerySort,
+  saveGallerySort,
+  sortGallery,
+  type GallerySort,
   compatLabel,
   validateAcademy,
   type AcademyFormValues,
@@ -204,6 +209,9 @@ function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean
 
 function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean; onChanged: () => void }) {
   const [classId, setClassId] = useState('');
+  const [sort, setSort] = useState<GallerySort>('class-date');
+  // El orden elegido se recuerda en este navegador (se lee después de montar).
+  useEffect(() => setSort(loadGallerySort()), []);
   const [playing, setPlaying] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -221,6 +229,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
       else n.add(id);
       return n;
     });
+  const items = useMemo(() => sortGallery(videos.data ?? [], sort), [videos.data, sort]);
   const selectedBytes = (videos.data ?? []).filter((v) => selected.has(v.id)).reduce((s, v) => s + v.sizeBytes, 0);
 
   const toVault = async () => {
@@ -256,16 +265,36 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
         <AcademyVideoUpload academyId={a.id} classes={a.classes} freeBytes={free} onUploaded={onChanged} />
       )}
 
-      {a.classes.length > 0 && (
-        <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
-          <option value="">Todas las clases</option>
-          {a.classes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.title} ({WEEKDAYS[c.weekday]} {c.startTime})
-            </option>
-          ))}
-        </Select>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {a.classes.length > 0 && (
+          <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+            <option value="">Todas las clases</option>
+            {a.classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title} ({WEEKDAYS[c.weekday]} {c.startTime})
+              </option>
+            ))}
+          </Select>
+        )}
+        <label className="flex items-center gap-2 text-sm text-neutral-400">
+          Ordenar por
+          <Select
+            value={sort}
+            onChange={(e) => {
+              const v = e.target.value as GallerySort;
+              setSort(v);
+              saveGallerySort(v);
+              setPlaying(null);
+            }}
+          >
+            {GALLERY_SORTS.map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </label>
+      </div>
 
       {manages && selected.size > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-brand/40 bg-neutral-900 p-3 text-sm shadow-lg">
@@ -290,7 +319,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
         </Card>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {videos.data?.map((v, i) => (
+        {items.map((v, i) => (
           <div
             key={v.id}
             className={clsx(
@@ -365,10 +394,10 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
           </div>
         ))}
       </div>
-      {playing !== null && videos.data?.[playing] && (
+      {playing !== null && items[playing] && (
         <AcademyVideoPlayer
           academyId={a.id}
-          items={videos.data}
+          items={items}
           index={playing}
           onIndex={setPlaying}
           onClose={() => setPlaying(null)}

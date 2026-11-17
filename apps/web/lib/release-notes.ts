@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.20.2',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'improvement',
+    title: 'Ordenar la galería por duración o fecha de subida',
+    description:
+      'En Fotos y videos de cada academia hay un selector "Ordenar por": fecha de la clase, subidos más recientes o más antiguos, y más largos o más cortos primero. Se recuerda el orden elegido.',
+  },
+  {
     version: '0.20.1',
     date: '2026-11-17',
     module: 'classes',
