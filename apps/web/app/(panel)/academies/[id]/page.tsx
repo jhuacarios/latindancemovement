@@ -27,12 +27,13 @@ import { LogoPicker } from '@/components/academy-logo-picker';
 import { AcademyClassModal } from '@/components/academy-class-modal';
 import { AcademyVideoUpload } from '@/components/academy-video-upload';
 import { AcademyVideoPlayer } from '@/components/academy-video-player';
+import { AcademyVault, StorageBar, downloadMedia } from '@/components/academy-vault';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { InstagramLink } from '@/components/instagram-link';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 
-type Tab = 'clases' | 'videos' | 'admin';
+type Tab = 'clases' | 'videos' | 'vault' | 'admin';
 
 export default function AcademyPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,7 +83,7 @@ export default function AcademyPage() {
           [
             ['clases', `Clases (${a.classCount})`],
             ['videos', `Fotos y videos (${a.videoCount})`],
-            ...(manages ? [['admin', 'Administrar']] : []),
+            ...(manages ? [['vault', '🗄️ Bóveda'], ['admin', 'Administrar']] : []),
           ] as [Tab, string][]
         ).map(([k, label]) => (
           <button
@@ -101,6 +102,7 @@ export default function AcademyPage() {
 
       {tab === 'clases' && <ClassesTab a={a} manages={manages} onChanged={refresh} />}
       {tab === 'videos' && <VideosTab a={a} manages={manages} onChanged={refresh} />}
+      {tab === 'vault' && manages && <AcademyVault a={a} onChanged={refresh} />}
       {tab === 'admin' && manages && <AdminTab a={a} onChanged={refresh} />}
     </div>
   );
@@ -191,11 +193,37 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
   const [classId, setClassId] = useState('');
   const [playing, setPlaying] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [moving, setMoving] = useState(false);
+  const [moveMsg, setMoveMsg] = useState<string | null>(null);
   const videos = useQuery({
     queryKey: ['academies', 'videos', a.id, classId],
     queryFn: () => academiesApi.videos(a.id, classId || undefined),
   });
   const free = a.storage ? a.storage.quotaBytes - a.storage.usedBytes : null;
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const selectedBytes = (videos.data ?? []).filter((v) => selected.has(v.id)).reduce((s, v) => s + v.sizeBytes, 0);
+
+  const toVault = async () => {
+    setMoving(true);
+    setMoveMsg(null);
+    try {
+      const r = await academiesApi.toVault(a.id, [...selected]);
+      setSelected(new Set());
+      setMoveMsg(`${r.moved} ${r.moved === 1 ? 'archivo movido' : 'archivos movidos'} a la bóveda.`);
+      onChanged();
+    } catch (e) {
+      setMoveMsg(e instanceof ApiError ? e.message : 'No se pudo mover a la bóveda.');
+    } finally {
+      setMoving(false);
+    }
+  };
 
   const remove = (v: AcademyVideoDto) =>
     setConfirm({
@@ -226,6 +254,22 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
         </Select>
       )}
 
+      {manages && selected.size > 0 && (
+        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-brand/40 bg-neutral-900 p-3 text-sm shadow-lg">
+          <span>
+            {selected.size} {selected.size === 1 ? 'seleccionado' : 'seleccionados'} ({formatBytes(selectedBytes)})
+          </span>
+          <Button size="sm" onClick={toVault} disabled={moving}>
+            {moving ? 'Moviendo…' : '🗄️ Mover a la bóveda'}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={moving}>
+            Cancelar
+          </Button>
+          <span className="text-xs text-neutral-500">Libera espacio de la galería; se podrán descargar o devolver.</span>
+        </div>
+      )}
+      {moveMsg && <p className="text-sm text-neutral-300">{moveMsg}</p>}
+
       {videos.isLoading && <Spinner label="Cargando galería…" />}
       {videos.data && videos.data.length === 0 && (
         <Card className="text-sm text-neutral-400">
@@ -234,7 +278,24 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {videos.data?.map((v, i) => (
-          <div key={v.id} className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/60">
+          <div
+            key={v.id}
+            className={clsx(
+              'relative overflow-hidden rounded-xl border bg-neutral-900/60',
+              selected.has(v.id) ? 'border-brand' : 'border-neutral-800',
+            )}
+          >
+            {manages && (
+              <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center rounded bg-black/60 p-1.5">
+                <input
+                  type="checkbox"
+                  checked={selected.has(v.id)}
+                  onChange={() => toggle(v.id)}
+                  className="h-4 w-4 accent-brand"
+                  aria-label={`Seleccionar ${v.title}`}
+                />
+              </label>
+            )}
             <button type="button" onClick={() => setPlaying(i)} className="group relative block aspect-video w-full bg-neutral-800">
               {v.thumbUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -263,8 +324,15 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
                 {[v.classTitle ?? 'Contenido general', v.recordedOn].filter(Boolean).join(' · ')}
               </div>
               {manages && (
-                <div className="flex gap-3 pt-1 text-xs">
+                <div className="flex flex-wrap gap-3 pt-1 text-xs">
                   <span className="text-neutral-500">{formatBytes(v.sizeBytes)}</span>
+                  <button
+                    type="button"
+                    onClick={() => void downloadMedia(a.id, v.id)}
+                    className="text-neutral-400 hover:text-neutral-200"
+                  >
+                    Descargar
+                  </button>
                   <button type="button" onClick={() => remove(v)} className="text-red-400/80 hover:text-red-300">
                     Eliminar
                   </button>
@@ -281,6 +349,8 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
           index={playing}
           onIndex={setPlaying}
           onClose={() => setPlaying(null)}
+          manages={manages}
+          onChanged={onChanged}
         />
       )}
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
@@ -429,13 +499,9 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
 
         {a.storage && (
           <Card className="space-y-2">
-            <h2 className="font-semibold">Espacio para videos</h2>
-            <div className="h-2 overflow-hidden rounded-full bg-neutral-800">
-              <div className="h-full bg-brand" style={{ width: `${Math.min(100, (used / quota) * 100)}%` }} />
-            </div>
-            <p className="text-xs text-neutral-400">
-              {formatBytes(used)} de {formatBytes(quota)} usados
-            </p>
+            <h2 className="font-semibold">Espacio</h2>
+            <StorageBar label="Galería (fotos y videos)" used={used} quota={quota} />
+            <StorageBar label="Bóveda" used={a.storage.vaultUsedBytes} quota={a.storage.vaultQuotaBytes} />
           </Card>
         )}
 

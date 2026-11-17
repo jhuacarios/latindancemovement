@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import {
   ACADEMY_PHOTO_MAX_BYTES,
   type AcademyMediaKind,
+  type AcademyMediaLocation,
   type AcademyVideoDto,
   type AcademyVideoReportDto,
   type AcademyVideoUploadTicket,
@@ -18,6 +19,7 @@ import {
   CompleteVideoUploadDto,
   CreateVideoUploadDto,
   ListVideosQueryDto,
+  MoveMediaDto,
   ReportVideoDto,
   UpdateVideoDto,
 } from './dto/academy.dto';
@@ -54,6 +56,8 @@ const VIDEO_SELECT = {
   sizeBytes: true,
   durationMs: true,
   status: true,
+  location: true,
+  vaultedAt: true,
   uploadedBy: { select: { name: true } },
   createdAt: true,
 } satisfies Prisma.AcademyVideoSelect;
@@ -80,6 +84,8 @@ export class AcademyVideosService {
       id: v.id,
       academyId: v.academyId,
       kind: kindOf(v.mimeType),
+      location: v.location as AcademyMediaLocation,
+      vaultedAt: v.vaultedAt?.toISOString() ?? null,
       classId: v.classId,
       classTitle: v.class?.title ?? null,
       title: v.title,
@@ -107,7 +113,7 @@ export class AcademyVideosService {
   async list(user: AuthUser, academyId: string, q: ListVideosQueryDto): Promise<AcademyVideoDto[]> {
     await this.academies.roleIn(user, academyId); // 404 si la academia no existe
     const rows = await this.prisma.academyVideo.findMany({
-      where: { academyId, status: 'READY', ...(q.classId ? { classId: q.classId } : {}) },
+      where: { academyId, status: 'READY', location: 'GALLERY', ...(q.classId ? { classId: q.classId } : {}) },
       select: VIDEO_SELECT,
       orderBy: [{ recordedOn: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     });
@@ -124,9 +130,11 @@ export class AcademyVideosService {
   }
 
   private async removeRow(v: { id: string; storageKey: string; thumbKey: string | null }): Promise<void> {
+    const extra = await this.prisma.academyVideo.findUnique({ where: { id: v.id }, select: { pendingThumbKey: true } });
     await this.prisma.academyVideo.delete({ where: { id: v.id } });
     await this.media.remove(v.storageKey);
     if (v.thumbKey) await this.media.remove(v.thumbKey);
+    if (extra?.pendingThumbKey) await this.media.remove(extra.pendingThumbKey);
   }
 
   /**
@@ -137,18 +145,23 @@ export class AcademyVideosService {
     user: AuthUser,
     academyId: string,
     dto: CheckDuplicatesDto,
-  ): Promise<{ hash: string; videoId: string; title: string }[]> {
+  ): Promise<{ hash: string; videoId: string; title: string; location: AcademyMediaLocation }[]> {
     await this.academies.assertMember(user, academyId);
     if (dto.hashes.length === 0) return [];
     const rows = await this.prisma.academyVideo.findMany({
       where: { academyId, status: 'READY', contentHash: { in: dto.hashes } },
-      select: { id: true, title: true, contentHash: true },
+      select: { id: true, title: true, contentHash: true, location: true },
       orderBy: { createdAt: 'asc' },
     });
     const seen = new Set<string>();
     return rows
       .filter((r) => r.contentHash && !seen.has(r.contentHash) && seen.add(r.contentHash))
-      .map((r) => ({ hash: r.contentHash!, videoId: r.id, title: r.title }));
+      .map((r) => ({
+        hash: r.contentHash!,
+        videoId: r.id,
+        title: r.title,
+        location: r.location as AcademyMediaLocation,
+      }));
   }
 
   async createUpload(
@@ -167,10 +180,13 @@ export class AcademyVideosService {
     if (dto.contentHash) {
       const dup = await this.prisma.academyVideo.findFirst({
         where: { academyId, status: 'READY', contentHash: dto.contentHash },
-        select: { title: true },
+        select: { title: true, location: true },
       });
       // El mensaje empieza igual siempre: el navegador lo usa para saltarlo sin cortar el lote.
-      if (dup) throw new ConflictException(`${DUPLICATE_PREFIX} "${dup.title}".`);
+      if (dup) {
+        const where = dup.location === 'VAULT' ? ' (en la bóveda)' : '';
+        throw new ConflictException(`${DUPLICATE_PREFIX} "${dup.title}"${where}.`);
+      }
     }
     const [used, quota] = await Promise.all([
       this.academies.usedBytes(academyId),
@@ -260,11 +276,130 @@ export class AcademyVideosService {
     await this.removeRow(await this.video(academyId, videoId));
   }
 
-  /** URL firmada (1 h) para reproducir. Cualquier usuario con cuenta. */
+  /** URL firmada (1 h) para reproducir. Cualquier usuario con cuenta; lo de la bóveda no. */
   async viewUrl(user: AuthUser, academyId: string, videoId: string): Promise<{ url: string }> {
     const v = await this.video(academyId, videoId);
+    if (v.location === 'VAULT') {
+      // Para quien no administra, lo de la bóveda no existe.
+      if (!(await this.academies.roleIn(user, academyId))) throw new NotFoundException('Video no encontrado.');
+      throw new ConflictException('Este archivo está en la bóveda: no se reproduce, solo se descarga.');
+    }
     if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
     return { url: await this.media.viewUrl(v.storageKey) };
+  }
+
+  /**
+   * URL para reemplazar la miniatura (dueño y profesores): el navegador saca un
+   * cuadro del video (p. ej. cuando la automática salió negra) y lo sube directo.
+   */
+  async thumbUpload(
+    user: AuthUser,
+    academyId: string,
+    videoId: string,
+  ): Promise<{ uploadUrl: string; uploadHeaders: Record<string, string> }> {
+    await this.academies.assertMember(user, academyId);
+    this.media.assertEnabled();
+    const v = await this.video(academyId, videoId);
+    // Clave nueva cada vez: la URL firmada anterior (y su caché) no muestra la vieja.
+    const thumbKey = `academies/${academyId}/thumbs/${v.id}-${randomUUID().slice(0, 8)}.jpg`;
+    const uploadUrl = await this.media.uploadUrl(thumbKey, THUMB_MIME);
+    await this.prisma.academyVideo.update({ where: { id: v.id }, data: { pendingThumbKey: thumbKey } });
+    return { uploadUrl, uploadHeaders: { 'Content-Type': THUMB_MIME } };
+  }
+
+  /** Confirma la miniatura nueva (ya subida) y borra la anterior. */
+  async thumbComplete(user: AuthUser, academyId: string, videoId: string): Promise<AcademyVideoDto> {
+    await this.academies.assertMember(user, academyId);
+    const row = await this.prisma.academyVideo.findFirst({
+      where: { id: videoId, academyId },
+      select: { thumbKey: true, pendingThumbKey: true },
+    });
+    if (!row) throw new NotFoundException('Video no encontrado.');
+    if (!row.pendingThumbKey || (await this.media.size(row.pendingThumbKey)) === null) {
+      throw new BadRequestException('La miniatura no terminó de subir. Intenta de nuevo.');
+    }
+    const updated = await this.prisma.academyVideo.update({
+      where: { id: videoId },
+      data: { thumbKey: row.pendingThumbKey, pendingThumbKey: null },
+      select: VIDEO_SELECT,
+    });
+    if (row.thumbKey && row.thumbKey !== row.pendingThumbKey) await this.media.remove(row.thumbKey);
+    return this.toDto(updated);
+  }
+
+  // --- bóveda -------------------------------------------------------------------
+
+  /** Lo que está en la bóveda (solo quienes administran). */
+  async listVault(user: AuthUser, academyId: string): Promise<AcademyVideoDto[]> {
+    await this.academies.assertMember(user, academyId);
+    const rows = await this.prisma.academyVideo.findMany({
+      where: { academyId, status: 'READY', location: 'VAULT' },
+      select: VIDEO_SELECT,
+      orderBy: [{ vaultedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    return Promise.all(rows.map((r) => this.toDto(r)));
+  }
+
+  /** URL firmada que descarga el original con su nombre (solo quienes administran). */
+  async downloadUrl(user: AuthUser, academyId: string, videoId: string): Promise<{ url: string }> {
+    await this.academies.assertMember(user, academyId);
+    const v = await this.video(academyId, videoId);
+    if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
+    const ext = EXT[v.mimeType];
+    const name = ext && !v.title.toLowerCase().endsWith(`.${ext}`) && !/\.[a-z0-9]{2,4}$/i.test(v.title)
+      ? `${v.title}.${ext}`
+      : v.title;
+    return { url: await this.media.downloadUrl(v.storageKey, name) };
+  }
+
+  /**
+   * Mueve archivos entre la galería y la bóveda. En la bóveda quedan en R2
+   * Infrequent Access (más barato por GB, solo descarga) y cuentan en el cupo de la
+   * bóveda, no en el de la galería. Se copia con la nueva clase y se borra el
+   * anterior; si algo falla a mitad, el archivo sigue donde estaba.
+   */
+  async move(
+    user: AuthUser,
+    academyId: string,
+    dto: MoveMediaDto,
+    to: AcademyMediaLocation,
+  ): Promise<{ moved: number }> {
+    await this.academies.assertMember(user, academyId);
+    this.media.assertEnabled();
+    const from: AcademyMediaLocation = to === 'VAULT' ? 'GALLERY' : 'VAULT';
+    const rows = await this.prisma.academyVideo.findMany({
+      where: { academyId, id: { in: dto.videoIds }, status: 'READY', location: from },
+      select: { id: true, storageKey: true, sizeBytes: true, mimeType: true },
+    });
+    if (rows.length === 0) return { moved: 0 };
+
+    const [used, quota] = await Promise.all([
+      this.academies.usedBytes(academyId, to),
+      this.academies.quotaBytes(academyId, to),
+    ]);
+    const adding = rows.reduce((s, r) => s + Number(r.sizeBytes), 0);
+    if (used + adding > quota) {
+      const free = Math.max(0, quota - used);
+      const where = to === 'VAULT' ? 'la bóveda' : 'la galería';
+      throw new ConflictException(
+        `No hay espacio en ${where}: quedan ${(free / 1024 ** 3).toFixed(1)} GB libres y estos archivos suman ${(adding / 1024 ** 3).toFixed(1)} GB.`,
+      );
+    }
+
+    let moved = 0;
+    for (const r of rows) {
+      const file = r.storageKey.split('/').pop()!;
+      const folder = to === 'VAULT' ? 'vault' : kindOf(r.mimeType) === 'PHOTO' ? 'photos' : 'videos';
+      const newKey = `academies/${academyId}/${folder}/${file}`;
+      await this.media.copy(r.storageKey, newKey, to === 'VAULT' ? 'STANDARD_IA' : 'STANDARD');
+      await this.prisma.academyVideo.update({
+        where: { id: r.id },
+        data: { storageKey: newKey, location: to, vaultedAt: to === 'VAULT' ? new Date() : null },
+      });
+      if (newKey !== r.storageKey) await this.media.remove(r.storageKey);
+      moved++;
+    }
+    return { moved };
   }
 
   // --- reportes -----------------------------------------------------------------

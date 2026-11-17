@@ -101,7 +101,8 @@ export function AcademyVideoUpload({
         }
         const found = await academiesApi.duplicates(academyId, [hash]).catch(() => []);
         if (found.length > 0) {
-          patch(it.key, { state: 'duplicate', hash, progress: 0, note: `Ya está en la galería: "${found[0].title}".` });
+          const where = found[0].location === 'VAULT' ? 'en la bóveda' : 'en la galería';
+          patch(it.key, { state: 'duplicate', hash, progress: 0, note: `Ya está ${where}: "${found[0].title}".` });
           continue;
         }
       }

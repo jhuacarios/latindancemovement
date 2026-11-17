@@ -477,6 +477,7 @@ model Academy {
   logoData        String? // base64, sin prefijo data:
   logoMime        String?
   storageQuotaMb  Int      @default(51200) // cupo de fotos y videos (50 GB)
+  vaultQuotaMb    Int      @default(204800) // cupo de la bóveda (200 GB): archivo barato, solo descarga
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -527,30 +528,33 @@ model AcademyClass {
 
 /// Video o foto de una academia (el tipo sale de mimeType) en el bucket de media (R2, privado: se ve por URL firmada).
 model AcademyVideo {
-  id           String        @id @default(cuid())
-  academyId    String
-  academy      Academy       @relation(fields: [academyId], references: [id], onDelete: Cascade)
-  classId      String?
-  class        AcademyClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
-  title        String
-  description  String?
-  style        String? // DanceStyle
-  recordedOn   DateTime? // día de la clase
-  storageKey   String        @unique
-  thumbKey     String? // miniatura JPG (la saca el navegador)
-  mimeType     String
-  sizeBytes    BigInt
-  durationMs   Int?
-  contentHash  String? // SHA-256 del archivo (lo calcula el navegador): evita subir el mismo dos veces
-  status       String        @default("UPLOADING") // AcademyVideoStatus: UPLOADING | READY
-  uploadedById String
-  uploadedBy   User          @relation("AcademyVideoUploadedBy", fields: [uploadedById], references: [id])
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  academyId       String
+  academy         Academy       @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  classId         String?
+  class           AcademyClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  title           String
+  description     String?
+  style           String? // DanceStyle
+  recordedOn      DateTime? // día de la clase
+  storageKey      String        @unique
+  thumbKey        String? // miniatura JPG (la saca el navegador)
+  pendingThumbKey String? // miniatura nueva subiéndose (al confirmar pasa a thumbKey)
+  mimeType        String
+  sizeBytes       BigInt
+  durationMs      Int?
+  contentHash     String? // SHA-256 del archivo (lo calcula el navegador): evita subir el mismo dos veces
+  status          String        @default("UPLOADING") // AcademyVideoStatus: UPLOADING | READY
+  location        String        @default("GALLERY") // AcademyMediaLocation: GALLERY | VAULT (R2 Infrequent Access: no se reproduce, solo se descarga)
+  vaultedAt       DateTime?
+  uploadedById    String
+  uploadedBy      User          @relation("AcademyVideoUploadedBy", fields: [uploadedById], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   reports AcademyVideoReport[]
 
-  @@index([academyId, status])
+  @@index([academyId, status, location])
   @@index([academyId, contentHash])
   @@index([classId])
 }

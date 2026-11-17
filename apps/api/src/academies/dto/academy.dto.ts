@@ -1,6 +1,7 @@
 import { PartialType } from '@nestjs/mapped-types';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsBoolean,
@@ -179,6 +180,15 @@ export class CheckDuplicatesDto {
   @ArrayMaxSize(500)
   @Matches(/^[a-f0-9]{64}$/, { each: true, message: 'Huella del archivo no válida.' })
   hashes!: string[];
+}
+
+/** Archivos a mover entre la galería y la bóveda. */
+export class MoveMediaDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  videoIds!: string[];
 }
 
 export class CompleteVideoUploadDto {

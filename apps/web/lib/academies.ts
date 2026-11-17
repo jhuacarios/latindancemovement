@@ -240,41 +240,134 @@ function photoThumb(file: File): Promise<Blob | null> {
   });
 }
 
+/** Espera a que el cuadro buscado esté de verdad pintado (si no, a veces sale negro). */
+function frameReady(video: HTMLVideoElement): Promise<void> {
+  const v = video as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+  return new Promise((resolve) => {
+    const fallback = setTimeout(resolve, 300);
+    v.requestVideoFrameCallback?.(() => {
+      clearTimeout(fallback);
+      resolve();
+    });
+  });
+}
+
+function seek(video: HTMLVideoElement, t: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    video.onseeked = () => resolve();
+    video.onerror = () => reject(new Error('video'));
+    video.currentTime = t;
+  });
+}
+
+/** Dibuja el cuadro actual (máx. 640 px). null si salió (casi) negro. */
+function drawFrame(video: HTMLVideoElement): Promise<Blob | null> {
+  const w = Math.min(640, video.videoWidth);
+  if (!w || !video.videoHeight) return Promise.resolve(null);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = Math.round((video.videoHeight / video.videoWidth) * w);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return Promise.resolve(null);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  // Brillo promedio de una muestra: los videos HDR/HEVC del iPhone a veces se dibujan negros.
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < data.length; i += 4 * 97) {
+    sum += data[i] + data[i + 1] + data[i + 2];
+    n++;
+  }
+  if (n === 0 || sum / (n * 3) < 6) return Promise.resolve(null);
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.8));
+}
+
 /**
  * Duración y miniatura sacadas por el navegador (sin usar CPU del servidor). Si el
- * navegador no puede leer el video (p. ej. HEVC del iPhone en Chrome/Windows),
- * devuelve nulls: el video se sube igual, sin miniatura.
+ * cuadro sale negro, prueba en otros momentos (25 % y 50 % del video); si el
+ * navegador no puede leerlo o todos salen negros, la miniatura queda en null (la
+ * galería muestra un ícono, y quien administra puede elegir un cuadro después).
  */
 export function videoPreview(file: File): Promise<{ durationMs: number | null; thumb: Blob | null }> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
-    video.preload = 'metadata';
+    video.preload = 'auto';
     video.muted = true;
     video.playsInline = true;
     let durationMs: number | null = null;
+    let finished = false;
     const done = (thumb: Blob | null) => {
+      if (finished) return;
+      finished = true;
       clearTimeout(timer);
       URL.revokeObjectURL(url);
+      video.removeAttribute('src');
+      video.load();
       resolve({ durationMs, thumb });
     };
-    const timer = setTimeout(() => done(null), 15_000);
+    const timer = setTimeout(() => done(null), 20_000);
     video.onerror = () => done(null);
-    video.onloadedmetadata = () => {
-      if (Number.isFinite(video.duration)) durationMs = Math.round(video.duration * 1000);
-      video.currentTime = Math.min(2, (video.duration || 0) / 10);
-    };
-    video.onseeked = () => {
-      const w = Math.min(640, video.videoWidth);
-      if (!w || !video.videoHeight) return done(null);
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = Math.round((video.videoHeight / video.videoWidth) * w);
-      canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((b) => done(b), 'image/jpeg', 0.8);
+    video.onloadedmetadata = async () => {
+      const d = Number.isFinite(video.duration) ? video.duration : 0;
+      if (d) durationMs = Math.round(d * 1000);
+      for (const t of [Math.min(2, d / 10), d * 0.25, d * 0.5]) {
+        try {
+          await seek(video, t);
+          await frameReady(video);
+          const thumb = await drawFrame(video);
+          if (thumb) return done(thumb);
+        } catch {
+          return done(null);
+        }
+      }
+      done(null);
     };
     video.src = url;
   });
+}
+
+/**
+ * Cuadro de un video ya subido (URL firmada) en el segundo dado, como JPG. Usa un
+ * <video> aparte con CORS (el del reproductor no se toca). null si sale negro o el
+ * navegador no lo puede leer.
+ */
+export function frameFromUrl(url: string, timeSec: number): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.preload = 'auto';
+    video.muted = true;
+    video.playsInline = true;
+    const timer = setTimeout(() => resolve(null), 20_000);
+    video.onerror = () => {
+      clearTimeout(timer);
+      resolve(null);
+    };
+    video.onloadedmetadata = async () => {
+      try {
+        await seek(video, Math.min(timeSec, Math.max(0, video.duration - 0.1)));
+        await frameReady(video);
+        const b = await drawFrame(video);
+        clearTimeout(timer);
+        resolve(b);
+      } catch {
+        clearTimeout(timer);
+        resolve(null);
+      }
+    };
+    video.src = url;
+  });
+}
+
+/** Reemplaza la miniatura de un video por el JPG dado (dueño y profesores). */
+export async function replaceThumbnail(academyId: string, videoId: string, jpg: Blob): Promise<AcademyVideoDto> {
+  const t = await api<{ uploadUrl: string; uploadHeaders: Record<string, string> }>(
+    `/academies/${academyId}/videos/${videoId}/thumb`,
+    { method: 'POST' },
+  );
+  await putWithProgress(t.uploadUrl, t.uploadHeaders, jpg);
+  return api<AcademyVideoDto>(`/academies/${academyId}/videos/${videoId}/thumb/complete`, { method: 'POST' });
 }
 
 /** PUT directo al storage con progreso (fetch no informa progreso de subida). */
@@ -411,12 +504,19 @@ export const academiesApi = {
   ) => api<AcademyVideoDto>(`/academies/${id}/videos/${videoId}`, { method: 'PATCH', body }),
   removeVideo: (id: string, videoId: string) =>
     api<void>(`/academies/${id}/videos/${videoId}`, { method: 'DELETE' }),
-  /** De las huellas dadas, cuáles ya están en la galería. */
+  /** De las huellas dadas, cuáles ya están (en la galería o en la bóveda). */
   duplicates: (id: string, hashes: string[]) =>
-    api<{ hash: string; videoId: string; title: string }[]>(`/academies/${id}/videos/duplicates`, {
+    api<{ hash: string; videoId: string; title: string; location: 'GALLERY' | 'VAULT' }[]>(`/academies/${id}/videos/duplicates`, {
       method: 'POST',
       body: { hashes },
     }),
+  /** URL firmada que descarga el original con su nombre (dueño y profesores). */
+  downloadUrl: (id: string, videoId: string) => api<{ url: string }>(`/academies/${id}/videos/${videoId}/download`),
+  vault: (id: string) => api<AcademyVideoDto[]>(`/academies/${id}/vault`),
+  toVault: (id: string, videoIds: string[]) =>
+    api<{ moved: number }>(`/academies/${id}/vault`, { method: 'POST', body: { videoIds } }),
+  fromVault: (id: string, videoIds: string[]) =>
+    api<{ moved: number }>(`/academies/${id}/vault/restore`, { method: 'POST', body: { videoIds } }),
   reportVideo: (id: string, videoId: string, reason: string) =>
     api<void>(`/academies/${id}/videos/${videoId}/report`, { method: 'POST', body: { reason } }),
   reports: () => api<AcademyVideoReportDto[]>('/academies/reports'),

@@ -9,6 +9,7 @@ import type { Prisma } from '@prisma/client';
 import type {
   AcademyClassDto,
   AcademyDto,
+  AcademyMediaLocation,
   AcademyMemberRole,
   AcademySummaryDto,
   ChileRegion,
@@ -28,6 +29,7 @@ import {
   UpdateClassDto,
 } from './dto/academy.dto';
 
+const MB = 1024 * 1024;
 const csv = (v: string) => v.split(',').filter(Boolean);
 const text = (v: string | null | undefined) => v?.trim() || null;
 const normHandle = (h: string | null | undefined) => h?.trim().replace(/^@/, '').toLowerCase() || null;
@@ -42,7 +44,9 @@ const SUMMARY = {
   instagramHandle: true,
   logoMime: true,
   members: { select: { userId: true, role: true } },
-  _count: { select: { classes: { where: { active: true } }, videos: { where: { status: 'READY' } } } },
+  _count: {
+    select: { classes: { where: { active: true } }, videos: { where: { status: 'READY', location: 'GALLERY' } } },
+  },
 } satisfies Prisma.AcademySelect;
 
 type SummaryRow = Prisma.AcademyGetPayload<{ select: typeof SUMMARY }>;
@@ -163,6 +167,7 @@ export class AcademiesService {
         address: true,
         description: true,
         storageQuotaMb: true,
+        vaultQuotaMb: true,
         createdAt: true,
         classes: { orderBy: CLASS_ORDER },
         members: {
@@ -189,25 +194,36 @@ export class AcademiesService {
           }))
         : [],
       storage: manages
-        ? { usedBytes: await this.usedBytes(id), quotaBytes: a.storageQuotaMb * 1024 * 1024 }
+        ? {
+            usedBytes: await this.usedBytes(id),
+            quotaBytes: a.storageQuotaMb * MB,
+            vaultUsedBytes: await this.usedBytes(id, 'VAULT'),
+            vaultQuotaBytes: a.vaultQuotaMb * MB,
+          }
         : null,
       createdAt: a.createdAt.toISOString(),
     };
   }
 
-  /** Bytes ocupados por los videos (los que se están subiendo también cuentan). */
-  async usedBytes(academyId: string): Promise<number> {
+  /**
+   * Bytes ocupados en la galería (los que se están subiendo también cuentan) o en
+   * la bóveda: cada una tiene su propio cupo.
+   */
+  async usedBytes(academyId: string, location: AcademyMediaLocation = 'GALLERY'): Promise<number> {
     const agg = await this.prisma.academyVideo.aggregate({
-      where: { academyId },
+      where: { academyId, location },
       _sum: { sizeBytes: true },
     });
     return Number(agg._sum.sizeBytes ?? 0);
   }
 
-  async quotaBytes(academyId: string): Promise<number> {
-    const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { storageQuotaMb: true } });
+  async quotaBytes(academyId: string, location: AcademyMediaLocation = 'GALLERY'): Promise<number> {
+    const a = await this.prisma.academy.findUnique({
+      where: { id: academyId },
+      select: { storageQuotaMb: true, vaultQuotaMb: true },
+    });
     if (!a) throw new NotFoundException('Academia no encontrada.');
-    return a.storageQuotaMb * 1024 * 1024;
+    return (location === 'VAULT' ? a.vaultQuotaMb : a.storageQuotaMb) * MB;
   }
 
   async create(user: AuthUser, dto: CreateAcademyDto, logo: UploadedImage | null): Promise<AcademyDto> {
@@ -251,12 +267,13 @@ export class AcademiesService {
     await this.assertOwner(user, id);
     const videos = await this.prisma.academyVideo.findMany({
       where: { academyId: id },
-      select: { storageKey: true, thumbKey: true },
+      select: { storageKey: true, thumbKey: true, pendingThumbKey: true },
     });
     await this.prisma.academy.delete({ where: { id } });
     for (const v of videos) {
       await this.media.remove(v.storageKey);
       if (v.thumbKey) await this.media.remove(v.thumbKey);
+      if (v.pendingThumbKey) await this.media.remove(v.pendingThumbKey);
     }
   }
 

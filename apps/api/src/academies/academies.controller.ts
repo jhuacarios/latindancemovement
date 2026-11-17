@@ -31,6 +31,7 @@ import {
   CreateClassDto,
   CreateVideoUploadDto,
   ListVideosQueryDto,
+  MoveMediaDto,
   QueryAcademiesDto,
   ReportVideoDto,
   UpdateAcademyDto,
@@ -230,6 +231,52 @@ export class AcademiesController {
   @UseGuards(JwtAuthGuard)
   videoUrl(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('videoId') videoId: string) {
     return this.videos.viewUrl(user, id, videoId);
+  }
+
+  /** Reemplazar la miniatura: devuelve la URL para subir el cuadro elegido. */
+  @Post(':id/videos/:videoId/thumb')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  thumbUpload(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('videoId') videoId: string) {
+    return this.videos.thumbUpload(user, id, videoId);
+  }
+
+  @Post(':id/videos/:videoId/thumb/complete')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  thumbComplete(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('videoId') videoId: string) {
+    return this.videos.thumbComplete(user, id, videoId);
+  }
+
+  /** Descarga del original (dueño y profesores; también lo que está en la bóveda). */
+  @Get(':id/videos/:videoId/download')
+  @UseGuards(JwtAuthGuard)
+  download(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('videoId') videoId: string) {
+    return this.videos.downloadUrl(user, id, videoId);
+  }
+
+  // --- bóveda -------------------------------------------------------------------
+
+  @Get(':id/vault')
+  @UseGuards(JwtAuthGuard)
+  vault(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.videos.listVault(user, id);
+  }
+
+  /** Mueve archivos de la galería a la bóveda. */
+  @Post(':id/vault')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  toVault(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: MoveMediaDto) {
+    return this.videos.move(user, id, dto, 'VAULT');
+  }
+
+  /** Devuelve archivos de la bóveda a la galería. */
+  @Post(':id/vault/restore')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  fromVault(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: MoveMediaDto) {
+    return this.videos.move(user, id, dto, 'GALLERY');
   }
 
   @Post(':id/videos/:videoId/report')

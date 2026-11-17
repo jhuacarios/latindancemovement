@@ -1080,6 +1080,8 @@ export const ACADEMY_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'
 export const ACADEMY_PHOTO_MAX_BYTES = 25 * 1024 * 1024;
 export const ACADEMY_MEDIA_MIME_TYPES = [...ACADEMY_VIDEO_MIME_TYPES, ...ACADEMY_PHOTO_MIME_TYPES] as const;
 export type AcademyMediaKind = 'VIDEO' | 'PHOTO';
+/** GALLERY = se ve y reproduce; VAULT = bóveda (almacenamiento barato, solo se descarga). */
+export type AcademyMediaLocation = 'GALLERY' | 'VAULT';
 
 export interface AcademySummaryDto {
   id: string;
@@ -1125,8 +1127,8 @@ export interface AcademyDto extends AcademySummaryDto {
   classes: AcademyClassDto[];
   /** Solo para quienes la administran (vacío para el resto). */
   members: AcademyMemberDto[];
-  /** Uso del cupo de videos (solo para quienes la administran; null para el resto). */
-  storage: { usedBytes: number; quotaBytes: number } | null;
+  /** Uso de la galería y de la bóveda (solo para quienes la administran; null para el resto). */
+  storage: { usedBytes: number; quotaBytes: number; vaultUsedBytes: number; vaultQuotaBytes: number } | null;
   createdAt: string;
 }
 
@@ -1135,6 +1137,9 @@ export interface AcademyVideoDto {
   id: string;
   academyId: string;
   kind: AcademyMediaKind;
+  location: AcademyMediaLocation;
+  /** Cuándo se movió a la bóveda (null si está en la galería). */
+  vaultedAt: string | null;
   classId: string | null;
   classTitle: string | null;
   title: string;

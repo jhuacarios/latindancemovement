@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.18.0',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'feature',
+    title: 'Bóveda para las academias: 200 GB de almacenamiento a largo plazo',
+    description:
+      'Las academias tienen una bóveda de 200 GB para guardar los originales que ya no necesitan mostrar: se seleccionan en Fotos y videos y se mueven a la bóveda, liberando el espacio de la galería. Lo que está en la bóveda no se ve ni se reproduce; se descarga al instante cuando se necesita o se devuelve a la galería. Además, el dueño y los profesores pueden descargar los originales de la galería, y elegir el cuadro de la miniatura de un video desde el reproductor (útil cuando la portada salió negra, algo común con videos HDR del iPhone). Las miniaturas automáticas ya no quedan negras: si el primer cuadro sale oscuro, se prueba con otros momentos del video.',
+  },
+  {
     version: '0.17.3',
     date: '2026-11-17',
     module: 'classes',

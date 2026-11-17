@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AcademyVideoDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
-import { academiesApi, formatVideoDuration, missingExtension } from '@/lib/academies';
+import { academiesApi, formatVideoDuration, frameFromUrl, missingExtension, replaceThumbnail } from '@/lib/academies';
 import { textareaClass } from './academy-form';
 import { Button, Spinner, StyleBadge } from './ui';
 
@@ -19,13 +19,21 @@ export function AcademyVideoPlayer({
   index,
   onIndex,
   onClose,
+  manages = false,
+  onChanged,
 }: {
   academyId: string;
   items: AcademyVideoDto[];
   index: number;
   onIndex: (i: number) => void;
   onClose: () => void;
+  /** Dueño o profesor: puede elegir el cuadro de la miniatura. */
+  manages?: boolean;
+  /** Se llamó cuando cambió algo (p. ej. la miniatura). */
+  onChanged?: () => void;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [thumbState, setThumbState] = useState<'idle' | 'saving' | 'done' | string>('idle');
   const item = items[index];
   const url = useQuery({
     queryKey: ['academies', 'media-url', item.id],
@@ -44,6 +52,7 @@ export function AcademyVideoPlayer({
   // Al cambiar de archivo se limpia el estado del anterior.
   useEffect(() => {
     setPlayError(false);
+    setThumbState('idle');
     setReporting(false);
     setReason('');
     setReportState('idle');
@@ -67,6 +76,26 @@ export function AcademyVideoPlayer({
       setReportState('sent');
     } catch (e) {
       setReportState(e instanceof ApiError ? e.message : 'No se pudo enviar el reporte.');
+    }
+  };
+
+  const useFrame = async () => {
+    const t = videoRef.current?.currentTime ?? 0;
+    if (!url.data) return;
+    setThumbState('saving');
+    try {
+      const jpg = await frameFromUrl(url.data.url, t);
+      if (!jpg) {
+        setThumbState(
+          'Tu navegador no pudo sacar ese cuadro (suele pasar con videos HDR/HEVC del iPhone en Chrome). Prueba otro momento, o desde Safari o el celular.',
+        );
+        return;
+      }
+      await replaceThumbnail(academyId, item.id, jpg);
+      setThumbState('done');
+      onChanged?.();
+    } catch (e) {
+      setThumbState(e instanceof ApiError ? e.message : 'No se pudo guardar la miniatura.');
     }
   };
 
@@ -125,6 +154,7 @@ export function AcademyVideoPlayer({
               <img src={url.data.url} alt={item.title} className="mx-auto max-h-[75vh] w-auto max-w-full object-contain" />
             ) : (
               <video
+                ref={videoRef}
                 key={url.data.url}
                 src={url.data.url}
                 poster={item.thumbUrl ?? undefined}
@@ -142,6 +172,24 @@ export function AcademyVideoPlayer({
             Tu navegador no puede reproducir este video (suele pasar con videos HEVC del iPhone en Chrome/Windows). Prueba en
             Safari o en el celular.
           </p>
+        )}
+
+        {manages && !isPhoto && url.data && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Button size="sm" variant="ghost" onClick={useFrame} disabled={thumbState === 'saving'}>
+              {thumbState === 'saving' ? 'Guardando…' : '📸 Usar este cuadro como miniatura'}
+            </Button>
+            <span className="text-neutral-500">
+              {thumbState === 'done'
+                ? '✓ Miniatura actualizada.'
+                : thumbState === 'idle' || thumbState === 'saving'
+                  ? 'Pausa el video en el momento que quieras como portada.'
+                  : ''}
+            </span>
+            {thumbState !== 'idle' && thumbState !== 'saving' && thumbState !== 'done' && (
+              <span className="w-full text-amber-300">{thumbState}</span>
+            )}
+          </div>
         )}
 
         {(item.style || item.description) && (

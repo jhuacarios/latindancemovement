@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import {
+  CopyObjectCommand,
   CreateBucketCommand,
   DeleteObjectCommand,
   GetObjectCommand,
@@ -73,6 +74,36 @@ export class MediaStorageService implements OnModuleInit {
     return getSignedUrl(this.s3, new PutObjectCommand({ Bucket: this.config!.bucket, Key: key, ContentType: mimeType }), {
       expiresIn: UPLOAD_URL_TTL_SEC,
     });
+  }
+
+  /** URL firmada que el navegador DESCARGA (no reproduce) con el nombre dado. */
+  downloadUrl(key: string, fileName: string): Promise<string> {
+    const ascii = fileName.normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/["\\]/g, '') || 'archivo';
+    return getSignedUrl(
+      this.s3,
+      new GetObjectCommand({
+        Bucket: this.config!.bucket,
+        Key: key,
+        ResponseContentDisposition: `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      }),
+      { expiresIn: VIEW_URL_TTL_SEC },
+    );
+  }
+
+  /**
+   * Copia un objeto dentro del bucket cambiando su clase de almacenamiento:
+   * STANDARD_IA = R2 Infrequent Access (la bóveda: más barata por GB, cobra por
+   * descargar y 30 días mínimos), STANDARD = normal. Sirve para objetos de hasta 5 GB.
+   */
+  async copy(fromKey: string, toKey: string, storageClass: 'STANDARD' | 'STANDARD_IA'): Promise<void> {
+    await this.s3.send(
+      new CopyObjectCommand({
+        Bucket: this.config!.bucket,
+        Key: toKey,
+        CopySource: `${this.config!.bucket}/${fromKey.split('/').map(encodeURIComponent).join('/')}`,
+        StorageClass: storageClass,
+      }),
+    );
   }
 
   viewUrl(key: string): Promise<string> {

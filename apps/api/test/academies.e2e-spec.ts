@@ -33,6 +33,17 @@ class FakeMedia {
   async viewUrl(key: string) {
     return `memory://view/${key}`;
   }
+  /** Clase de almacenamiento de cada objeto (STANDARD_IA = bóveda). */
+  classes = new Map<string, string>();
+  async downloadUrl(key: string, fileName: string) {
+    return `memory://download/${key}?name=${encodeURIComponent(fileName)}`;
+  }
+  async copy(from: string, to: string, storageClass: string) {
+    const size = this.objects.get(from);
+    if (size === undefined) throw new Error(`no existe ${from}`);
+    this.objects.set(to, size);
+    this.classes.set(to, storageClass);
+  }
   async size(key: string) {
     return this.objects.get(key) ?? null;
   }
@@ -147,7 +158,7 @@ describe('Academias (e2e)', () => {
     expect(a.myRole).toBe('OWNER');
     expect(a.instagramHandle).toBe('clave.vina');
     expect(a.members).toHaveLength(1);
-    expect(a.storage).toEqual({ usedBytes: 0, quotaBytes: 51200 * MB });
+    expect(a.storage).toEqual({ usedBytes: 0, quotaBytes: 51200 * MB, vaultUsedBytes: 0, vaultQuotaBytes: 204800 * MB });
 
     const seen = (await call('GET', `/${a.id}`, 'viewer')).json<AcademyDto>();
     expect(seen.myRole).toBeNull();
@@ -335,7 +346,7 @@ describe('Academias (e2e)', () => {
     await call('POST', `/${a.id}/videos/${t.videoId}/complete`, 'owner', {});
     const dups = await call('POST', `/${a.id}/videos/duplicates`, 'owner', { hashes: [h1, h2] });
     expect(dups.statusCode).toBe(200);
-    expect(dups.json()).toEqual([{ hash: h1, videoId: t.videoId, title: 'Original' }]);
+    expect(dups.json()).toEqual([{ hash: h1, videoId: t.videoId, title: 'Original', location: 'GALLERY' }]);
 
     const again = await call('POST', `/${a.id}/videos`, 'owner', { title: 'Copia', mimeType: 'video/mp4', sizeBytes: 5 * MB, contentHash: h1 });
     expect(again.statusCode).toBe(409);
@@ -344,5 +355,81 @@ describe('Academias (e2e)', () => {
     expect((await call('POST', `/${a.id}/videos`, 'owner', { title: 'Otro', mimeType: 'video/mp4', sizeBytes: MB, contentHash: h2 })).statusCode).toBe(201);
     expect((await call('POST', `/${a.id}/videos/duplicates`, 'owner', { hashes: ['xyz'] })).statusCode).toBe(400);
     expect((await call('POST', `/${a.id}/videos/duplicates`, 'viewer', { hashes: [h1] })).statusCode).toBe(403);
+  });
+  it('bóveda: libera la galería, no se reproduce, solo se descarga y se puede devolver', async () => {
+    const a = await createAcademy('Bóveda');
+    const v = await uploadVideo(a.id); // 50 MB, título "Clase 1: paso básico"
+    const before = (await call('GET', `/${a.id}`, 'owner')).json<AcademyDto>();
+    expect(before.storage).toMatchObject({ usedBytes: 50 * MB, vaultUsedBytes: 0, vaultQuotaBytes: 204800 * MB });
+
+    // Solo quien administra mueve y ve la bóveda.
+    expect((await call('POST', `/${a.id}/vault`, 'viewer', { videoIds: [v.id] })).statusCode).toBe(403);
+    expect((await call('GET', `/${a.id}/vault`, 'viewer')).statusCode).toBe(403);
+
+    const moved = await call('POST', `/${a.id}/vault`, 'owner', { videoIds: [v.id] });
+    expect(moved.json()).toEqual({ moved: 1 });
+    const after = (await call('GET', `/${a.id}`, 'owner')).json<AcademyDto>();
+    expect(after.storage).toMatchObject({ usedBytes: 0, vaultUsedBytes: 50 * MB });
+    expect(after.videoCount).toBe(0);
+
+    // Sale de la galería, queda en la bóveda con la clase barata y el archivo viejo se borra.
+    expect((await call('GET', `/${a.id}/videos`, 'viewer')).json<unknown[]>()).toEqual([]);
+    const vault = (await call('GET', `/${a.id}/vault`, 'owner')).json<AcademyVideoDto[]>();
+    expect(vault.map((x) => [x.id, x.location])).toEqual([[v.id, 'VAULT']]);
+    expect(vault[0].vaultedAt).not.toBeNull();
+    const vaultKeys = [...media.classes.entries()].filter(([k]) => k.includes(`academies/${a.id}/vault/`));
+    expect(vaultKeys.map(([, c]) => c)).toEqual(['STANDARD_IA']);
+    expect([...media.objects.keys()].some((k) => k.includes(`academies/${a.id}/videos/`) && k.endsWith('.mp4'))).toBe(false);
+
+    // No se reproduce: para quien administra avisa; para el resto no existe.
+    expect((await call('GET', `/${a.id}/videos/${v.id}/url`, 'owner')).statusCode).toBe(409);
+    expect((await call('GET', `/${a.id}/videos/${v.id}/url`, 'viewer')).statusCode).toBe(404);
+    // Se descarga con su nombre y extensión.
+    const dl = await call('GET', `/${a.id}/videos/${v.id}/download`, 'owner');
+    expect(dl.json<{ url: string }>().url).toContain(`name=${encodeURIComponent('Clase 1: paso básico.mp4')}`);
+    expect((await call('GET', `/${a.id}/videos/${v.id}/download`, 'viewer')).statusCode).toBe(403);
+
+    // Un archivo idéntico avisa que está en la bóveda.
+    const hashA = 'c'.repeat(64);
+    await prisma.academyVideo.update({ where: { id: v.id }, data: { contentHash: hashA } });
+    const dup = await call('POST', `/${a.id}/videos`, 'owner', { title: 'Copia', mimeType: 'video/mp4', sizeBytes: MB, contentHash: hashA });
+    expect(dup.json<{ message: string }>().message).toContain('(en la bóveda)');
+
+    // Cupo de la bóveda.
+    await prisma.academy.update({ where: { id: a.id }, data: { vaultQuotaMb: 10 } });
+    const other = await uploadVideo(a.id);
+    const full = await call('POST', `/${a.id}/vault`, 'owner', { videoIds: [other.id] });
+    expect(full.statusCode).toBe(409);
+    expect(full.json<{ message: string }>().message).toContain('No hay espacio en la bóveda');
+
+    // Volver a la galería: se ve y se reproduce otra vez, en almacenamiento normal.
+    expect((await call('POST', `/${a.id}/vault/restore`, 'owner', { videoIds: [v.id] })).json()).toEqual({ moved: 1 });
+    const back = (await call('GET', `/${a.id}/videos`, 'viewer')).json<AcademyVideoDto[]>();
+    expect(back.find((x) => x.id === v.id)?.location).toBe('GALLERY');
+    expect((await call('GET', `/${a.id}/videos/${v.id}/url`, 'viewer')).statusCode).toBe(200);
+    const restored = [...media.classes.entries()].find(([k]) => k.includes(`academies/${a.id}/videos/`));
+    expect(restored?.[1]).toBe('STANDARD');
+  });
+  it('miniatura: quien administra la reemplaza por un cuadro elegido y se borra la anterior', async () => {
+    const a = await createAcademy('Miniaturas');
+    const v = await uploadVideo(a.id);
+    const oldThumb = v.thumbUrl!.replace('memory://view/', '');
+    expect(media.has(oldThumb)).toBe(true);
+
+    expect((await call('POST', `/${a.id}/videos/${v.id}/thumb`, 'viewer')).statusCode).toBe(403);
+    const t = (await call('POST', `/${a.id}/videos/${v.id}/thumb`, 'owner')).json<{ uploadUrl: string }>();
+    // Sin subir todavía: no confirma.
+    expect((await call('POST', `/${a.id}/videos/${v.id}/thumb/complete`, 'owner')).statusCode).toBe(400);
+
+    media.put(t.uploadUrl, 40_000);
+    const done = await call('POST', `/${a.id}/videos/${v.id}/thumb/complete`, 'owner');
+    expect(done.statusCode).toBe(200);
+    const newThumb = done.json<AcademyVideoDto>().thumbUrl!.replace('memory://view/', '');
+    expect(newThumb).toMatch(new RegExp(`^academies/${a.id}/thumbs/${v.id}-.+\\.jpg$`));
+    expect(media.has(oldThumb)).toBe(false);
+    expect(media.has(newThumb)).toBe(true);
+
+    await call('DELETE', `/${a.id}/videos/${v.id}`, 'owner');
+    expect(media.has(newThumb)).toBe(false);
   });
 });
