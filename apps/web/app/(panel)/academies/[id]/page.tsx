@@ -18,6 +18,7 @@ import {
   formatBytes,
   formatVideoDuration,
   missingExtension,
+  compatLabel,
   validateAcademy,
   type AcademyFormValues,
 } from '@/lib/academies';
@@ -335,6 +336,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
               <div className="text-xs text-neutral-400">
                 {[v.classTitle ?? 'Contenido general', v.recordedOn].filter(Boolean).join(' · ')}
               </div>
+              {manages && compatLabel(v) && <div className="text-[11px] text-neutral-500">{compatLabel(v)}</div>}
               {manages && (
                 <div className="flex flex-wrap gap-3 pt-1 text-xs">
                   <span className="text-neutral-500">{formatBytes(v.sizeBytes)}</span>
@@ -345,6 +347,15 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
                   >
                     Descargar
                   </button>
+                  {v.kind === 'VIDEO' && v.compat.status === 'DONE' && (
+                    <button
+                      type="button"
+                      onClick={() => void downloadMedia(a.id, v.id, 'mp4')}
+                      className="text-brand hover:underline"
+                    >
+                      MP4
+                    </button>
+                  )}
                   <button type="button" onClick={() => remove(v)} className="text-red-400/80 hover:text-red-300">
                     Eliminar
                   </button>
@@ -363,7 +374,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
           onClose={() => setPlaying(null)}
           manages={manages}
           onChanged={onChanged}
-          onDownload={manages ? (vid) => downloadMedia(a.id, vid) : undefined}
+          onDownload={manages ? (vid, format) => downloadMedia(a.id, vid, format) : undefined}
         />
       )}
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />

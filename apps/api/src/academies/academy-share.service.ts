@@ -11,7 +11,13 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import { AcademiesService } from './academies.service';
-import { AcademyVideosService, VIDEO_SELECT, downloadName } from './academy-videos.service';
+import {
+  AcademyVideosService,
+  VIDEO_SELECT,
+  downloadTarget,
+  playableKey,
+  type DownloadFormat,
+} from './academy-videos.service';
 import { MediaStorageService } from './media-storage.service';
 
 /**
@@ -142,7 +148,7 @@ export class AcademyShareService {
     const l = await this.link(token);
     const v = await this.prisma.academyVideo.findFirst({
       where: { id: videoId, classId: l.classId, location: 'GALLERY' },
-      select: { storageKey: true, status: true, title: true, mimeType: true },
+      select: { storageKey: true, status: true, title: true, mimeType: true, compatStatus: true, compatKey: true },
     });
     if (!v) throw new NotFoundException('Archivo no encontrado.');
     if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
@@ -151,11 +157,12 @@ export class AcademyShareService {
 
   async viewUrl(token: string, videoId: string): Promise<{ url: string }> {
     const v = await this.sharedItem(token, videoId);
-    return { url: await this.media.viewUrl(v.storageKey) };
+    return { url: await this.media.viewUrl(playableKey(v)) };
   }
 
-  async downloadUrl(token: string, videoId: string): Promise<{ url: string }> {
+  async downloadUrl(token: string, videoId: string, format: DownloadFormat = 'original'): Promise<{ url: string }> {
     const v = await this.sharedItem(token, videoId);
-    return { url: await this.media.downloadUrl(v.storageKey, downloadName(v)) };
+    const t = downloadTarget(v, format);
+    return { url: await this.media.downloadUrl(t.key, t.name) };
   }
 }

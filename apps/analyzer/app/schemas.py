@@ -101,3 +101,18 @@ class AnalyzeResponse(BaseModel):
     sections: list[Section]  # Fase 2
     markers: list[Marker]  # Fase 2
     fingerprint: list[int]
+
+
+class CompatRequest(BaseModel):
+    """Versión compatible (MP4 H.264, SDR, máx. 1080p) de un video de academia."""
+
+    videoUrl: str = Field(min_length=1)
+    # URL firmada (PUT, Content-Type video/mp4) donde subir la copia.
+    uploadUrl: str = Field(min_length=1)
+    maxDurationSec: int = Field(default=15 * 60, ge=1)
+
+
+class CompatResponse(BaseModel):
+    result: Literal["converted", "not_needed", "too_long"]
+    durationMs: int = Field(ge=0)
+    sizeBytes: int | None = None

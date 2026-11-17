@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.20.0',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'feature',
+    title: 'Videos del iPhone que se ven en todos lados: versión MP4',
+    description:
+      'Los videos que no todos los equipos pueden reproducir (los HEVC/HDR que graba el iPhone) se convierten solos, en segundo plano, a una versión MP4 de hasta 1080p que funciona en cualquier navegador y teléfono. La galería y los links compartidos usan esa versión para reproducir, y aparece el botón "Descargar MP4" junto al original, que se conserva intacto. Se convierten videos de hasta 15 minutos y la copia no ocupa espacio de la academia. Los videos que ya estaban subidos también se convierten.',
+  },
+  {
     version: '0.19.0',
     date: '2026-11-17',
     module: 'classes',

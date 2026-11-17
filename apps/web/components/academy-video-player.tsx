@@ -4,7 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AcademyVideoDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
-import { academiesApi, formatVideoDuration, frameFromUrl, missingExtension, replaceThumbnail } from '@/lib/academies';
+import {
+  academiesApi,
+  compatLabel,
+  formatVideoDuration,
+  frameFromUrl,
+  hasMp4,
+  missingExtension,
+  replaceThumbnail,
+  type DownloadFormat,
+} from '@/lib/academies';
 import { textareaClass } from './academy-form';
 import { Button, Spinner, StyleBadge } from './ui';
 
@@ -37,10 +46,10 @@ export function AcademyVideoPlayer({
   /** De dónde sacar la URL para ver (por defecto, la API de la academia con sesión). */
   urlFor?: (videoId: string) => Promise<{ url: string }>;
   /** Si viene, muestra el botón Descargar. */
-  onDownload?: (videoId: string) => Promise<void>;
+  onDownload?: (videoId: string, format: DownloadFormat) => Promise<void>;
   allowReport?: boolean;
 }) {
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<DownloadFormat | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [thumbState, setThumbState] = useState<'idle' | 'saving' | 'done' | string>('idle');
   const item = items[index];
@@ -209,22 +218,32 @@ export function AcademyVideoPlayer({
         )}
 
         {onDownload && (
-          <div>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={downloading}
-              onClick={async () => {
-                setDownloading(true);
-                try {
-                  await onDownload(item.id);
-                } finally {
-                  setDownloading(false);
-                }
-              }}
-            >
-              {downloading ? 'Preparando…' : `⬇ Descargar ${isPhoto ? 'foto' : 'video'} original`}
-            </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {(isPhoto ? (['original'] as const) : hasMp4(item) ? (['mp4', 'original'] as const) : (['original'] as const)).map(
+              (f) => (
+                <Button
+                  key={f}
+                  size="sm"
+                  variant={f === 'mp4' ? undefined : 'ghost'}
+                  disabled={downloading !== null}
+                  onClick={async () => {
+                    setDownloading(f);
+                    try {
+                      await onDownload(item.id, f);
+                    } finally {
+                      setDownloading(null);
+                    }
+                  }}
+                >
+                  {downloading === f
+                    ? 'Preparando…'
+                    : f === 'mp4'
+                      ? '⬇ Descargar MP4 (se ve en todos lados)'
+                      : `⬇ ${isPhoto ? 'Descargar foto' : 'Original'}`}
+                </Button>
+              ),
+            )}
+            {manages && compatLabel(item) && <span className="text-xs text-neutral-500">{compatLabel(item)}</span>}
           </div>
         )}
 

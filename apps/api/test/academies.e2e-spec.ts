@@ -26,6 +26,12 @@ import { AcademiesService } from '../src/academies/academies.service';
 import { AcademyVideosService } from '../src/academies/academy-videos.service';
 import { AcademyShareService } from '../src/academies/academy-share.service';
 import { ShareController } from '../src/academies/share.controller';
+import {
+  AcademyCompatClient,
+  AcademyCompatQueue,
+  AcademyCompatService,
+  type CompatResult,
+} from '../src/academies/academy-compat.service';
 import { MediaStorageService } from '../src/academies/media-storage.service';
 
 process.env.JWT_SECRET = 'e2e-secret';
@@ -41,6 +47,12 @@ class FakeMedia {
   }
   async viewUrl(key: string) {
     return `memory://view/${key}`;
+  }
+  async analyzerViewUrl(key: string) {
+    return `memory://analyzer/${key}`;
+  }
+  async analyzerUploadUrl(key: string) {
+    return `memory://upload/${key}`;
   }
   /** Clase de almacenamiento de cada objeto (STANDARD_IA = bóveda). */
   classes = new Map<string, string>();
@@ -68,10 +80,35 @@ class FakeMedia {
   }
 }
 
+/** Cola de copias MP4: registra lo encolado (el test llama al procesador a mano). */
+class FakeCompatQueue {
+  enabled = true;
+  enqueued: string[] = [];
+  async enqueue(videoId: string) {
+    this.enqueued.push(videoId);
+  }
+}
+
+/** Analizador simulado: "convierte" subiendo un MP4 a la URL que le dan. */
+class FakeCompatClient {
+  constructor(private readonly media: FakeMedia) {}
+  next: CompatResult['result'] = 'converted';
+  async compat(_videoUrl: string, uploadUrl: string): Promise<CompatResult> {
+    if (this.next === 'converted') {
+      this.media.put(uploadUrl, 7 * 1024 * 1024);
+      return { result: 'converted', durationMs: 60_000, sizeBytes: 7 * 1024 * 1024 };
+    }
+    return { result: this.next, durationMs: 60_000 };
+  }
+}
+
 describe('Academias (e2e)', () => {
   let app: NestFastifyApplication;
   let prisma: PrismaService;
   const media = new FakeMedia();
+  const compatQueue = new FakeCompatQueue();
+  const compatClient = new FakeCompatClient(media);
+  let compat: AcademyCompatService;
   const tag = randomUUID().slice(0, 8);
   const users: Record<string, { id: string; email: string; token: string }> = {};
 
@@ -86,7 +123,10 @@ describe('Academias (e2e)', () => {
         AcademiesService,
         AcademyVideosService,
         AcademyShareService,
+        AcademyCompatService,
         { provide: MediaStorageService, useValue: media },
+        { provide: AcademyCompatQueue, useValue: compatQueue },
+        { provide: AcademyCompatClient, useValue: compatClient },
       ],
     }).compile();
 
@@ -105,6 +145,7 @@ describe('Academias (e2e)', () => {
     await app.getHttpAdapter().getInstance().ready();
 
     prisma = moduleRef.get(PrismaService);
+    compat = moduleRef.get(AcademyCompatService);
     const jwt = new JwtService({ secret: process.env.JWT_SECRET });
     const roles: Record<string, UserRole> = { owner: 'PROFESOR', teacher: 'BAILARIN', viewer: 'BAILARIN' };
     for (const [name, role] of Object.entries(roles)) {
@@ -483,5 +524,60 @@ describe('Academias (e2e)', () => {
     expect((await open(again.token)).statusCode).toBe(200);
     expect((await call('DELETE', `/${a.id}/classes/${lunes.id}/share`, 'owner')).statusCode).toBe(204);
     expect((await open(again.token)).statusCode).toBe(404);
+  });
+  it('copia MP4: se encola al subir, se usa para ver y descargar, y se borra al ir a la bóveda', async () => {
+    const a = await createAcademy('Copias MP4');
+    const cls = (await call('POST', `/${a.id}/classes`, 'owner', { title: 'Lunes', weekday: 1, startTime: '20:00' })).json<{ id: string }>();
+    const v = await uploadVideo(a.id, { mimeType: 'video/quicktime', title: 'IMG_2969.MOV', classId: cls.id });
+    expect(compatQueue.enqueued).toContain(v.id);
+    expect(v.compat.status).toBe('PENDING');
+
+    // Sin copia todavía: se ve el original y el MP4 no está listo.
+    expect((await call('GET', `/${a.id}/videos/${v.id}/url`, 'viewer')).json<{ url: string }>().url).toMatch(/\.mov$/);
+    expect((await call('GET', `/${a.id}/videos/${v.id}/download?format=mp4`, 'owner')).statusCode).toBe(409);
+
+    await compat.process(v.id);
+    const listed = (await call('GET', `/${a.id}/videos`, 'viewer')).json<AcademyVideoDto[]>().find((x) => x.id === v.id)!;
+    expect(listed.compat).toEqual({ status: 'DONE', sizeBytes: 7 * 1024 * 1024 });
+    const compatKey = `academies/${a.id}/compat/${v.id}.mp4`;
+    expect(media.has(compatKey)).toBe(true);
+    // La copia no cuenta en el cupo.
+    expect((await call('GET', `/${a.id}`, 'owner')).json<AcademyDto>().storage?.usedBytes).toBe(50 * MB);
+
+    // Para ver se usa la copia; para descargar, el original o el MP4 con nombre .mp4.
+    expect((await call('GET', `/${a.id}/videos/${v.id}/url`, 'viewer')).json<{ url: string }>().url).toBe(`memory://view/${compatKey}`);
+    expect((await call('GET', `/${a.id}/videos/${v.id}/download?format=mp4`, 'owner')).json<{ url: string }>().url).toBe(
+      `memory://download/${compatKey}?name=${encodeURIComponent('IMG_2969.mp4')}`,
+    );
+    expect((await call('GET', `/${a.id}/videos/${v.id}/download`, 'owner')).json<{ url: string }>().url).toContain(
+      `name=${encodeURIComponent('IMG_2969.MOV')}`,
+    );
+    // También en el link compartido.
+    const link = (await call('POST', `/${a.id}/classes/${cls.id}/share`, 'owner')).json<AcademyShareLinkDto>();
+    const pub = await app.inject({ method: 'GET', url: `/api/v1/share/${link.token}/media/${v.id}/download?format=mp4` });
+    expect(pub.json<{ url: string }>().url).toContain(compatKey);
+
+    // A la bóveda: la copia se borra; de vuelta en la galería se vuelve a encolar.
+    await call('POST', `/${a.id}/vault`, 'owner', { videoIds: [v.id] });
+    expect(media.has(compatKey)).toBe(false);
+    expect((await call('GET', `/${a.id}/vault`, 'owner')).json<AcademyVideoDto[]>()[0].compat.status).toBeNull();
+    compatQueue.enqueued = [];
+    await call('POST', `/${a.id}/vault/restore`, 'owner', { videoIds: [v.id] });
+    expect(compatQueue.enqueued).toEqual([v.id]);
+
+    // Un MP4 que ya es compatible: no se copia y "Descargar MP4" da el original.
+    compatClient.next = 'not_needed';
+    const mp4 = await uploadVideo(a.id, { title: 'clase.mp4' });
+    await compat.process(mp4.id);
+    const row = (await call('GET', `/${a.id}/videos`, 'owner')).json<AcademyVideoDto[]>().find((x) => x.id === mp4.id)!;
+    expect(row.compat.status).toBe('NOT_NEEDED');
+    expect((await call('GET', `/${a.id}/videos/${mp4.id}/download?format=mp4`, 'owner')).statusCode).toBe(200);
+    compatClient.next = 'converted';
+
+    // Eliminar el video borra su copia.
+    await compat.process(v.id);
+    expect(media.has(compatKey)).toBe(true);
+    await call('DELETE', `/${a.id}/videos/${v.id}`, 'owner');
+    expect(media.has(compatKey)).toBe(false);
   });
 });

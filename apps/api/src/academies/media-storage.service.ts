@@ -15,6 +15,11 @@ import { MEDIA_CONFIG, type MediaConfig } from './media.config';
 /** Subir un video de 3 GB con mala conexión puede tardar: margen amplio. */
 const UPLOAD_URL_TTL_SEC = 6 * 60 * 60;
 const VIEW_URL_TTL_SEC = 60 * 60;
+/**
+ * La conversión espera su turno (la cola pesada es de a uno, con Demucs) y puede
+ * tardar: las URLs del analizador duran bastante.
+ */
+const ANALYZER_URL_TTL_SEC = 12 * 60 * 60;
 
 /**
  * Bucket PRIVADO de media (R2 en prod, SeaweedFS en local). Todo acceso es por
@@ -24,18 +29,21 @@ const VIEW_URL_TTL_SEC = 60 * 60;
 export class MediaStorageService implements OnModuleInit {
   private readonly logger = new Logger(MediaStorageService.name);
   private readonly client: S3Client | null = null;
+  /** Solo firma URLs para el analizador (otro host en local; el mismo en prod). */
+  private readonly analyzerSigner: S3Client | null = null;
 
   constructor(@Inject(MEDIA_CONFIG) private readonly config: MediaConfig | null) {
     if (!config) return;
-    this.client = new S3Client({
+    const base = {
       region: config.region,
-      endpoint: config.endpoint,
       forcePathStyle: true,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
       // R2 no soporta los checksums CRC que el SDK agrega por defecto a las URLs firmadas.
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      responseChecksumValidation: 'WHEN_REQUIRED',
-    });
+      requestChecksumCalculation: 'WHEN_REQUIRED' as const,
+      responseChecksumValidation: 'WHEN_REQUIRED' as const,
+    };
+    this.client = new S3Client({ ...base, endpoint: config.endpoint });
+    this.analyzerSigner = new S3Client({ ...base, endpoint: config.analyzerEndpoint });
   }
 
   get enabled(): boolean {
@@ -74,6 +82,22 @@ export class MediaStorageService implements OnModuleInit {
     return getSignedUrl(this.s3, new PutObjectCommand({ Bucket: this.config!.bucket, Key: key, ContentType: mimeType }), {
       expiresIn: UPLOAD_URL_TTL_SEC,
     });
+  }
+
+  /** URL firmada para que el analizador baje un archivo. */
+  analyzerViewUrl(key: string): Promise<string> {
+    return getSignedUrl(this.analyzerSigner!, new GetObjectCommand({ Bucket: this.config!.bucket, Key: key }), {
+      expiresIn: ANALYZER_URL_TTL_SEC,
+    });
+  }
+
+  /** URL firmada para que el analizador suba un archivo (p. ej. la copia MP4). */
+  analyzerUploadUrl(key: string, mimeType: string): Promise<string> {
+    return getSignedUrl(
+      this.analyzerSigner!,
+      new PutObjectCommand({ Bucket: this.config!.bucket, Key: key, ContentType: mimeType }),
+      { expiresIn: ANALYZER_URL_TTL_SEC },
+    );
   }
 
   /** URL firmada que el navegador DESCARGA (no reproduce) con el nombre dado. */

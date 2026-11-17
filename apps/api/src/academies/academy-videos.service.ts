@@ -3,6 +3,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { Prisma } from '@prisma/client';
 import {
   ACADEMY_PHOTO_MAX_BYTES,
+  type AcademyCompatStatus,
   type AcademyMediaKind,
   type AcademyMediaLocation,
   type AcademyVideoDto,
@@ -14,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import { AcademiesService } from './academies.service';
 import { MediaStorageService } from './media-storage.service';
+import { AcademyCompatQueue, AcademyCompatService } from './academy-compat.service';
 import {
   CheckDuplicatesDto,
   CompleteVideoUploadDto,
@@ -58,6 +60,9 @@ export const VIDEO_SELECT = {
   status: true,
   location: true,
   vaultedAt: true,
+  compatStatus: true,
+  compatKey: true,
+  compatSizeBytes: true,
   uploadedBy: { select: { name: true } },
   createdAt: true,
 } satisfies Prisma.AcademyVideoSelect;
@@ -68,6 +73,36 @@ export type VideoRow = Prisma.AcademyVideoGetPayload<{ select: typeof VIDEO_SELE
 export function downloadName(v: { title: string; mimeType: string }): string {
   const ext = EXT[v.mimeType];
   return ext && !/\.[a-z0-9]{2,4}$/i.test(v.title) ? `${v.title}.${ext}` : v.title;
+}
+
+/** Nombre de la copia MP4: el título sin su extensión, terminado en .mp4. */
+export function compatDownloadName(v: { title: string }): string {
+  return `${v.title.replace(/\.(mp4|m4v|mov|webm)$/i, '')}.mp4`;
+}
+
+export type DownloadFormat = 'original' | 'mp4';
+
+/**
+ * Qué URL dar para VER: la copia compatible si existe (se reproduce en todos los
+ * navegadores), si no el original.
+ */
+export function playableKey(v: { storageKey: string; compatStatus: string | null; compatKey: string | null }): string {
+  return v.compatStatus === 'DONE' && v.compatKey ? v.compatKey : v.storageKey;
+}
+
+/** Key y nombre de la descarga pedida (409 si piden el MP4 y no hay copia). */
+export function downloadTarget(
+  v: { storageKey: string; title: string; mimeType: string; compatStatus: string | null; compatKey: string | null },
+  format: DownloadFormat,
+): { key: string; name: string } {
+  if (format === 'mp4') {
+    if (v.mimeType === 'video/mp4' && v.compatStatus !== 'DONE') return { key: v.storageKey, name: downloadName(v) };
+    if (v.compatStatus !== 'DONE' || !v.compatKey) {
+      throw new ConflictException('La versión MP4 de este video todavía no está lista.');
+    }
+    return { key: v.compatKey, name: compatDownloadName(v) };
+  }
+  return { key: v.storageKey, name: downloadName(v) };
 }
 
 const toDate = (ymd: string | null | undefined) => (ymd ? new Date(`${ymd}T12:00:00Z`) : null);
@@ -83,6 +118,8 @@ export class AcademyVideosService {
     private readonly prisma: PrismaService,
     private readonly academies: AcademiesService,
     private readonly media: MediaStorageService,
+    private readonly compatQueue: AcademyCompatQueue,
+    private readonly compat: AcademyCompatService,
   ) {}
 
   async toDto(v: VideoRow): Promise<AcademyVideoDto> {
@@ -92,6 +129,10 @@ export class AcademyVideosService {
       kind: kindOf(v.mimeType),
       location: v.location as AcademyMediaLocation,
       vaultedAt: v.vaultedAt?.toISOString() ?? null,
+      compat: {
+        status: v.compatStatus as AcademyCompatStatus | null,
+        sizeBytes: v.compatSizeBytes === null ? null : Number(v.compatSizeBytes),
+      },
       classId: v.classId,
       classTitle: v.class?.title ?? null,
       title: v.title,
@@ -136,11 +177,15 @@ export class AcademyVideosService {
   }
 
   private async removeRow(v: { id: string; storageKey: string; thumbKey: string | null }): Promise<void> {
-    const extra = await this.prisma.academyVideo.findUnique({ where: { id: v.id }, select: { pendingThumbKey: true } });
+    const extra = await this.prisma.academyVideo.findUnique({
+      where: { id: v.id },
+      select: { pendingThumbKey: true, compatKey: true },
+    });
     await this.prisma.academyVideo.delete({ where: { id: v.id } });
     await this.media.remove(v.storageKey);
     if (v.thumbKey) await this.media.remove(v.thumbKey);
     if (extra?.pendingThumbKey) await this.media.remove(extra.pendingThumbKey);
+    if (extra?.compatKey) await this.media.remove(extra.compatKey);
   }
 
   /**
@@ -260,6 +305,11 @@ export class AcademyVideosService {
       },
       select: VIDEO_SELECT,
     });
+    // Videos: copia MP4 compatible en segundo plano (si hace falta).
+    if (kindOf(updated.mimeType) === 'VIDEO') {
+      await this.compatQueue.enqueue(updated.id);
+      return this.toDto({ ...updated, compatStatus: this.compatQueue.enabled ? 'PENDING' : null });
+    }
     return this.toDto(updated);
   }
 
@@ -291,7 +341,7 @@ export class AcademyVideosService {
       throw new ConflictException('Este archivo está en la bóveda: no se reproduce, solo se descarga.');
     }
     if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
-    return { url: await this.media.viewUrl(v.storageKey) };
+    return { url: await this.media.viewUrl(playableKey(v)) };
   }
 
   /**
@@ -346,12 +396,21 @@ export class AcademyVideosService {
     return Promise.all(rows.map((r) => this.toDto(r)));
   }
 
-  /** URL firmada que descarga el original con su nombre (solo quienes administran). */
-  async downloadUrl(user: AuthUser, academyId: string, videoId: string): Promise<{ url: string }> {
+  /**
+   * URL firmada que descarga el original, o la copia MP4 (`format=mp4`), con su
+   * nombre (solo quienes administran).
+   */
+  async downloadUrl(
+    user: AuthUser,
+    academyId: string,
+    videoId: string,
+    format: DownloadFormat = 'original',
+  ): Promise<{ url: string }> {
     await this.academies.assertMember(user, academyId);
     const v = await this.video(academyId, videoId);
     if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
-    return { url: await this.media.downloadUrl(v.storageKey, downloadName(v)) };
+    const t = downloadTarget(v, format);
+    return { url: await this.media.downloadUrl(t.key, t.name) };
   }
 
   /**
@@ -399,6 +458,9 @@ export class AcademyVideosService {
         data: { storageKey: newKey, location: to, vaultedAt: to === 'VAULT' ? new Date() : null },
       });
       if (newKey !== r.storageKey) await this.media.remove(r.storageKey);
+      // La copia MP4 solo existe para lo de la galería (no se cobra guardarla en la bóveda).
+      if (to === 'VAULT') await this.compat.discard(r.id);
+      else if (kindOf(r.mimeType) === 'VIDEO') await this.compatQueue.enqueue(r.id);
       moved++;
     }
     return { moved };

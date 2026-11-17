@@ -195,6 +195,30 @@ export function mediaMimeType(file: File): string | null {
 
 export const isPhotoMime = (mime: string) => mime.startsWith('image/');
 
+/** original = el archivo tal como se subió; mp4 = la copia compatible (H.264). */
+export type DownloadFormat = 'original' | 'mp4';
+
+/** ¿Hay un MP4 que se pueda descargar? (la copia lista, o el original ya es MP4). */
+export function hasMp4(v: { mimeType: string; compat: { status: string | null } }): boolean {
+  return v.compat.status === 'DONE' || (v.mimeType === 'video/mp4' && v.compat.status !== 'DONE');
+}
+
+/** Texto del estado de la copia para quien administra (null = nada que mostrar). */
+export function compatLabel(v: { kind: string; compat: { status: string | null } }): string | null {
+  if (v.kind !== 'VIDEO') return null;
+  switch (v.compat.status) {
+    case 'PENDING':
+    case 'PROCESSING':
+      return '⏳ Preparando versión MP4…';
+    case 'TOO_LONG':
+      return 'Sin versión MP4 (dura más de 15 min)';
+    case 'ERROR':
+      return '⚠ No se pudo crear la versión MP4';
+    default:
+      return null;
+  }
+}
+
 const EXT_BY_MIME: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/quicktime': 'mov',
@@ -513,7 +537,8 @@ export const academiesApi = {
       body: { hashes },
     }),
   /** URL firmada que descarga el original con su nombre (dueño y profesores). */
-  downloadUrl: (id: string, videoId: string) => api<{ url: string }>(`/academies/${id}/videos/${videoId}/download`),
+  downloadUrl: (id: string, videoId: string, format: DownloadFormat = 'original') =>
+    api<{ url: string }>(`/academies/${id}/videos/${videoId}/download${format === 'mp4' ? '?format=mp4' : ''}`),
   vault: (id: string) => api<AcademyVideoDto[]>(`/academies/${id}/vault`),
   toVault: (id: string, videoIds: string[]) =>
     api<{ moved: number }>(`/academies/${id}/vault`, { method: 'POST', body: { videoIds } }),
@@ -542,6 +567,8 @@ export const sharedApi = {
   get: (token: string) => api<SharedClassDto>(`/share/${encodeURIComponent(token)}`),
   viewUrl: (token: string, videoId: string) =>
     api<{ url: string }>(`/share/${encodeURIComponent(token)}/media/${videoId}/url`),
-  downloadUrl: (token: string, videoId: string) =>
-    api<{ url: string }>(`/share/${encodeURIComponent(token)}/media/${videoId}/download`),
+  downloadUrl: (token: string, videoId: string, format: DownloadFormat = 'original') =>
+    api<{ url: string }>(
+      `/share/${encodeURIComponent(token)}/media/${videoId}/download${format === 'mp4' ? '?format=mp4' : ''}`,
+    ),
 };

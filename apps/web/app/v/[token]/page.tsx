@@ -13,8 +13,10 @@ import {
   classTimeRange,
   formatBytes,
   formatVideoDuration,
+  hasMp4,
   missingExtension,
   sharedApi,
+  type DownloadFormat,
 } from '@/lib/academies';
 import { AcademyVideoPlayer } from '@/components/academy-video-player';
 import { BrandLogo, Wordmark } from '@/components/brand';
@@ -30,8 +32,8 @@ export default function SharedClassPage() {
   const [playing, setPlaying] = useState<number | null>(null);
   const q = useQuery({ queryKey: ['shared', token], queryFn: () => sharedApi.get(token), retry: false });
 
-  const download = async (videoId: string) => {
-    const { url } = await sharedApi.downloadUrl(token, videoId);
+  const download = async (videoId: string, format: DownloadFormat = 'original') => {
+    const { url } = await sharedApi.downloadUrl(token, videoId, format);
     window.location.href = url;
   };
 
@@ -129,9 +131,27 @@ export default function SharedClassPage() {
                   <div className="flex items-center gap-3 text-xs text-neutral-400">
                     {v.recordedOn && <span>{v.recordedOn}</span>}
                     <span className="text-neutral-500">{formatBytes(v.sizeBytes)}</span>
-                    <button type="button" onClick={() => void download(v.id)} className="text-brand hover:underline">
-                      ⬇ Descargar
-                    </button>
+                    {v.kind === 'VIDEO' && hasMp4(v) ? (
+                      <>
+                        <button type="button" onClick={() => void download(v.id, 'mp4')} className="text-brand hover:underline">
+                          ⬇ MP4
+                        </button>
+                        {v.mimeType !== 'video/mp4' && (
+                          <button
+                            type="button"
+                            onClick={() => void download(v.id)}
+                            className="text-neutral-400 hover:text-neutral-200"
+                            title="El archivo tal como se grabó (puede no verse en todos los equipos)"
+                          >
+                            Original
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button type="button" onClick={() => void download(v.id)} className="text-brand hover:underline">
+                        ⬇ Descargar
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

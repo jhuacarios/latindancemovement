@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { AcademyShareService } from './academy-share.service';
 
 /**
@@ -19,8 +19,9 @@ export class ShareController {
     return this.share.viewUrl(token, videoId);
   }
 
+  /** `?format=mp4` = la copia compatible (si existe); por defecto, el original. */
   @Get(':token/media/:videoId/download')
-  downloadUrl(@Param('token') token: string, @Param('videoId') videoId: string) {
-    return this.share.downloadUrl(token, videoId);
+  downloadUrl(@Param('token') token: string, @Param('videoId') videoId: string, @Query('format') format?: string) {
+    return this.share.downloadUrl(token, videoId, format === 'mp4' ? 'mp4' : 'original');
   }
 }

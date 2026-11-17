@@ -1082,6 +1082,13 @@ export const ACADEMY_MEDIA_MIME_TYPES = [...ACADEMY_VIDEO_MIME_TYPES, ...ACADEMY
 export type AcademyMediaKind = 'VIDEO' | 'PHOTO';
 /** GALLERY = se ve y reproduce; VAULT = bóveda (almacenamiento barato, solo se descarga). */
 export type AcademyMediaLocation = 'GALLERY' | 'VAULT';
+/**
+ * Versión compatible (MP4 H.264, color normal, máx. 1080p) que se genera de los
+ * videos que no todos los navegadores reproducen (HEVC/HDR del iPhone).
+ */
+export type AcademyCompatStatus = 'PENDING' | 'PROCESSING' | 'DONE' | 'NOT_NEEDED' | 'TOO_LONG' | 'ERROR';
+/** Solo se convierten videos de hasta esta duración. */
+export const ACADEMY_COMPAT_MAX_MINUTES = 15;
 
 export interface AcademySummaryDto {
   id: string;
@@ -1140,6 +1147,8 @@ export interface AcademyVideoDto {
   location: AcademyMediaLocation;
   /** Cuándo se movió a la bóveda (null si está en la galería). */
   vaultedAt: string | null;
+  /** Versión compatible MP4 (solo videos de la galería; null = todavía sin revisar). */
+  compat: { status: AcademyCompatStatus | null; sizeBytes: number | null };
   classId: string | null;
   classTitle: string | null;
   title: string;

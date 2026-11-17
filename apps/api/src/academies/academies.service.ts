@@ -267,13 +267,13 @@ export class AcademiesService {
     await this.assertOwner(user, id);
     const videos = await this.prisma.academyVideo.findMany({
       where: { academyId: id },
-      select: { storageKey: true, thumbKey: true, pendingThumbKey: true },
+      select: { storageKey: true, thumbKey: true, pendingThumbKey: true, compatKey: true },
     });
     await this.prisma.academy.delete({ where: { id } });
     for (const v of videos) {
-      await this.media.remove(v.storageKey);
-      if (v.thumbKey) await this.media.remove(v.thumbKey);
-      if (v.pendingThumbKey) await this.media.remove(v.pendingThumbKey);
+      for (const key of [v.storageKey, v.thumbKey, v.pendingThumbKey, v.compatKey]) {
+        if (key) await this.media.remove(key);
+      }
     }
   }
 

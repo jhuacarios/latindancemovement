@@ -4,14 +4,24 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AcademyDto, AcademyVideoDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
-import { academiesApi, formatBytes, formatVideoDuration, missingExtension } from '@/lib/academies';
+import {
+  academiesApi,
+  formatBytes,
+  formatVideoDuration,
+  missingExtension,
+  type DownloadFormat,
+} from '@/lib/academies';
 import { ConfirmDialog, type ConfirmOptions } from './confirm-dialog';
 import { Button, Card, Spinner } from './ui';
 import { clsx } from './clsx';
 
 /** Descarga el original: la URL firmada trae "attachment", así que el navegador lo baja sin salir de la página. */
-export async function downloadMedia(academyId: string, videoId: string): Promise<void> {
-  const { url } = await academiesApi.downloadUrl(academyId, videoId);
+export async function downloadMedia(
+  academyId: string,
+  videoId: string,
+  format: DownloadFormat = 'original',
+): Promise<void> {
+  const { url } = await academiesApi.downloadUrl(academyId, videoId, format);
   window.location.href = url;
 }
 

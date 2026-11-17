@@ -15,10 +15,13 @@ from .audio import AudioError, download, to_wav
 from .fingerprint import fingerprint
 from .instruments import analyze_instruments
 from .stems import StemUploadError, make_stems
+from .video import VideoError, VideoUploadError, make_compat
 from .schemas import (
     STEM_KEYS,
     AnalyzeRequest,
     AnalyzeResponse,
+    CompatRequest,
+    CompatResponse,
     FingerprintRequest,
     FingerprintResponse,
     InstrumentsRequest,
@@ -102,4 +105,17 @@ def stems_endpoint(body: StemsRequest) -> StemsResponse:
         except AudioError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except StemUploadError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/compat", response_model=CompatResponse, dependencies=[Depends(require_token)])
+def compat_endpoint(body: CompatRequest) -> CompatResponse:
+    """Copia MP4 H.264 de un video de academia (si hace falta). Pesado: de a uno, en la misma cola que Demucs."""
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            with HEAVY:
+                return CompatResponse(**make_compat(body.videoUrl, body.uploadUrl, body.maxDurationSec, Path(tmp)))
+        except VideoError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except VideoUploadError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc

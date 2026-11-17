@@ -276,8 +276,14 @@ export class AcademiesController {
   /** Descarga del original (dueño y profesores; también lo que está en la bóveda). */
   @Get(':id/videos/:videoId/download')
   @UseGuards(JwtAuthGuard)
-  download(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('videoId') videoId: string) {
-    return this.videos.downloadUrl(user, id, videoId);
+  download(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('videoId') videoId: string,
+    @Query('format') format?: string,
+  ) {
+    // `?format=mp4` = la copia compatible (si existe); por defecto, el original.
+    return this.videos.downloadUrl(user, id, videoId, format === 'mp4' ? 'mp4' : 'original');
   }
 
   // --- bóveda -------------------------------------------------------------------
