@@ -24,6 +24,24 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.17.0',
+    date: '2026-11-16',
+    module: 'classes',
+    type: 'feature',
+    title: 'Academias: horario de clases y galería de fotos y videos',
+    description:
+      'Nueva sección Academias y Clases. Cada academia tiene su perfil, publica su horario semanal (estilo, nivel, día, hora, profesor y precio) y sube las fotos y los videos de sus clases (varios a la vez), ordenados por clase. Cualquier usuario con cuenta puede ver las academias, mirar las fotos en grande y reproducir los videos, pasando de uno a otro con las flechas. Quien crea la academia queda como dueño y puede agregar profesores para que también suban material. Cada foto y video tiene un botón para reportarlo.',
+  },
+  {
+    version: '0.16.0',
+    date: '2026-11-15',
+    module: 'events',
+    type: 'feature',
+    title: 'Publicar evento desde una captura del post o solo con el texto',
+    description:
+      'Para publicar un evento ya no hace falta el flyer: puedes subir o pegar (Ctrl+V) un pantallazo del post de Instagram con su texto, o pegar solo el texto del post, y leemos la fecha, el lugar, los precios y quién organiza. Además, si el evento tiene el link de un post o reel de Instagram, se muestra embebido en su página.',
+  },
+  {
     version: '0.15.1',
     date: '2026-11-14',
     module: 'studio',

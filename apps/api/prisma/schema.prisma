@@ -47,6 +47,9 @@ model User {
   chatMemberships ChatParticipant[]
   chatMessages    ChatMessage[]         @relation("ChatMessageSender")
   audioFiles      AudioFile[]
+  academies       AcademyMember[]
+  academyVideos   AcademyVideo[]        @relation("AcademyVideoUploadedBy")
+  videoReports    AcademyVideoReport[]
 
   @@index([role])
 }
@@ -458,4 +461,109 @@ model SongMarker {
   createdAt   DateTime  @default(now())
 
   @@index([audioFileId])
+}
+
+/// Academia de baile: perfil público (para usuarios con cuenta), horario de clases
+/// y videos de las clases. La administran su dueño y los profesores que agregue.
+model Academy {
+  id              String   @id @default(cuid())
+  name            String
+  region          String // ChileRegion (code)
+  city            String?
+  address         String?
+  styles          String   @default("") // CSV de DanceStyle
+  description     String?
+  instagramHandle String? // sin @
+  logoData        String? // base64, sin prefijo data:
+  logoMime        String?
+  storageQuotaMb  Int      @default(20480) // cupo de videos (20 GB en el piloto)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members AcademyMember[]
+  classes AcademyClass[]
+  videos  AcademyVideo[]
+
+  @@index([region])
+}
+
+/// Quién administra la academia: OWNER (uno, el que la creó) o TEACHER.
+model AcademyMember {
+  id        String   @id @default(cuid())
+  academyId String
+  academy   Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String // AcademyMemberRole: OWNER | TEACHER
+  createdAt DateTime @default(now())
+
+  @@unique([academyId, userId])
+  @@index([userId])
+}
+
+/// Clase del horario semanal (informativa: sin reservas ni pagos).
+model AcademyClass {
+  id          String   @id @default(cuid())
+  academyId   String
+  academy     Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  title       String
+  style       String? // DanceStyle
+  level       String   @default("TODOS") // ClassLevel: BASICO | INTERMEDIO | AVANZADO | TODOS
+  weekday     Int // 0 = domingo … 6 = sábado
+  startTime   String // "HH:mm"
+  durationMin Int      @default(60)
+  teacherName String?
+  place       String?
+  priceInfo   String?
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  videos AcademyVideo[]
+
+  @@index([academyId])
+}
+
+/// Video o foto de una academia (el tipo sale de mimeType) en el bucket de media (R2, privado: se ve por URL firmada).
+model AcademyVideo {
+  id           String        @id @default(cuid())
+  academyId    String
+  academy      Academy       @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  classId      String?
+  class        AcademyClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  title        String
+  description  String?
+  style        String? // DanceStyle
+  recordedOn   DateTime? // día de la clase
+  storageKey   String        @unique
+  thumbKey     String? // miniatura JPG (la saca el navegador)
+  mimeType     String
+  sizeBytes    BigInt
+  durationMs   Int?
+  status       String        @default("UPLOADING") // AcademyVideoStatus: UPLOADING | READY
+  uploadedById String
+  uploadedBy   User          @relation("AcademyVideoUploadedBy", fields: [uploadedById], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  reports AcademyVideoReport[]
+
+  @@index([academyId, status])
+  @@index([classId])
+}
+
+/// Reporte de un video (derecho de imagen, contenido inapropiado…). Lo revisa el super admin.
+model AcademyVideoReport {
+  id         String       @id @default(cuid())
+  videoId    String
+  video      AcademyVideo @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  reason     String
+  resolvedAt DateTime?
+  createdAt  DateTime     @default(now())
+
+  @@unique([videoId, reporterId])
+  @@index([resolvedAt])
 }

@@ -564,6 +564,12 @@ región (qué suena dónde — el moat de "data premium DJs").
 - La API llama al analizador con `node:http`, NO con `fetch`: undici corta a los 5 min (headersTimeout) aunque se le pase un timeout mayor.
 - Tests API: `pnpm --filter @baile-latino/api test` y `test:e2e` (requiere `docker compose up -d db`).
 
+### Módulo Academias (`apps/api/src/academies/`)
+- Perfil + horario semanal informativo (sin reservas ni pagos) + videos de clases. Lo ve cualquier usuario con cuenta; administran el dueño (`AcademyMember` OWNER) y sus profesores (TEACHER); crear academia requiere rol PROFESOR (o PILOTO/SUPER_ADMIN).
+- Galería de fotos y videos (tabla `AcademyVideo`; el tipo sale de `mimeType`: `image/*` = foto, máx. 25 MB) en el bucket PRIVADO de media (`S3_MEDIA_BUCKET`, mismo endpoint/credenciales S3 que el Estudio), prefijo `academies/<id>/videos/`. El navegador sube directo (URL firmada) y saca la miniatura y la duración; el servidor NO transcodifica. Cupo por academia (`storageQuotaMb`, 20 GB por defecto), 2 GB por video.
+- Reportes de videos → Admin → Reportes de videos (SUPER_ADMIN).
+- El schema se aplica con `prisma db push` (no hay migraciones); en prod la API lo corre al arrancar.
+
 ---
 
 ## Comandos

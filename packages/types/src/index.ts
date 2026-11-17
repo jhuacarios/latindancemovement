@@ -1063,4 +1063,112 @@ export interface StudioUploadTicket {
   uploadHeaders: Record<string, string>;
 }
 
+// --- Academias ---------------------------------------------------------------
+
+export const ACADEMY_MEMBER_ROLES = ['OWNER', 'TEACHER'] as const;
+export type AcademyMemberRole = (typeof ACADEMY_MEMBER_ROLES)[number];
+
+export const CLASS_LEVELS = ['BASICO', 'INTERMEDIO', 'AVANZADO', 'TODOS'] as const;
+export type ClassLevel = (typeof CLASS_LEVELS)[number];
+
+/** Formatos de video que se pueden subir (se reproducen tal cual, sin convertir). */
+export const ACADEMY_VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'] as const;
+export type AcademyVideoMimeType = (typeof ACADEMY_VIDEO_MIME_TYPES)[number];
+export const ACADEMY_VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+/** Fotos de la academia (van en la misma galería que los videos). */
+export const ACADEMY_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const ACADEMY_PHOTO_MAX_BYTES = 25 * 1024 * 1024;
+export const ACADEMY_MEDIA_MIME_TYPES = [...ACADEMY_VIDEO_MIME_TYPES, ...ACADEMY_PHOTO_MIME_TYPES] as const;
+export type AcademyMediaKind = 'VIDEO' | 'PHOTO';
+
+export interface AcademySummaryDto {
+  id: string;
+  name: string;
+  region: ChileRegion;
+  city: string | null;
+  styles: DanceStyle[];
+  instagramHandle: string | null;
+  hasLogo: boolean;
+  classCount: number;
+  videoCount: number;
+  /** Rol del usuario actual en la academia (null si no la administra). */
+  myRole: AcademyMemberRole | null;
+}
+
+export interface AcademyMemberDto {
+  userId: string;
+  name: string;
+  email: string;
+  role: AcademyMemberRole;
+}
+
+export interface AcademyClassDto {
+  id: string;
+  title: string;
+  style: DanceStyle | null;
+  level: ClassLevel;
+  /** 0 = domingo … 6 = sábado. */
+  weekday: number;
+  /** "HH:mm". */
+  startTime: string;
+  durationMin: number;
+  teacherName: string | null;
+  place: string | null;
+  priceInfo: string | null;
+  description: string | null;
+  active: boolean;
+}
+
+export interface AcademyDto extends AcademySummaryDto {
+  address: string | null;
+  description: string | null;
+  classes: AcademyClassDto[];
+  /** Solo para quienes la administran (vacío para el resto). */
+  members: AcademyMemberDto[];
+  /** Uso del cupo de videos (solo para quienes la administran; null para el resto). */
+  storage: { usedBytes: number; quotaBytes: number } | null;
+  createdAt: string;
+}
+
+/** Un video o una foto de la galería de la academia. */
+export interface AcademyVideoDto {
+  id: string;
+  academyId: string;
+  kind: AcademyMediaKind;
+  classId: string | null;
+  classTitle: string | null;
+  title: string;
+  description: string | null;
+  style: DanceStyle | null;
+  /** YYYY-MM-DD. */
+  recordedOn: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  durationMs: number | null;
+  /** URL firmada de la miniatura (dura 1 h), o null. */
+  thumbUrl: string | null;
+  uploadedByName: string;
+  createdAt: string;
+}
+
+/** Respuesta al pedir subir un video: el navegador sube el video y la miniatura directo al storage. */
+export interface AcademyVideoUploadTicket {
+  videoId: string;
+  uploadUrl: string;
+  uploadHeaders: Record<string, string>;
+  thumbUploadUrl: string;
+  thumbUploadHeaders: Record<string, string>;
+}
+
+export interface AcademyVideoReportDto {
+  id: string;
+  videoId: string;
+  videoTitle: string;
+  academyId: string;
+  academyName: string;
+  reporterName: string;
+  reason: string;
+  createdAt: string;
+}
+
 export * from './phrases';

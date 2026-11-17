@@ -152,12 +152,27 @@ export const MODULES: AppModule[] = [
   },
   {
     key: 'classes',
-    title: 'Clases y Bootcamps',
-    description: 'Calendario, reservas, seguimiento de alumnos.',
-    href: '/classes',
+    title: 'Academias y Clases',
+    description: 'Academias de baile con su horario de clases y las fotos y videos de cada clase.',
+    href: '/academies',
     icon: '🎓',
-    roles: ['PROFESOR', 'SUPER_ADMIN'],
-    status: 'soon',
+    roles: ALL,
+    status: 'ready',
+    children: [
+      { label: 'Academias', key: 'classes.academies', href: '/academies' },
+      {
+        label: 'Mis academias',
+        key: 'classes.mine',
+        href: '/academies/mine',
+        roles: ['PROFESOR', 'SUPER_ADMIN'],
+      },
+      {
+        // Sin href: solo gatea el botón "Crear academia" (ajustable en Roles y permisos).
+        label: 'Crear academia',
+        key: 'classes.create',
+        roles: ['PROFESOR', 'SUPER_ADMIN'],
+      },
+    ],
   },
   {
     key: 'competitions',
@@ -266,6 +281,7 @@ export const MODULES: AppModule[] = [
         href: '/admin/youtube-access',
       },
       { label: 'Roles y permisos', key: 'admin.roles', href: '/admin/roles' },
+      { label: 'Reportes de fotos y videos', key: 'admin.video-reports', href: '/admin/video-reports' },
       { label: 'Estilos y sub-estilos', key: 'admin.tags', href: '/admin/tags' },
       { label: 'Configuración del sitio', key: 'admin.settings', href: '/admin/settings' },
     ],

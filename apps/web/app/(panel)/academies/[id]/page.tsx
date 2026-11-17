@@ -1,0 +1,467 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { regionName, type AcademyClassDto, type AcademyDto, type AcademyVideoDto } from '@baile-latino/types';
+import { ApiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import {
+  LEVEL_LABEL,
+  WEEKDAYS,
+  WEEK_ORDER,
+  academiesApi,
+  academyFormFrom,
+  academyLogoUrl,
+  classTimeRange,
+  formatBytes,
+  formatVideoDuration,
+  validateAcademy,
+  type AcademyFormValues,
+} from '@/lib/academies';
+import { AcademyLogo } from '@/components/academy-card';
+import { AcademyForm } from '@/components/academy-form';
+import { LogoPicker } from '@/components/academy-logo-picker';
+import { AcademyClassModal } from '@/components/academy-class-modal';
+import { AcademyVideoUpload } from '@/components/academy-video-upload';
+import { AcademyVideoPlayer } from '@/components/academy-video-player';
+import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
+import { InstagramLink } from '@/components/instagram-link';
+import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
+import { clsx } from '@/components/clsx';
+
+type Tab = 'clases' | 'videos' | 'admin';
+
+export default function AcademyPage() {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<Tab>('clases');
+  const q = useQuery({ queryKey: ['academies', 'detail', id], queryFn: () => academiesApi.get(id) });
+  const a = q.data;
+  const manages = Boolean(a && (a.myRole || user?.role === 'SUPER_ADMIN'));
+  const refresh = () => qc.invalidateQueries({ queryKey: ['academies'] });
+
+  if (q.isLoading) return <Spinner label="Cargando academia…" />;
+  if (q.isError || !a) {
+    return (
+      <Card className="text-sm text-red-300">
+        {q.error instanceof ApiError ? q.error.message : 'Academia no encontrada.'}
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Link href="/academies" className="text-sm text-neutral-400 hover:text-neutral-200">
+          ← Academias
+        </Link>
+        <div className="mt-2 flex flex-wrap items-start gap-4">
+          <AcademyLogo a={a} className="h-20 w-20" />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-bold">{a.name}</h1>
+            <p className="text-sm text-neutral-400">
+              {[a.address, a.city, regionName(a.region)].filter(Boolean).join(' · ')}
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {a.styles.map((s) => (
+                <StyleBadge key={s} style={s} />
+              ))}
+              {a.instagramHandle && <InstagramLink handle={a.instagramHandle} />}
+            </div>
+          </div>
+        </div>
+        {a.description && <p className="mt-3 max-w-3xl whitespace-pre-line text-sm text-neutral-300">{a.description}</p>}
+      </div>
+
+      <div className="flex gap-1 border-b border-neutral-800">
+        {(
+          [
+            ['clases', `Clases (${a.classCount})`],
+            ['videos', `Fotos y videos (${a.videoCount})`],
+            ...(manages ? [['admin', 'Administrar']] : []),
+          ] as [Tab, string][]
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={clsx(
+              '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition',
+              tab === k ? 'border-brand text-brand' : 'border-transparent text-neutral-400 hover:text-neutral-200',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'clases' && <ClassesTab a={a} manages={manages} onChanged={refresh} />}
+      {tab === 'videos' && <VideosTab a={a} manages={manages} onChanged={refresh} />}
+      {tab === 'admin' && manages && <AdminTab a={a} onChanged={refresh} />}
+    </div>
+  );
+}
+
+// --- Clases -----------------------------------------------------------------------
+
+function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean; onChanged: () => void }) {
+  const [modal, setModal] = useState<AcademyClassDto | 'new' | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+  const byDay = WEEK_ORDER.map((d) => ({ day: d, classes: a.classes.filter((c) => c.weekday === d) })).filter(
+    (x) => x.classes.length > 0,
+  );
+
+  const remove = (c: AcademyClassDto) =>
+    setConfirm({
+      title: 'Eliminar clase',
+      message: `¿Eliminar "${c.title}"? Sus videos quedan como contenido general.`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+      onConfirm: async () => {
+        await academiesApi.removeClass(a.id, c.id);
+        onChanged();
+      },
+    });
+
+  return (
+    <div className="space-y-4">
+      {manages && (
+        <Button onClick={() => setModal('new')} size="sm">
+          + Agregar clase
+        </Button>
+      )}
+      {byDay.length === 0 && <Card className="text-sm text-neutral-400">Esta academia todavía no publica su horario.</Card>}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {byDay.map(({ day, classes }) => (
+          <Card key={day} className="space-y-3">
+            <h3 className="font-semibold">{WEEKDAYS[day]}</h3>
+            {classes.map((c) => (
+              <div key={c.id} className={clsx('space-y-0.5 border-t border-neutral-800 pt-3 first:border-0 first:pt-0', !c.active && 'opacity-50')}>
+                <div className="text-sm font-medium text-brand">{classTimeRange(c)}</div>
+                <div className="font-medium">
+                  {c.title}
+                  {!c.active && <span className="ml-2 text-[10px] text-neutral-400">(no se muestra)</span>}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-400">
+                  {c.style && <StyleBadge style={c.style} />}
+                  <span>{LEVEL_LABEL[c.level]}</span>
+                  {c.teacherName && <span>· {c.teacherName}</span>}
+                  {c.place && <span>· {c.place}</span>}
+                </div>
+                {c.priceInfo && <div className="text-xs text-neutral-300">{c.priceInfo}</div>}
+                {c.description && <div className="text-xs text-neutral-500">{c.description}</div>}
+                {manages && (
+                  <div className="flex gap-3 pt-1 text-xs">
+                    <button type="button" onClick={() => setModal(c)} className="text-neutral-400 hover:text-neutral-200">
+                      Editar
+                    </button>
+                    <button type="button" onClick={() => remove(c)} className="text-red-400/80 hover:text-red-300">
+                      Eliminar
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </Card>
+        ))}
+      </div>
+      {modal && (
+        <AcademyClassModal
+          academyId={a.id}
+          editing={modal === 'new' ? null : modal}
+          onClose={() => setModal(null)}
+          onSaved={() => {
+            setModal(null);
+            onChanged();
+          }}
+        />
+      )}
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+    </div>
+  );
+}
+
+// --- Videos -----------------------------------------------------------------------
+
+function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean; onChanged: () => void }) {
+  const [classId, setClassId] = useState('');
+  const [playing, setPlaying] = useState<number | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+  const videos = useQuery({
+    queryKey: ['academies', 'videos', a.id, classId],
+    queryFn: () => academiesApi.videos(a.id, classId || undefined),
+  });
+  const free = a.storage ? a.storage.quotaBytes - a.storage.usedBytes : null;
+
+  const remove = (v: AcademyVideoDto) =>
+    setConfirm({
+      title: v.kind === 'PHOTO' ? 'Eliminar foto' : 'Eliminar video',
+      message: `¿Eliminar "${v.title}"? Se borra el archivo y no se puede recuperar.`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+      onConfirm: async () => {
+        await academiesApi.removeVideo(a.id, v.id);
+        onChanged();
+      },
+    });
+
+  return (
+    <div className="space-y-4">
+      {manages && (
+        <AcademyVideoUpload academyId={a.id} classes={a.classes} freeBytes={free} onUploaded={onChanged} />
+      )}
+
+      {a.classes.length > 0 && (
+        <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+          <option value="">Todas las clases</option>
+          {a.classes.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title} ({WEEKDAYS[c.weekday]} {c.startTime})
+            </option>
+          ))}
+        </Select>
+      )}
+
+      {videos.isLoading && <Spinner label="Cargando galería…" />}
+      {videos.data && videos.data.length === 0 && (
+        <Card className="text-sm text-neutral-400">
+          {classId ? 'Esta clase no tiene fotos ni videos todavía.' : 'Todavía no hay fotos ni videos.'}
+        </Card>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {videos.data?.map((v, i) => (
+          <div key={v.id} className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/60">
+            <button type="button" onClick={() => setPlaying(i)} className="group relative block aspect-video w-full bg-neutral-800">
+              {v.thumbUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={v.thumbUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+              ) : (
+                <span className="flex h-full items-center justify-center text-3xl">{v.kind === 'PHOTO' ? '🖼️' : '🎬'}</span>
+              )}
+              <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-4xl text-white/0 transition group-hover:bg-black/40 group-hover:text-white/90">
+                {v.kind === 'PHOTO' ? '⤢' : '▶'}
+              </span>
+              {v.kind === 'VIDEO' && v.durationMs === null && (
+                <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] text-white">▶ video</span>
+              )}
+              {v.durationMs !== null && (
+                <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] text-white">
+                  {formatVideoDuration(v.durationMs)}
+                </span>
+              )}
+            </button>
+            <div className="space-y-0.5 p-3">
+              <div className="line-clamp-2 text-sm font-medium">{v.title}</div>
+              <div className="text-xs text-neutral-400">
+                {[v.classTitle ?? 'Contenido general', v.recordedOn].filter(Boolean).join(' · ')}
+              </div>
+              {manages && (
+                <div className="flex gap-3 pt-1 text-xs">
+                  <span className="text-neutral-500">{formatBytes(v.sizeBytes)}</span>
+                  <button type="button" onClick={() => remove(v)} className="text-red-400/80 hover:text-red-300">
+                    Eliminar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {playing !== null && videos.data?.[playing] && (
+        <AcademyVideoPlayer
+          academyId={a.id}
+          items={videos.data}
+          index={playing}
+          onIndex={setPlaying}
+          onClose={() => setPlaying(null)}
+        />
+      )}
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+    </div>
+  );
+}
+
+// --- Administrar ------------------------------------------------------------------
+
+function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
+  const router = useRouter();
+  // Acá solo llegan quienes administran: sin rol en la academia = SUPER_ADMIN, que cuenta como dueño.
+  const isOwner = a.myRole !== 'TEACHER';
+  const [values, setValues] = useState<AcademyFormValues>(academyFormFrom(a));
+  const [logo, setLogo] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [email, setEmail] = useState('');
+  const [memberError, setMemberError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
+
+  const save = async () => {
+    const err = validateAcademy(values);
+    if (err) return setError(err);
+    setBusy(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await academiesApi.update(a.id, values);
+      if (logo) await academiesApi.setLogo(a.id, logo);
+      setLogo(null);
+      setSaved(true);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo guardar.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addMember = async () => {
+    setMemberError(null);
+    try {
+      await academiesApi.addMember(a.id, email.trim());
+      setEmail('');
+      onChanged();
+    } catch (e) {
+      setMemberError(e instanceof ApiError ? e.message : 'No se pudo agregar.');
+    }
+  };
+
+  const used = a.storage?.usedBytes ?? 0;
+  const quota = a.storage?.quotaBytes ?? 1;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <Card>
+        <h2 className="mb-4 font-semibold">Perfil</h2>
+        <AcademyForm
+          values={values}
+          onChange={(v) => {
+            setValues(v);
+            setSaved(false);
+          }}
+          onSubmit={save}
+          submitLabel={saved ? '✓ Guardado' : 'Guardar cambios'}
+          busy={busy}
+          error={error}
+          logoSlot={
+            <div className="space-y-1">
+              <LogoPicker file={logo} onChange={setLogo} currentUrl={academyLogoUrl(a)} />
+              {a.hasLogo && !logo && (
+                <button
+                  type="button"
+                  className="text-xs text-neutral-400 hover:text-neutral-200"
+                  onClick={async () => {
+                    await academiesApi.clearLogo(a.id);
+                    onChanged();
+                  }}
+                >
+                  Quitar logo
+                </button>
+              )}
+            </div>
+          }
+        />
+      </Card>
+
+      <div className="space-y-4">
+        <Card className="space-y-3">
+          <h2 className="font-semibold">Profesores</h2>
+          <p className="text-xs text-neutral-400">
+            Pueden editar el perfil, el horario y subir videos. Solo el dueño agrega o quita profesores.
+          </p>
+          <ul className="space-y-2">
+            {a.members.map((m) => (
+              <li key={m.userId} className="flex items-center justify-between gap-2 text-sm">
+                <div className="min-w-0">
+                  <div className="truncate">{m.name}</div>
+                  <div className="truncate text-xs text-neutral-500">{m.email}</div>
+                </div>
+                {m.role === 'OWNER' ? (
+                  <span className="text-xs text-brand">Dueño</span>
+                ) : (
+                  isOwner && (
+                    <button
+                      type="button"
+                      className="text-xs text-red-400/80 hover:text-red-300"
+                      onClick={() =>
+                        setConfirm({
+                          title: 'Quitar profesor',
+                          message: `¿Quitar a ${m.name}? Ya no podrá administrar la academia.`,
+                          confirmLabel: 'Quitar',
+                          danger: true,
+                          onConfirm: async () => {
+                            await academiesApi.removeMember(a.id, m.userId);
+                            onChanged();
+                          },
+                        })
+                      }
+                    >
+                      Quitar
+                    </button>
+                  )
+                )}
+              </li>
+            ))}
+          </ul>
+          {isOwner && (
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void addMember();
+              }}
+            >
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="correo@del-profesor.cl" />
+              <Button type="submit" size="sm" disabled={!email.includes('@')}>
+                Agregar
+              </Button>
+            </form>
+          )}
+          {memberError && <p className="text-xs text-red-300">{memberError}</p>}
+        </Card>
+
+        {a.storage && (
+          <Card className="space-y-2">
+            <h2 className="font-semibold">Espacio para videos</h2>
+            <div className="h-2 overflow-hidden rounded-full bg-neutral-800">
+              <div className="h-full bg-brand" style={{ width: `${Math.min(100, (used / quota) * 100)}%` }} />
+            </div>
+            <p className="text-xs text-neutral-400">
+              {formatBytes(used)} de {formatBytes(quota)} usados
+            </p>
+          </Card>
+        )}
+
+        {isOwner && (
+          <Card className="space-y-2">
+            <h2 className="font-semibold text-red-300">Eliminar academia</h2>
+            <p className="text-xs text-neutral-400">Se borran el perfil, el horario y todos los videos. No se puede deshacer.</p>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() =>
+                setConfirm({
+                  title: 'Eliminar academia',
+                  message: `¿Eliminar "${a.name}" con todas sus clases y videos?`,
+                  confirmLabel: 'Eliminar todo',
+                  danger: true,
+                  onConfirm: async () => {
+                    await academiesApi.remove(a.id);
+                    onChanged();
+                    router.push('/academies/mine');
+                  },
+                })
+              }
+            >
+              Eliminar academia
+            </Button>
+          </Card>
+        )}
+      </div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+    </div>
+  );
+}
