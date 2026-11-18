@@ -281,6 +281,7 @@ export const MODULES: AppModule[] = [
         href: '/admin/youtube-access',
       },
       { label: 'Roles y permisos', key: 'admin.roles', href: '/admin/roles' },
+      { label: 'Academias (Plan Director)', key: 'admin.academies', href: '/admin/academies' },
       { label: 'Reportes de fotos y videos', key: 'admin.video-reports', href: '/admin/video-reports' },
       { label: 'Estilos y sub-estilos', key: 'admin.tags', href: '/admin/tags' },
       { label: 'Configuración del sitio', key: 'admin.settings', href: '/admin/settings' },

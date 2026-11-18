@@ -41,7 +41,7 @@ export default function NewAcademyPage() {
         </Link>
         <h1 className="mt-1 text-2xl font-bold">Crear academia</h1>
         <p className="text-sm text-neutral-400">
-          Quedas como dueño. Después puedes agregar profesores, publicar el horario y subir los videos de las clases.
+          Quedas como director de la academia. Después puedes agregar profesores, publicar el horario y subir los videos de las clases.
         </p>
       </div>
       <Card>

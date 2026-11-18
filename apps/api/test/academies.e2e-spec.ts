@@ -11,6 +11,7 @@ import fastifyMultipart from '@fastify/multipart';
 import { JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import type {
+  AcademyAdminRowDto,
   AcademyDto,
   AcademyShareLinkDto,
   AcademyVideoDto,
@@ -147,7 +148,7 @@ describe('Academias (e2e)', () => {
     prisma = moduleRef.get(PrismaService);
     compat = moduleRef.get(AcademyCompatService);
     const jwt = new JwtService({ secret: process.env.JWT_SECRET });
-    const roles: Record<string, UserRole> = { owner: 'PROFESOR', teacher: 'BAILARIN', viewer: 'BAILARIN' };
+    const roles: Record<string, UserRole> = { owner: 'PROFESOR', teacher: 'BAILARIN', viewer: 'BAILARIN', admin: 'SUPER_ADMIN' };
     for (const [name, role] of Object.entries(roles)) {
       const email = `${name}-${tag}@test.local`;
       const u = await prisma.user.create({ data: { email, name, role } });
@@ -171,7 +172,8 @@ describe('Academias (e2e)', () => {
     });
   }
 
-  async function createAcademy(name = 'Academia Clave'): Promise<AcademyDto> {
+  /** Crea una academia con el Plan Director vigente (sin plan no se puede subir). */
+  async function createAcademy(name = 'Academia Clave', withPlan = true): Promise<AcademyDto> {
     const boundary = 'x-boundary';
     const data = JSON.stringify({ name, region: 'VALPARAISO', city: 'Viña del Mar', styles: ['BACHATA'], instagramHandle: '@Clave.Vina' });
     const body = `--${boundary}\r\nContent-Disposition: form-data; name="data"\r\n\r\n${data}\r\n--${boundary}--\r\n`;
@@ -185,7 +187,11 @@ describe('Academias (e2e)', () => {
       payload: body,
     });
     expect(res.statusCode).toBe(201);
-    return res.json<AcademyDto>();
+    const a = res.json<AcademyDto>();
+    if (withPlan) {
+      await prisma.academy.update({ where: { id: a.id }, data: { planExpiresAt: new Date(Date.now() + 30 * 86_400_000) } });
+    }
+    return a;
   }
 
   async function uploadVideo(academyId: string, extra: object = {}): Promise<AcademyVideoDto> {
@@ -579,5 +585,54 @@ describe('Academias (e2e)', () => {
     expect(media.has(compatKey)).toBe(true);
     await call('DELETE', `/${a.id}/videos/${v.id}`, 'owner');
     expect(media.has(compatKey)).toBe(false);
+  });
+  it('Plan Director: sin plan vigente la academia queda en solo lectura; el SUPER_ADMIN lo activa', async () => {
+    const a = await createAcademy('Sin plan', false);
+    const detail = (await call('GET', `/${a.id}`, 'owner')).json<AcademyDto>();
+    expect(detail.plan).toEqual({ active: false, expiresAt: null });
+    expect((await call('GET', `/${a.id}`, 'viewer')).json<AcademyDto>().plan).toBeNull();
+
+    const up = await call('POST', `/${a.id}/videos`, 'owner', { title: 'Clase', mimeType: 'video/mp4', sizeBytes: MB });
+    expect(up.statusCode).toBe(403);
+    expect(up.json<{ message: string }>().message).toContain('Plan Director');
+
+    // Solo el SUPER_ADMIN ve y cambia los planes.
+    expect((await call('GET', '/admin/plans', 'owner')).statusCode).toBe(403);
+    expect((await call('PATCH', `/${a.id}/plan`, 'owner', { expiresAt: '2099-12-31' })).statusCode).toBe(403);
+    const set = await call('PATCH', `/${a.id}/plan`, 'admin', { expiresAt: '2099-12-31', storageQuotaGb: 80, vaultQuotaGb: 300 });
+    expect(set.statusCode).toBe(200);
+    const row = set.json<AcademyAdminRowDto>();
+    expect(row.plan.active).toBe(true);
+    expect(row.ownerEmail).toBe(users.owner.email);
+    expect(row.storage.quotaBytes).toBe(80 * 1024 * MB);
+    expect(row.storage.vaultQuotaBytes).toBe(300 * 1024 * MB);
+    expect((await call('GET', '/admin/plans', 'admin')).json<AcademyAdminRowDto[]>().some((r) => r.id === a.id)).toBe(true);
+
+    const v = await uploadVideo(a.id);
+    // Vencido: se sigue viendo y descargando, pero no se mueve a la bóveda.
+    await prisma.academy.update({ where: { id: a.id }, data: { planExpiresAt: new Date(Date.now() - 1000) } });
+    expect((await call('POST', `/${a.id}/vault`, 'owner', { videoIds: [v.id] })).statusCode).toBe(403);
+    expect((await call('GET', `/${a.id}/videos/${v.id}/download`, 'owner')).statusCode).toBe(200);
+    expect((await call('GET', `/${a.id}/videos/${v.id}/url`, 'viewer')).statusCode).toBe(200);
+    expect((await call('PATCH', `/${a.id}/plan`, 'admin', { expiresAt: null })).json<AcademyAdminRowDto>().plan).toEqual({
+      active: false,
+      expiresAt: null,
+    });
+  });
+
+  it('un profesor solo elimina lo que subió él; el director elimina todo', async () => {
+    const a = await createAcademy('Borrar propios');
+    await call('POST', `/${a.id}/members`, 'owner', { email: users.teacher.email });
+    const ofOwner = await uploadVideo(a.id);
+    expect(ofOwner.uploadedById).toBe(users.owner.id);
+    const t = await call('POST', `/${a.id}/videos`, 'teacher', { title: 'Del profe', mimeType: 'video/mp4', sizeBytes: MB });
+    expect(t.statusCode).toBe(201);
+    const ticket = t.json<AcademyVideoUploadTicket>();
+    media.put(ticket.uploadUrl, MB);
+    expect((await call('POST', `/${a.id}/videos/${ticket.videoId}/complete`, 'teacher', {})).statusCode).toBe(200);
+
+    expect((await call('DELETE', `/${a.id}/videos/${ofOwner.id}`, 'teacher')).statusCode).toBe(403);
+    expect((await call('DELETE', `/${a.id}/videos/${ticket.videoId}`, 'teacher')).statusCode).toBe(204);
+    expect((await call('DELETE', `/${a.id}/videos/${ofOwner.id}`, 'owner')).statusCode).toBe(204);
   });
 });

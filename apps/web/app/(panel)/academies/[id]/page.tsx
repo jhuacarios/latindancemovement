@@ -18,6 +18,11 @@ import {
   formatBytes,
   formatVideoDuration,
   missingExtension,
+  MEMBER_ROLE_LABEL,
+  canDeleteMedia,
+  canWrite,
+  planDate,
+  planDaysLeft,
   GALLERY_SORTS,
   loadGallerySort,
   saveGallerySort,
@@ -83,11 +88,13 @@ export default function AcademyPage() {
           </div>
           {manages && a.storage && (
             <div className="w-full space-y-2 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 sm:w-72">
+              <PlanStatus a={a} />
               <StorageBar label="Galería" used={a.storage.usedBytes} quota={a.storage.quotaBytes} />
               <StorageBar label="🗄️ Bóveda" used={a.storage.vaultUsedBytes} quota={a.storage.vaultQuotaBytes} />
             </div>
           )}
         </div>
+        {manages && <StorageAlerts a={a} />}
         {a.description && <p className="mt-3 max-w-3xl whitespace-pre-line text-sm text-neutral-300">{a.description}</p>}
       </div>
 
@@ -117,6 +124,47 @@ export default function AcademyPage() {
       {tab === 'videos' && <VideosTab a={a} manages={manages} onChanged={refresh} />}
       {tab === 'vault' && manages && <AcademyVault a={a} onChanged={refresh} />}
       {tab === 'admin' && manages && <AdminTab a={a} onChanged={refresh} />}
+    </div>
+  );
+}
+
+// --- Plan Director ----------------------------------------------------------------
+
+function PlanStatus({ a }: { a: AcademyDto }) {
+  if (!a.plan) return null;
+  if (!a.plan.active) {
+    return <div className="text-xs font-medium text-amber-300">Plan Director: sin plan vigente (solo lectura)</div>;
+  }
+  const days = a.plan.expiresAt ? planDaysLeft(a.plan.expiresAt) : null;
+  return (
+    <div className={clsx('text-xs', days !== null && days <= 7 ? 'text-amber-300' : 'text-neutral-400')}>
+      ⭐ Plan Director vigente hasta el {a.plan.expiresAt ? planDate(a.plan.expiresAt) : '—'}
+      {days !== null && days <= 7 && ` (quedan ${days} ${days === 1 ? 'día' : 'días'})`}
+    </div>
+  );
+}
+
+/** Avisos para quienes administran: plan vencido y galería casi llena (80 %) o llena. */
+function StorageAlerts({ a }: { a: AcademyDto }) {
+  const msgs: string[] = [];
+  if (a.plan && !a.plan.active) {
+    msgs.push(
+      a.myRole === 'TEACHER'
+        ? 'La academia no tiene el Plan Director vigente: todo se sigue viendo y descargando, pero no se puede subir ni mover archivos. Pídele al director que lo renueve.'
+        : 'Tu academia no tiene el Plan Director vigente: todo se sigue viendo y descargando, pero no se puede subir ni mover archivos. Escríbenos para activarlo o renovarlo.',
+    );
+  } else if (a.storage) {
+    const pct = a.storage.usedBytes / Math.max(1, a.storage.quotaBytes);
+    if (pct >= 1) msgs.push('La galería está llena: mueve archivos a la bóveda o elimina algunos para seguir subiendo.');
+    else if (pct >= 0.8)
+      msgs.push(`La galería va en ${Math.floor(pct * 100)} %: puedes mover a la bóveda lo que ya no necesites mostrar.`);
+  }
+  if (msgs.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-1 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+      {msgs.map((m) => (
+        <p key={m}>⚠️ {m}</p>
+      ))}
     </div>
   );
 }
@@ -208,6 +256,8 @@ function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean
 // --- Videos -----------------------------------------------------------------------
 
 function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean; onChanged: () => void }) {
+  const { user } = useAuth();
+  const writable = canWrite(a);
   const [classId, setClassId] = useState('');
   const [sort, setSort] = useState<GallerySort>('class-date');
   // El orden elegido se recuerda en este navegador (se lee después de montar).
@@ -261,7 +311,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
 
   return (
     <div className="space-y-4">
-      {manages && (
+      {manages && writable && (
         <AcademyVideoUpload academyId={a.id} classes={a.classes} freeBytes={free} onUploaded={onChanged} />
       )}
 
@@ -296,7 +346,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
         </label>
       </div>
 
-      {manages && selected.size > 0 && (
+      {manages && writable && selected.size > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-brand/40 bg-neutral-900 p-3 text-sm shadow-lg">
           <span>
             {selected.size} {selected.size === 1 ? 'seleccionado' : 'seleccionados'} ({formatBytes(selectedBytes)})
@@ -327,7 +377,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
               selected.has(v.id) ? 'border-brand' : 'border-neutral-800',
             )}
           >
-            {manages && (
+            {manages && writable && (
               <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center rounded bg-black/60 p-1.5">
                 <input
                   type="checkbox"
@@ -385,9 +435,11 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
                       MP4
                     </button>
                   )}
-                  <button type="button" onClick={() => remove(v)} className="text-red-400/80 hover:text-red-300">
-                    Eliminar
-                  </button>
+                  {canDeleteMedia(a, v, user) && (
+                    <button type="button" onClick={() => remove(v)} className="text-red-400/80 hover:text-red-300">
+                      Eliminar
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -415,7 +467,7 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
 
 function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
   const router = useRouter();
-  // Acá solo llegan quienes administran: sin rol en la academia = SUPER_ADMIN, que cuenta como dueño.
+  // Acá solo llegan quienes administran: sin rol en la academia = SUPER_ADMIN, que cuenta como director.
   const isOwner = a.myRole !== 'TEACHER';
   const [values, setValues] = useState<AcademyFormValues>(academyFormFrom(a));
   const [logo, setLogo] = useState<File | null>(null);
@@ -497,7 +549,7 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
         <Card className="space-y-3">
           <h2 className="font-semibold">Profesores</h2>
           <p className="text-xs text-neutral-400">
-            Pueden editar el perfil, el horario y subir videos. Solo el dueño agrega o quita profesores.
+            Pueden editar el perfil, el horario y subir videos, y eliminar lo que subieron ellos. Solo el director agrega o quita profesores y elimina lo de otros.
           </p>
           <ul className="space-y-2">
             {a.members.map((m) => (
@@ -507,7 +559,7 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
                   <div className="truncate text-xs text-neutral-500">{m.email}</div>
                 </div>
                 {m.role === 'OWNER' ? (
-                  <span className="text-xs text-brand">Dueño</span>
+                  <span className="text-xs text-brand">{MEMBER_ROLE_LABEL.OWNER}</span>
                 ) : (
                   isOwner && (
                     <button
@@ -553,6 +605,11 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
         {a.storage && (
           <Card className="space-y-2">
             <h2 className="font-semibold">Espacio</h2>
+            <PlanStatus a={a} />
+            <p className="text-xs text-neutral-500">
+              El Plan Director de la academia incluye {formatBytes(a.storage.quotaBytes)} de galería y{' '}
+              {formatBytes(a.storage.vaultQuotaBytes)} de bóveda.
+            </p>
             <StorageBar label="Galería (fotos y videos)" used={used} quota={quota} />
             <StorageBar label="Bóveda" used={a.storage.vaultUsedBytes} quota={a.storage.vaultQuotaBytes} />
           </Card>

@@ -2,8 +2,10 @@ import {
   ACADEMY_MEDIA_MIME_TYPES,
   ACADEMY_PHOTO_MAX_BYTES,
   ACADEMY_VIDEO_MAX_BYTES,
+  type AcademyAdminRowDto,
   type AcademyClassDto,
   type AcademyDto,
+  type AcademyMemberRole,
   type AcademyShareLinkDto,
   type AcademySummaryDto,
   type AcademyVideoDto,
@@ -552,6 +554,10 @@ export const academiesApi = {
   reportVideo: (id: string, videoId: string, reason: string) =>
     api<void>(`/academies/${id}/videos/${videoId}/report`, { method: 'POST', body: { reason } }),
   reports: () => api<AcademyVideoReportDto[]>('/academies/reports'),
+  /** Admin → Academias (SUPER_ADMIN): todas con su Plan Director y su uso. */
+  adminPlans: () => api<AcademyAdminRowDto[]>('/academies/admin/plans'),
+  setPlan: (id: string, body: { expiresAt?: string | null; storageQuotaGb?: number; vaultQuotaGb?: number }) =>
+    api<AcademyAdminRowDto>(`/academies/${id}/plan`, { method: 'PATCH', body }),
   resolveReport: (reportId: string) => api<void>(`/academies/reports/${reportId}/resolve`, { method: 'POST' }),
 };
 
@@ -629,4 +635,40 @@ export function saveGallerySort(sort: GallerySort): void {
   } catch {
     /* sin almacenamiento: no se recuerda */
   }
+}
+
+// --- Plan Director y permisos -----------------------------------------------------------
+
+/** El dueño de la academia se muestra como "Director". */
+export const MEMBER_ROLE_LABEL: Record<AcademyMemberRole, string> = { OWNER: 'Director', TEACHER: 'Profesor' };
+
+/** Fecha del plan para mostrar (dd-mm-aaaa, hora de Chile). */
+export function planDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-CL', { timeZone: 'America/Santiago' });
+}
+
+/** YYYY-MM-DD (hora de Chile) para un <input type="date">. */
+export function planDateInput(iso: string | null): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+}
+
+/** Días que le quedan al plan (negativo = vencido). */
+export function planDaysLeft(iso: string): number {
+  return Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000);
+}
+
+/** Subir y mover archivos requiere el Plan Director vigente. */
+export function canWrite(a: AcademyDto): boolean {
+  return Boolean(a.plan?.active);
+}
+
+/**
+ * El director (y el SUPER_ADMIN) elimina cualquier archivo; un profesor, solo lo
+ * que subió él (la API lo valida igual).
+ */
+export function canDeleteMedia(a: AcademyDto, v: AcademyVideoDto, user: { id: string; role: string } | null): boolean {
+  if (!user) return false;
+  if (user.role === 'SUPER_ADMIN' || a.myRole === 'OWNER') return true;
+  return a.myRole === 'TEACHER' && v.uploadedById === user.id;
 }

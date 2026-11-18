@@ -7,10 +7,12 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
+  AcademyAdminRowDto,
   AcademyClassDto,
   AcademyDto,
   AcademyMediaLocation,
   AcademyMemberRole,
+  AcademyPlanDto,
   AcademySummaryDto,
   ChileRegion,
   ClassLevel,
@@ -25,6 +27,7 @@ import {
   CreateAcademyDto,
   CreateClassDto,
   QueryAcademiesDto,
+  SetAcademyPlanDto,
   UpdateAcademyDto,
   UpdateClassDto,
 } from './dto/academy.dto';
@@ -51,6 +54,16 @@ const SUMMARY = {
 
 type SummaryRow = Prisma.AcademyGetPayload<{ select: typeof SUMMARY }>;
 type ClassRow = Prisma.AcademyClassGetPayload<object>;
+
+const GB_MB = 1024;
+
+/** Plan Director vigente = tiene fecha y no ha vencido. */
+export function planOf(expiresAt: Date | null, now = new Date()): AcademyPlanDto {
+  return { active: expiresAt !== null && expiresAt > now, expiresAt: expiresAt?.toISOString() ?? null };
+}
+
+export const NO_PLAN_MESSAGE =
+  'La academia no tiene el Plan Director vigente: se puede ver y descargar todo, pero no subir ni mover archivos. Pide al director que lo renueve.';
 
 const CLASS_ORDER: Prisma.AcademyClassOrderByWithRelationInput[] = [{ weekday: 'asc' }, { startTime: 'asc' }];
 
@@ -88,7 +101,14 @@ export class AcademiesService {
 
   async assertOwner(user: AuthUser, academyId: string): Promise<void> {
     const role = await this.roleIn(user, academyId);
-    if (role !== 'OWNER') throw new ForbiddenException('Solo el dueño de la academia puede hacer esto.');
+    if (role !== 'OWNER') throw new ForbiddenException('Solo el director de la academia puede hacer esto.');
+  }
+
+  /** Subir y mover archivos requiere el Plan Director vigente (sin él: solo lectura). */
+  async assertPlan(academyId: string): Promise<void> {
+    const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { planExpiresAt: true } });
+    if (!a) throw new NotFoundException('Academia no encontrada.');
+    if (!planOf(a.planExpiresAt).active) throw new ForbiddenException(NO_PLAN_MESSAGE);
   }
 
   // --- mapeos -------------------------------------------------------------------
@@ -168,6 +188,7 @@ export class AcademiesService {
         description: true,
         storageQuotaMb: true,
         vaultQuotaMb: true,
+        planExpiresAt: true,
         createdAt: true,
         classes: { orderBy: CLASS_ORDER },
         members: {
@@ -201,8 +222,66 @@ export class AcademiesService {
             vaultQuotaBytes: a.vaultQuotaMb * MB,
           }
         : null,
+      plan: manages ? planOf(a.planExpiresAt) : null,
       createdAt: a.createdAt.toISOString(),
     };
+  }
+
+  // --- Plan Director (SUPER_ADMIN) ------------------------------------------------
+
+  /** Todas las academias con su plan y su uso (Admin → Academias). */
+  async adminList(): Promise<AcademyAdminRowDto[]> {
+    const rows = await this.prisma.academy.findMany({
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        storageQuotaMb: true,
+        vaultQuotaMb: true,
+        planExpiresAt: true,
+        createdAt: true,
+        members: { where: { role: 'OWNER' }, select: { user: { select: { name: true, email: true } } }, take: 1 },
+      },
+      orderBy: { name: 'asc' },
+    });
+    const sums = await this.prisma.academyVideo.groupBy({
+      by: ['academyId', 'location'],
+      _sum: { sizeBytes: true },
+    });
+    const used = (id: string, location: AcademyMediaLocation) =>
+      Number(sums.find((x) => x.academyId === id && x.location === location)?._sum.sizeBytes ?? 0);
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      city: r.city,
+      ownerName: r.members[0]?.user.name ?? null,
+      ownerEmail: r.members[0]?.user.email ?? null,
+      plan: planOf(r.planExpiresAt),
+      storage: {
+        usedBytes: used(r.id, 'GALLERY'),
+        quotaBytes: r.storageQuotaMb * MB,
+        vaultUsedBytes: used(r.id, 'VAULT'),
+        vaultQuotaBytes: r.vaultQuotaMb * MB,
+      },
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  /** Activa, extiende o quita el Plan Director y ajusta los cupos (en GB). */
+  async setPlan(id: string, dto: SetAcademyPlanDto): Promise<AcademyAdminRowDto> {
+    const exists = await this.prisma.academy.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new NotFoundException('Academia no encontrada.');
+    const data: Prisma.AcademyUpdateInput = {};
+    if (dto.expiresAt !== undefined) {
+      // Fecha sola (YYYY-MM-DD) = vigente hasta el final de ese día, hora de Chile.
+      data.planExpiresAt = dto.expiresAt === null ? null : new Date(`${dto.expiresAt}T23:59:59-04:00`);
+    }
+    if (dto.storageQuotaGb !== undefined) data.storageQuotaMb = dto.storageQuotaGb * GB_MB;
+    if (dto.vaultQuotaGb !== undefined) data.vaultQuotaMb = dto.vaultQuotaGb * GB_MB;
+    await this.prisma.academy.update({ where: { id }, data });
+    const row = (await this.adminList()).find((r) => r.id === id);
+    if (!row) throw new NotFoundException('Academia no encontrada.');
+    return row;
   }
 
   /**

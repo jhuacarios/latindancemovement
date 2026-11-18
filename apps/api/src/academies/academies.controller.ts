@@ -35,6 +35,7 @@ import {
   MoveMediaDto,
   QueryAcademiesDto,
   ReportVideoDto,
+  SetAcademyPlanDto,
   UpdateAcademyDto,
   UpdateClassDto,
   UpdateVideoDto,
@@ -79,6 +80,22 @@ export class AcademiesController {
   @HttpCode(204)
   async resolveReport(@Param('reportId') reportId: string) {
     await this.videos.resolveReport(reportId);
+  }
+
+  /** Admin → Academias: todas con su Plan Director y su uso. */
+  @Get('admin/plans')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  adminList() {
+    return this.academies.adminList();
+  }
+
+  /** Activa/extiende/quita el Plan Director y ajusta los cupos. */
+  @Patch(':id/plan')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  setPlan(@Param('id') id: string, @Body() dto: SetAcademyPlanDto) {
+    return this.academies.setPlan(id, dto);
   }
 
   /** Crea una academia (queda como dueño). multipart: `data` (JSON) + `file` (logo, opcional). */

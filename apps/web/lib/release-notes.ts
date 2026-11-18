@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.21.0',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'feature',
+    title: 'Plan Director para academias',
+    description:
+      'Cada academia tiene ahora su Plan Director, la suscripción del director (quien creó la academia), que incluye 50 GB de galería y 200 GB de bóveda. La cabecera de la academia muestra hasta cuándo está vigente y avisa cuando la galería va en 80 % o se llena. Sin plan vigente la academia queda en solo lectura: todo se sigue viendo y descargando, pero no se pueden subir ni mover archivos. Además, cada profesor puede eliminar solo lo que subió él; el director puede eliminar todo. Los profesores siguen pudiendo mover archivos a la bóveda para liberar espacio.',
+  },
+  {
     version: '0.20.2',
     date: '2026-11-17',
     module: 'classes',

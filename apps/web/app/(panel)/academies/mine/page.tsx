@@ -20,7 +20,7 @@ export default function MyAcademiesPage() {
         <div>
           <h1 className="text-2xl font-bold">Mis academias</h1>
           <p className="text-sm text-neutral-400">
-            Las academias que administras, como dueño o profesor. Ahí publicas el horario y subes los videos.
+            Las academias que administras, como director o profesor. Ahí publicas el horario y subes los videos.
           </p>
         </div>
         {canCreate && (
@@ -35,7 +35,7 @@ export default function MyAcademiesPage() {
         <Card className="space-y-2 text-sm text-neutral-400">
           <p>Todavía no administras ninguna academia.</p>
           <p>
-            Si eres profesor de una academia que ya está en Nectason, pídele al dueño que te agregue con el correo de tu
+            Si eres profesor de una academia que ya está en Nectason, pídele al director que te agregue con el correo de tu
             cuenta.
           </p>
         </Card>

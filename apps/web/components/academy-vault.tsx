@@ -4,11 +4,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AcademyDto, AcademyVideoDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import {
   academiesApi,
   formatBytes,
   formatVideoDuration,
   missingExtension,
+  canDeleteMedia,
+  canWrite,
   type DownloadFormat,
 } from '@/lib/academies';
 import { ConfirmDialog, type ConfirmOptions } from './confirm-dialog';
@@ -43,11 +46,13 @@ export function StorageBar({ label, used, quota }: { label: string; used: number
 }
 
 /**
- * Bóveda de la academia (solo dueño y profesores): archivos guardados en
+ * Bóveda de la academia (solo director y profesores): archivos guardados en
  * almacenamiento barato (R2 Infrequent Access). No se ven ni se reproducen en la
  * galería y no ocupan su espacio; se descargan o se devuelven a la galería.
  */
 export function AcademyVault({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
+  const { user } = useAuth();
+  const writable = canWrite(a);
   const q = useQuery({ queryKey: ['academies', 'vault', a.id], queryFn: () => academiesApi.vault(a.id) });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
@@ -123,7 +128,7 @@ export function AcademyVault({ a, onChanged }: { a: AcademyDto; onChanged: () =>
         )}
       </Card>
 
-      {selected.size > 0 && (
+      {writable && selected.size > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-brand/40 bg-neutral-900 p-3 text-sm shadow-lg">
           <span>
             {selected.size} {selected.size === 1 ? 'archivo seleccionado' : 'archivos seleccionados'} ({formatBytes(selectedBytes)})
@@ -151,13 +156,15 @@ export function AcademyVault({ a, onChanged }: { a: AcademyDto; onChanged: () =>
               selected.has(v.id) ? 'border-brand/60' : 'border-neutral-800',
             )}
           >
-            <input
-              type="checkbox"
-              checked={selected.has(v.id)}
-              onChange={() => toggle(v.id)}
-              className="ml-1 h-4 w-4 accent-brand"
-              aria-label={`Seleccionar ${v.title}`}
-            />
+            {writable && (
+              <input
+                type="checkbox"
+                checked={selected.has(v.id)}
+                onChange={() => toggle(v.id)}
+                className="ml-1 h-4 w-4 accent-brand"
+                aria-label={`Seleccionar ${v.title}`}
+              />
+            )}
             <div className="h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-neutral-800">
               {v.thumbUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -186,12 +193,16 @@ export function AcademyVault({ a, onChanged }: { a: AcademyDto; onChanged: () =>
               <Button size="sm" variant="ghost" onClick={() => download(v)} disabled={busy !== null}>
                 {busy === v.id ? 'Preparando…' : '⬇ Descargar'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => restore([v.id])} disabled={busy !== null}>
-                A la galería
-              </Button>
-              <button type="button" onClick={() => remove(v)} className="px-1 text-red-400/80 hover:text-red-300">
-                Eliminar
-              </button>
+              {writable && (
+                <Button size="sm" variant="ghost" onClick={() => restore([v.id])} disabled={busy !== null}>
+                  A la galería
+                </Button>
+              )}
+              {canDeleteMedia(a, v, user) && (
+                <button type="button" onClick={() => remove(v)} className="px-1 text-red-400/80 hover:text-red-300">
+                  Eliminar
+                </button>
+              )}
             </div>
           </li>
         ))}

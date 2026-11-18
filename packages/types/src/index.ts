@@ -1090,6 +1090,21 @@ export type AcademyCompatStatus = 'PENDING' | 'PROCESSING' | 'DONE' | 'NOT_NEEDE
 /** Solo se convierten videos de hasta esta duración. */
 export const ACADEMY_COMPAT_MAX_MINUTES = 15;
 
+/**
+ * Plan Director: la suscripción de la academia (la paga el dueño, que se muestra
+ * como "Director"). Trae el cupo de la galería y de la bóveda. Sin plan vigente la
+ * academia queda en solo lectura: se ve y se descarga, pero no se sube ni se mueve.
+ */
+export const ACADEMY_PLAN_NAME = 'Plan Director';
+export const ACADEMY_PLAN_STORAGE_GB = 50;
+export const ACADEMY_PLAN_VAULT_GB = 200;
+
+export interface AcademyPlanDto {
+  active: boolean;
+  /** ISO; null = nunca se activó. */
+  expiresAt: string | null;
+}
+
 export interface AcademySummaryDto {
   id: string;
   name: string;
@@ -1136,6 +1151,20 @@ export interface AcademyDto extends AcademySummaryDto {
   members: AcademyMemberDto[];
   /** Uso de la galería y de la bóveda (solo para quienes la administran; null para el resto). */
   storage: { usedBytes: number; quotaBytes: number; vaultUsedBytes: number; vaultQuotaBytes: number } | null;
+  /** Plan Director (solo para quienes la administran; null para el resto). */
+  plan: AcademyPlanDto | null;
+  createdAt: string;
+}
+
+/** Fila de Admin → Academias (SUPER_ADMIN): plan y cupos de cada academia. */
+export interface AcademyAdminRowDto {
+  id: string;
+  name: string;
+  city: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  plan: AcademyPlanDto;
+  storage: { usedBytes: number; quotaBytes: number; vaultUsedBytes: number; vaultQuotaBytes: number };
   createdAt: string;
 }
 
@@ -1161,6 +1190,7 @@ export interface AcademyVideoDto {
   durationMs: number | null;
   /** URL firmada de la miniatura (dura 1 h), o null. */
   thumbUrl: string | null;
+  uploadedById: string;
   uploadedByName: string;
   createdAt: string;
 }

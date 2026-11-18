@@ -238,3 +238,24 @@ export class ReportVideoDto {
   @MaxLength(1000)
   reason!: string;
 }
+
+/** Admin → Academias: Plan Director y cupos. Lo que no venga no se cambia. */
+export class SetAcademyPlanDto {
+  /** Vigente hasta ese día (YYYY-MM-DD); null = quitar el plan (solo lectura). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Fecha en formato YYYY-MM-DD.' })
+  expiresAt?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  storageQuotaGb?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(20000)
+  vaultQuotaGb?: number;
+}

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   ACADEMY_PHOTO_MAX_BYTES,
@@ -63,6 +63,7 @@ export const VIDEO_SELECT = {
   compatStatus: true,
   compatKey: true,
   compatSizeBytes: true,
+  uploadedById: true,
   uploadedBy: { select: { name: true } },
   createdAt: true,
 } satisfies Prisma.AcademyVideoSelect;
@@ -143,6 +144,7 @@ export class AcademyVideosService {
       sizeBytes: Number(v.sizeBytes),
       durationMs: v.durationMs,
       thumbUrl: v.thumbKey && this.media.enabled ? await this.media.viewUrl(v.thumbKey) : null,
+      uploadedById: v.uploadedById,
       uploadedByName: v.uploadedBy.name,
       createdAt: v.createdAt.toISOString(),
     };
@@ -221,6 +223,7 @@ export class AcademyVideosService {
     dto: CreateVideoUploadDto,
   ): Promise<AcademyVideoUploadTicket> {
     await this.academies.assertMember(user, academyId);
+    await this.academies.assertPlan(academyId);
     this.media.assertEnabled();
     if (kindOf(dto.mimeType) === 'PHOTO' && dto.sizeBytes > ACADEMY_PHOTO_MAX_BYTES) {
       throw new BadRequestException('La foto no puede superar 25 MB.');
@@ -327,9 +330,16 @@ export class AcademyVideosService {
     return this.toDto(updated);
   }
 
+  /** El director borra cualquier archivo; un profesor, solo lo que subió él. */
   async remove(user: AuthUser, academyId: string, videoId: string): Promise<void> {
-    await this.academies.assertMember(user, academyId);
-    await this.removeRow(await this.video(academyId, videoId));
+    const role = await this.academies.assertMember(user, academyId);
+    const v = await this.video(academyId, videoId);
+    if (role === 'TEACHER' && v.uploadedById !== user.id) {
+      throw new ForbiddenException(
+        'Solo el director puede eliminar lo que subieron otros. Puedes moverlo a la bóveda para liberar espacio.',
+      );
+    }
+    await this.removeRow(v);
   }
 
   /** URL firmada (1 h) para reproducir. Cualquier usuario con cuenta; lo de la bóveda no. */
@@ -426,6 +436,7 @@ export class AcademyVideosService {
     to: AcademyMediaLocation,
   ): Promise<{ moved: number }> {
     await this.academies.assertMember(user, academyId);
+    await this.academies.assertPlan(academyId);
     this.media.assertEnabled();
     const from: AcademyMediaLocation = to === 'VAULT' ? 'GALLERY' : 'VAULT';
     const rows = await this.prisma.academyVideo.findMany({
