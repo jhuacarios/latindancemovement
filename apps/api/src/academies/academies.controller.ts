@@ -36,6 +36,7 @@ import {
   QueryAcademiesDto,
   ReportVideoDto,
   SetAcademyPlanDto,
+  SetDirectorDto,
   UpdateAcademyDto,
   UpdateClassDto,
   UpdateVideoDto,
@@ -98,10 +99,21 @@ export class AcademiesController {
     return this.academies.setPlan(id, dto);
   }
 
-  /** Crea una academia (queda como dueño). multipart: `data` (JSON) + `file` (logo, opcional). */
+  /** Cambia el director de la academia (el anterior queda como profesor). */
+  @Patch(':id/director')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  setDirector(@Param('id') id: string, @Body() dto: SetDirectorDto) {
+    return this.academies.setDirector(id, dto);
+  }
+
+  /**
+   * Crea una academia (por ahora solo el SUPER_ADMIN). El director es `directorEmail`
+   * o, si no viene, quien la crea. multipart: `data` (JSON) + `file` (logo, opcional).
+   */
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('PROFESOR')
+  @Roles('SUPER_ADMIN')
   async create(@CurrentUser() user: AuthUser, @Req() req: FastifyRequest) {
     const { file, fields } = await readMultipart(req);
     const dto = await validateJsonField(CreateAcademyDto, fields.data);

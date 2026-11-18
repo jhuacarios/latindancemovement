@@ -24,6 +24,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.22.0',
+    date: '2026-11-17',
+    module: 'classes',
+    type: 'improvement',
+    title: 'Las academias se crean con Nectason y se puede cambiar el director',
+    description:
+      'Por ahora las academias las crea el equipo de Nectason, que deja como director a la cuenta que corresponda. Si quieres registrar tu academia, escríbenos. El director de una academia también se puede cambiar; el anterior queda como profesor, así no pierde el acceso de golpe.',
+  },
+  {
     version: '0.21.0',
     date: '2026-11-17',
     module: 'classes',

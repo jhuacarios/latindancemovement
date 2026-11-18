@@ -11,7 +11,8 @@ import { Button, Card, Spinner } from '@/components/ui';
 export default function MyAcademiesPage() {
   const role = useEffectiveRole();
   const perms = usePermissions();
-  const canCreate = role ? perms.can(role, 'classes.create', 'ver') : false;
+  // Por ahora solo el super admin crea academias.
+  const canCreate = role === 'SUPER_ADMIN' && perms.can(role, 'classes.create', 'ver');
   const q = useQuery({ queryKey: ['academies', 'mine'], queryFn: academiesApi.mine });
 
   return (
@@ -38,6 +39,7 @@ export default function MyAcademiesPage() {
             Si eres profesor de una academia que ya está en Nectason, pídele al director que te agregue con el correo de tu
             cuenta.
           </p>
+          <p>¿Quieres registrar tu academia y ser su director? Escríbenos y la creamos con tu cuenta.</p>
         </Card>
       )}
       {q.data && q.data.length > 0 && (

@@ -52,6 +52,22 @@ function PlanRow({ r }: { r: AcademyAdminRowDto }) {
   const [vaultGb, setVaultGb] = useState(String(Math.round(r.storage.vaultQuotaBytes / GB)));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [directorEmail, setDirectorEmail] = useState('');
+
+  const changeDirector = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const row = await academiesApi.setDirector(r.id, directorEmail);
+      setDirectorEmail('');
+      setMsg({ ok: true, text: `Ahora el director es ${row.ownerName ?? row.ownerEmail}. El anterior quedó como profesor.` });
+      void qc.invalidateQueries({ queryKey: ['academies'] });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'No se pudo cambiar el director.' });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const save = async (expiresAt: string | null) => {
     const s = Number(storageGb);
@@ -131,8 +147,23 @@ function PlanRow({ r }: { r: AcademyAdminRowDto }) {
             Quitar plan
           </Button>
         )}
-        {msg && <span className={msg.ok ? 'text-emerald-300' : 'text-red-300'}>{msg.text}</span>}
       </div>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void changeDirector();
+        }}
+      >
+        <label className="min-w-56 flex-1 space-y-1 text-xs text-neutral-400 sm:max-w-sm">
+          <span>Cambiar director (correo de su cuenta)</span>
+          <Input type="email" value={directorEmail} onChange={(e) => setDirectorEmail(e.target.value)} placeholder="nuevo@director.cl" />
+        </label>
+        <Button size="sm" variant="ghost" type="submit" disabled={busy || !directorEmail.includes('@')}>
+          Cambiar director
+        </Button>
+      </form>
+      {msg && <p className={msg.ok ? 'text-xs text-emerald-300' : 'text-xs text-red-300'}>{msg.text}</p>}
     </Card>
   );
 }

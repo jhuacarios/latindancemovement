@@ -28,6 +28,7 @@ import {
   CreateClassDto,
   QueryAcademiesDto,
   SetAcademyPlanDto,
+  SetDirectorDto,
   UpdateAcademyDto,
   UpdateClassDto,
 } from './dto/academy.dto';
@@ -305,7 +306,18 @@ export class AcademiesService {
     return (location === 'VAULT' ? a.vaultQuotaMb : a.storageQuotaMb) * MB;
   }
 
+  /** Cuenta por correo (404 con un mensaje claro si no existe). */
+  private async userByEmail(email: string): Promise<{ id: string }> {
+    const u = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() }, select: { id: true } });
+    if (!u) {
+      throw new NotFoundException('No hay ninguna cuenta con ese correo. La persona debe registrarse primero en Nectason.');
+    }
+    return u;
+  }
+
+  /** Por ahora solo el SUPER_ADMIN crea academias; el director puede ser otra cuenta. */
   async create(user: AuthUser, dto: CreateAcademyDto, logo: UploadedImage | null): Promise<AcademyDto> {
+    const director = dto.directorEmail?.trim() ? await this.userByEmail(dto.directorEmail) : { id: user.id };
     const a = await this.prisma.academy.create({
       data: {
         ...(this.toData(dto) as Prisma.AcademyCreateInput),
@@ -313,7 +325,7 @@ export class AcademiesService {
         region: dto.region,
         logoData: logo ? logo.buffer.toString('base64') : null,
         logoMime: logo ? logo.mime : null,
-        members: { create: { userId: user.id, role: 'OWNER' } },
+        members: { create: { userId: director.id, role: 'OWNER' } },
       },
       select: { id: true },
     });
@@ -354,6 +366,30 @@ export class AcademiesService {
         if (key) await this.media.remove(key);
       }
     }
+  }
+
+  /**
+   * Cambia el director (SUPER_ADMIN). El anterior queda como profesor, para no
+   * perder el acceso de golpe (se le puede quitar después).
+   */
+  async setDirector(id: string, dto: SetDirectorDto): Promise<AcademyAdminRowDto> {
+    const exists = await this.prisma.academy.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new NotFoundException('Academia no encontrada.');
+    const target = await this.userByEmail(dto.email);
+    await this.prisma.$transaction([
+      this.prisma.academyMember.updateMany({
+        where: { academyId: id, role: 'OWNER', userId: { not: target.id } },
+        data: { role: 'TEACHER' },
+      }),
+      this.prisma.academyMember.upsert({
+        where: { academyId_userId: { academyId: id, userId: target.id } },
+        create: { academyId: id, userId: target.id, role: 'OWNER' },
+        update: { role: 'OWNER' },
+      }),
+    ]);
+    const row = (await this.adminList()).find((r) => r.id === id);
+    if (!row) throw new NotFoundException('Academia no encontrada.');
+    return row;
   }
 
   // --- profesores ---------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { PartialType } from '@nestjs/mapped-types';
+import { OmitType, PartialType } from '@nestjs/mapped-types';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -63,9 +63,21 @@ export class CreateAcademyDto {
   @Matches(/^@?[A-Za-z0-9._]{1,30}$/, { message: 'Usuario de Instagram no válido.' })
   @ValidateIf((_o, v) => v !== null && v !== '')
   instagramHandle?: string | null;
+
+  /** Correo de la cuenta que queda como director (si no viene, quien la crea). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null && v !== '')
+  @IsEmail({}, { message: 'Correo del director no válido.' })
+  directorEmail?: string | null;
 }
 
-export class UpdateAcademyDto extends PartialType(CreateAcademyDto) {}
+export class UpdateAcademyDto extends PartialType(OmitType(CreateAcademyDto, ['directorEmail'] as const)) {}
+
+/** Admin → Academias: cambiar el director. */
+export class SetDirectorDto {
+  @IsEmail({}, { message: 'Correo no válido.' })
+  email!: string;
+}
 
 export class QueryAcademiesDto {
   @IsOptional()

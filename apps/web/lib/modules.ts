@@ -167,10 +167,10 @@ export const MODULES: AppModule[] = [
         roles: ['PROFESOR', 'SUPER_ADMIN'],
       },
       {
-        // Sin href: solo gatea el botón "Crear academia" (ajustable en Roles y permisos).
+        // Sin href: solo gatea el botón "Crear academia". Por ahora solo el super admin.
         label: 'Crear academia',
         key: 'classes.create',
-        roles: ['PROFESOR', 'SUPER_ADMIN'],
+        roles: ['SUPER_ADMIN'],
       },
     ],
   },

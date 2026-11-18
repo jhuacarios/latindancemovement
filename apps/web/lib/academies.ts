@@ -493,9 +493,9 @@ export const academiesApi = {
     api<AcademySummaryDto[]>(`/academies${region ? `?region=${region}` : ''}`),
   mine: () => api<AcademySummaryDto[]>('/academies/mine'),
   get: (id: string) => api<AcademyDto>(`/academies/${id}`),
-  create: (v: AcademyFormValues, logo: File | null) => {
+  create: (v: AcademyFormValues, logo: File | null, directorEmail?: string) => {
     const fd = new FormData();
-    fd.append('data', JSON.stringify(academyPayload(v)));
+    fd.append('data', JSON.stringify({ ...academyPayload(v), directorEmail: directorEmail?.trim() || null }));
     if (logo) fd.append('file', logo);
     return uploadForm<AcademyDto>('/academies', fd);
   },
@@ -556,6 +556,8 @@ export const academiesApi = {
   reports: () => api<AcademyVideoReportDto[]>('/academies/reports'),
   /** Admin → Academias (SUPER_ADMIN): todas con su Plan Director y su uso. */
   adminPlans: () => api<AcademyAdminRowDto[]>('/academies/admin/plans'),
+  setDirector: (id: string, email: string) =>
+    api<AcademyAdminRowDto>(`/academies/${id}/director`, { method: 'PATCH', body: { email } }),
   setPlan: (id: string, body: { expiresAt?: string | null; storageQuotaGb?: number; vaultQuotaGb?: number }) =>
     api<AcademyAdminRowDto>(`/academies/${id}/plan`, { method: 'PATCH', body }),
   resolveReport: (reportId: string) => api<void>(`/academies/reports/${reportId}/resolve`, { method: 'POST' }),

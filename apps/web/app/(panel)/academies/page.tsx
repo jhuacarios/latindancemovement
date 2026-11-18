@@ -14,7 +14,8 @@ export default function AcademiesPage() {
   const [region, setRegion] = useState<ChileRegion | ''>('');
   const role = useEffectiveRole();
   const perms = usePermissions();
-  const canCreate = role ? perms.can(role, 'classes.create', 'ver') : false;
+  // Por ahora solo el super admin crea academias.
+  const canCreate = role === 'SUPER_ADMIN' && perms.can(role, 'classes.create', 'ver');
   const q = useQuery({ queryKey: ['academies', 'list', region], queryFn: () => academiesApi.list(region) });
 
   return (

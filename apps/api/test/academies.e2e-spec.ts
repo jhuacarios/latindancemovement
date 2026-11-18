@@ -175,19 +175,29 @@ describe('Academias (e2e)', () => {
   /** Crea una academia con el Plan Director vigente (sin plan no se puede subir). */
   async function createAcademy(name = 'Academia Clave', withPlan = true): Promise<AcademyDto> {
     const boundary = 'x-boundary';
-    const data = JSON.stringify({ name, region: 'VALPARAISO', city: 'Viña del Mar', styles: ['BACHATA'], instagramHandle: '@Clave.Vina' });
+    // Solo el SUPER_ADMIN crea academias; el director es `owner`.
+    const data = JSON.stringify({
+      name,
+      region: 'VALPARAISO',
+      city: 'Viña del Mar',
+      styles: ['BACHATA'],
+      instagramHandle: '@Clave.Vina',
+      directorEmail: users.owner.email,
+    });
     const body = `--${boundary}\r\nContent-Disposition: form-data; name="data"\r\n\r\n${data}\r\n--${boundary}--\r\n`;
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/academies',
       headers: {
-        authorization: `Bearer ${users.owner.token}`,
+        authorization: `Bearer ${users.admin.token}`,
         'content-type': `multipart/form-data; boundary=${boundary}`,
       },
       payload: body,
     });
     expect(res.statusCode).toBe(201);
-    const a = res.json<AcademyDto>();
+    const created = res.json<AcademyDto>();
+    // Se lee como el director (myRole OWNER).
+    const a = (await call('GET', `/${created.id}`, 'owner')).json<AcademyDto>();
     if (withPlan) {
       await prisma.academy.update({ where: { id: a.id }, data: { planExpiresAt: new Date(Date.now() + 30 * 86_400_000) } });
     }
@@ -634,5 +644,31 @@ describe('Academias (e2e)', () => {
     expect((await call('DELETE', `/${a.id}/videos/${ofOwner.id}`, 'teacher')).statusCode).toBe(403);
     expect((await call('DELETE', `/${a.id}/videos/${ticket.videoId}`, 'teacher')).statusCode).toBe(204);
     expect((await call('DELETE', `/${a.id}/videos/${ofOwner.id}`, 'owner')).statusCode).toBe(204);
+  });
+  it('solo el SUPER_ADMIN crea academias y cambia al director (el anterior queda como profesor)', async () => {
+    const boundary = 'x-boundary';
+    const body = `--${boundary}
+Content-Disposition: form-data; name="data"
+
+${JSON.stringify({ name: 'Nueva', region: 'VALPARAISO' })}
+--${boundary}--
+`;
+    const denied = await app.inject({
+      method: 'POST',
+      url: '/api/v1/academies',
+      headers: { authorization: `Bearer ${users.owner.token}`, 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const a = await createAcademy('Cambio de director');
+    expect(a.myRole).toBe('OWNER');
+    expect((await call('PATCH', `/${a.id}/director`, 'owner', { email: users.teacher.email })).statusCode).toBe(403);
+    expect((await call('PATCH', `/${a.id}/director`, 'admin', { email: 'nadie@test.local' })).statusCode).toBe(404);
+    const res = await call('PATCH', `/${a.id}/director`, 'admin', { email: users.teacher.email });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<AcademyAdminRowDto>().ownerEmail).toBe(users.teacher.email);
+    expect((await call('GET', `/${a.id}`, 'teacher')).json<AcademyDto>().myRole).toBe('OWNER');
+    expect((await call('GET', `/${a.id}`, 'owner')).json<AcademyDto>().myRole).toBe('TEACHER');
   });
 });
