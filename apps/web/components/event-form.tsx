@@ -8,6 +8,7 @@ import {
   type FlyerExtraction,
 } from '@baile-latino/types';
 import { Button, Input, Select } from '@/components/ui';
+import { CitySelect, CommuneSelect } from '@/components/place-selects';
 import { clsx } from '@/components/clsx';
 import type { EventFormValues } from '@/lib/events';
 
@@ -145,12 +146,17 @@ export function EventForm({
         </Field>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Región" hint={h('region')}>
           <Select
             value={values.region}
             onChange={(e) =>
-              set('region', e.target.value as EventFormValues['region'])
+              onChange({
+                ...values,
+                region: e.target.value as EventFormValues['region'],
+                city: '',
+                commune: '',
+              })
             }
             required
             className={clsx('w-full', hintClass(h('region')))}
@@ -163,11 +169,19 @@ export function EventForm({
             ))}
           </Select>
         </Field>
-        <Field label="Ciudad o comuna" hint={h('city')}>
-          <Input
-            value={values.city}
-            onChange={(e) => set('city', e.target.value)}
-            placeholder="Viña del Mar"
+        <Field label="Ciudad" hint={h('city')}>
+          <CitySelect
+            region={values.region}
+            value={values}
+            onChange={(p) => onChange({ ...values, ...p })}
+            className={hintClass(h('city'))}
+          />
+        </Field>
+        <Field label="Comuna" hint={h('city')}>
+          <CommuneSelect
+            region={values.region}
+            value={values}
+            onChange={(p) => onChange({ ...values, ...p })}
             className={hintClass(h('city'))}
           />
         </Field>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ACADEMY_PLAN_STORAGE_GB, ACADEMY_PLAN_VAULT_GB, type AcademyAdminRowDto } from '@baile-latino/types';
+import { placeLabel, ACADEMY_PLAN_STORAGE_GB, ACADEMY_PLAN_VAULT_GB, type AcademyAdminRowDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { academiesApi, planDate, planDateInput } from '@/lib/academies';
 import { StorageBar } from '@/components/academy-vault';
@@ -97,7 +97,7 @@ function PlanRow({ r }: { r: AcademyAdminRowDto }) {
           <Link href={`/academies/${r.id}`} className="font-semibold hover:text-brand">
             {r.name}
           </Link>
-          {r.city && <span className="text-sm text-neutral-400"> · {r.city}</span>}
+          {r.city && <span className="text-sm text-neutral-400"> · {placeLabel(r.city, r.commune)}</span>}
           <div className="text-xs text-neutral-500">
             Director: {r.ownerName ?? '—'}
             {r.ownerEmail && ` (${r.ownerEmail})`}

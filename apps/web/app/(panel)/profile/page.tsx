@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { regionName, placeLabel } from '@baile-latino/types';
 import type { PublicUser } from '@baile-latino/types';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Spinner } from '@/components/ui';
@@ -86,7 +87,7 @@ function PerfilSection({ user }: { user: PublicUser }) {
       />
       <Card className="space-y-2.5">
         <Field label="Nombre" value={user.name} />
-        <Field label="Ciudad" value={user.city || '—'} />
+        <Field label="Comuna" value={[placeLabel(user.city, user.commune), user.region && regionName(user.region)].filter(Boolean).join(' · ') || '—'} />
         <Field
           label="Instagram"
           value={user.instagramHandle ? `@${user.instagramHandle}` : '—'}

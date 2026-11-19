@@ -5,7 +5,10 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsNumber,
   IsOptional,
+  Max,
+  Min,
   IsString,
   Matches,
   MaxLength,
@@ -37,6 +40,12 @@ export class CreateCommunityPlaceDto {
   @MaxLength(80)
   city?: string | null;
 
+  /** Comuna dentro de la ciudad (se valida contra CHILE_CITIES). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  commune?: string | null;
+
   @IsOptional()
   @IsString()
   @MaxLength(140)
@@ -46,6 +55,19 @@ export class CreateCommunityPlaceDto {
   @IsString()
   @MaxLength(200)
   address?: string | null;
+
+  /** Punto en el mapa (WGS84). Se mandan los dos o ninguno (null = quitar). */
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number | null;
 
   @IsOptional()
   @IsString()

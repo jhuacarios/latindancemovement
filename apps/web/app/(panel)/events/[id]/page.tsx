@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { regionName, type EventDto } from '@baile-latino/types';
+import { placeLabel, regionName, type EventDto } from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -143,7 +143,7 @@ export default function EventDetailPage() {
         </div>
         <p className="text-sm text-neutral-400">
           {regionName(ev.region)}
-          {ev.city ? ` · ${ev.city}` : ''}
+          {ev.city ? ` · ${placeLabel(ev.city, ev.commune)}` : ''}
         </p>
       </div>
 

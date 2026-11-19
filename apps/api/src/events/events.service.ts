@@ -1,3 +1,4 @@
+import { placeData, type PlaceFields } from '../common/place';
 import {
   ForbiddenException,
   Injectable,
@@ -35,6 +36,7 @@ const EVENT_SELECT = {
   endsAt: true,
   region: true,
   city: true,
+  commune: true,
   venueName: true,
   address: true,
   styles: true,
@@ -74,6 +76,7 @@ export class EventsService {
       endsAt: e.endsAt ? e.endsAt.toISOString() : null,
       region: e.region as ChileRegion,
       city: e.city,
+      commune: e.commune,
       venueName: e.venueName,
       address: e.address,
       styles: e.styles
@@ -168,7 +171,7 @@ export class EventsService {
   }
 
   /** Normaliza un DTO (create o update) a los campos escalares de Prisma. */
-  private toData(dto: UpdateEventDto): Prisma.EventUpdateInput {
+  private toData(dto: UpdateEventDto, current?: PlaceFields | null): Prisma.EventUpdateInput {
     const data: Prisma.EventUpdateInput = {};
     const text = (v: string | null | undefined) => v?.trim() || null;
     if (dto.title !== undefined) data.title = dto.title.trim();
@@ -178,7 +181,8 @@ export class EventsService {
       data.endsAt = dto.endsAt ? new Date(dto.endsAt) : null;
     }
     if (dto.region !== undefined) data.region = dto.region;
-    if (dto.city !== undefined) data.city = text(dto.city);
+    const place = placeData(dto, current);
+    if (place) Object.assign(data, place);
     if (dto.venueName !== undefined) data.venueName = text(dto.venueName);
     if (dto.address !== undefined) data.address = text(dto.address);
     if (dto.styles !== undefined) data.styles = dto.styles.join(',');
@@ -239,9 +243,13 @@ export class EventsService {
     dto: UpdateEventDto,
   ): Promise<EventDto> {
     await this.assertOwner(user, id);
+    const current = await this.prisma.event.findUnique({
+      where: { id },
+      select: { region: true, city: true, commune: true },
+    });
     const e = await this.prisma.event.update({
       where: { id },
-      data: this.toData(dto),
+      data: this.toData(dto, current),
       select: EVENT_SELECT,
     });
     return this.toDto(e);

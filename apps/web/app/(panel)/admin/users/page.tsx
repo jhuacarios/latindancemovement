@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { USER_ROLES, type PublicUser, type UserRole } from '@baile-latino/types';
+import {
+  CHILE_REGIONS,
+  USER_ROLES,
+  placeLabel,
+  type PublicUser,
+  type UserRole,
+} from '@baile-latino/types';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -10,17 +16,22 @@ import {
   type ConfirmOptions,
 } from '@/components/confirm-dialog';
 import { Button, Card, DeleteIconButton, Input, Select, Spinner } from '@/components/ui';
+import { CitySelect, CommuneSelect } from '@/components/place-selects';
+
+const EMPTY_FORM = {
+  email: '',
+  password: '',
+  name: '',
+  role: 'BAILARIN' as UserRole,
+  region: '',
+  city: '',
+  commune: '',
+};
 
 export default function AdminUsersPage() {
   const qc = useQueryClient();
   const { user: me } = useAuth();
-  const [form, setForm] = useState({
-    email: '',
-    password: '',
-    name: '',
-    role: 'BAILARIN' as UserRole,
-    city: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [err, setErr] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
 
@@ -31,9 +42,17 @@ export default function AdminUsersPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-users'] });
 
   const create = useMutation({
-    mutationFn: () => api<PublicUser>('/admin/users', { method: 'POST', body: form }),
+    mutationFn: () => api<PublicUser>('/admin/users', {
+        method: 'POST',
+        body: {
+          ...form,
+          region: form.region || undefined,
+          city: form.city || undefined,
+          commune: form.commune || undefined,
+        },
+      }),
     onSuccess: () => {
-      setForm({ email: '', password: '', name: '', role: 'BAILARIN', city: '' });
+      setForm(EMPTY_FORM);
       void invalidate();
     },
     onError: (e) =>
@@ -94,10 +113,26 @@ export default function AdminUsersPage() {
               </option>
             ))}
           </Select>
-          <Input
-            placeholder="Ciudad (opcional)"
-            value={form.city}
-            onChange={(e) => setForm({ ...form, city: e.target.value })}
+          <Select
+            value={form.region}
+            onChange={(e) => setForm({ ...form, region: e.target.value, city: '', commune: '' })}
+          >
+            <option value="">Región (opcional)</option>
+            {CHILE_REGIONS.map((r) => (
+              <option key={r.code} value={r.code}>
+                {r.name}
+              </option>
+            ))}
+          </Select>
+          <CitySelect
+            region={form.region}
+            value={form}
+            onChange={(p) => setForm({ ...form, ...p })}
+          />
+          <CommuneSelect
+            region={form.region}
+            value={form}
+            onChange={(p) => setForm({ ...form, ...p })}
           />
           <div className="flex items-center">
             <Button
@@ -126,7 +161,7 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3 w-48">Rol</th>
-                <th className="px-4 py-3">Ciudad</th>
+                <th className="px-4 py-3">Comuna</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -162,7 +197,7 @@ export default function AdminUsersPage() {
                         ))}
                       </Select>
                     </td>
-                    <td className="px-4 py-3 text-neutral-400">{u.city ?? '—'}</td>
+                    <td className="px-4 py-3 text-neutral-400">{placeLabel(u.city, u.commune) || '—'}</td>
                     <td className="px-4 py-3 text-right">
                       {!isMe && (
                         <DeleteIconButton

@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import type {
   AuthTokens,
+  ChileRegion,
   DanceStyle,
   JwtPayload,
   PublicUser,
@@ -25,7 +26,9 @@ type UserRecord = {
   email: string;
   name: string;
   role: string;
+  region: string | null;
   city: string | null;
+  commune: string | null;
   instagramHandle: string | null;
   styles: string;
   stylePreference?: string | null;
@@ -369,7 +372,9 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role as UserRole,
+      region: (user.region as ChileRegion) ?? null,
       city: user.city,
+      commune: user.commune,
       instagramHandle: user.instagramHandle,
       styles: user.styles
         ? (user.styles.split(',').filter(Boolean) as DanceStyle[])

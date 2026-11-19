@@ -41,6 +41,7 @@ export interface AcademyFormValues {
   name: string;
   region: ChileRegion | '';
   city: string;
+  commune: string;
   address: string;
   styles: DanceStyle[];
   description: string;
@@ -51,6 +52,7 @@ export const EMPTY_ACADEMY: AcademyFormValues = {
   name: '',
   region: '',
   city: '',
+  commune: '',
   address: '',
   styles: [],
   description: '',
@@ -62,6 +64,7 @@ export function academyFormFrom(a: AcademyDto): AcademyFormValues {
     name: a.name,
     region: a.region,
     city: a.city ?? '',
+    commune: a.commune ?? '',
     address: a.address ?? '',
     styles: a.styles,
     description: a.description ?? '',
@@ -75,6 +78,7 @@ function academyPayload(v: AcademyFormValues) {
     name: v.name.trim(),
     region: v.region || undefined,
     city: opt(v.city),
+    commune: opt(v.commune),
     address: opt(v.address),
     styles: v.styles,
     description: opt(v.description),

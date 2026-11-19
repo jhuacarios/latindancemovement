@@ -21,6 +21,8 @@ import {
   type PlaceKindCopy,
 } from '@/lib/community-places';
 import { Button, Input, Select } from '@/components/ui';
+import { CitySelect, CommuneSelect } from '@/components/place-selects';
+import { MapPointPicker } from '@/components/map-point-picker';
 import { clsx } from '@/components/clsx';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
@@ -104,7 +106,7 @@ export function CommunityPlaceModal({
   };
 
   const save = async () => {
-    const err = validatePlaceForm(values);
+    const err = validatePlaceForm(values, copy);
     if (err) {
       setError(err);
       return;
@@ -169,12 +171,17 @@ export function CommunityPlaceModal({
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Región">
               <Select
                 value={values.region}
                 onChange={(e) =>
-                  set('region', e.target.value as CommunityPlaceFormValues['region'])
+                  setValues({
+                    ...values,
+                    region: e.target.value as CommunityPlaceFormValues['region'],
+                    city: '',
+                    commune: '',
+                  })
                 }
                 required
                 className="w-full"
@@ -187,15 +194,35 @@ export function CommunityPlaceModal({
                 ))}
               </Select>
             </Field>
-            <Field label="Ciudad o comuna">
-              <Input
-                value={values.city}
-                onChange={(e) => set('city', e.target.value)}
-                placeholder="Viña del Mar"
+            <Field label="Ciudad">
+              <CitySelect
+                region={values.region}
+                value={values}
+                onChange={(p) => setValues({ ...values, ...p })}
+              />
+            </Field>
+            <Field label="Comuna">
+              <CommuneSelect
+                region={values.region}
+                value={values}
+                onChange={(p) => setValues({ ...values, ...p })}
               />
             </Field>
           </div>
 
+          {copy.mapPoint ? (
+            // div y no <label>: dentro de un label los clics del mapa irían al buscador.
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-neutral-400">Punto de encuentro</span>
+              <MapPointPicker
+                value={values.point}
+                onChange={(point) => set('point', point)}
+                region={values.region}
+                city={values.city}
+                commune={values.commune}
+              />
+            </div>
+          ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {!copy.hideAddress && (
               <Field label="Dirección">
@@ -214,6 +241,7 @@ export function CommunityPlaceModal({
               />
             </Field>
           </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={copy.scheduleLabel}>

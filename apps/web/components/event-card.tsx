@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { placeLabel } from '@baile-latino/types';
 import type { EventDto } from '@baile-latino/types';
 import { StyleBadge } from '@/components/ui';
 import { clsx } from '@/components/clsx';
@@ -11,7 +12,7 @@ export function EventCard({ ev, past = false }: { ev: EventDto; past?: boolean }
   const router = useRouter();
   const img = flyerUrl(ev);
   const cancelled = ev.status === 'CANCELLED';
-  const where = [ev.venueName, ev.city].filter(Boolean).join(' · ');
+  const where = [ev.venueName, placeLabel(ev.city, ev.commune)].filter(Boolean).join(' · ');
   const href = `/events/${ev.id}`;
   // La tarjeta navega al detalle, pero no es un <a>: adentro va el chip de
   // Instagram (un link real) y un <a> dentro de otro <a> es HTML inválido.

@@ -79,6 +79,7 @@ export interface EventFormValues {
   endsAt: string;
   region: ChileRegion | '';
   city: string;
+  commune: string;
   venueName: string;
   address: string;
   styles: DanceStyle[];
@@ -98,6 +99,7 @@ export const EMPTY_EVENT_FORM: EventFormValues = {
   endsAt: '',
   region: '',
   city: '',
+  commune: '',
   venueName: '',
   address: '',
   styles: [],
@@ -118,6 +120,7 @@ export function formFromEvent(ev: EventDto): EventFormValues {
     endsAt: toLocalInput(ev.endsAt),
     region: ev.region,
     city: ev.city ?? '',
+    commune: ev.commune ?? '',
     venueName: ev.venueName ?? '',
     address: ev.address ?? '',
     styles: ev.styles,
@@ -152,6 +155,7 @@ export function formFromExtraction(x: FlyerExtraction): EventFormValues {
     endsAt,
     region: x.region ?? '',
     city: x.city ?? '',
+    commune: x.commune ?? '',
     venueName: x.venueName ?? '',
     address: x.address ?? '',
     styles: x.styles,
@@ -176,6 +180,7 @@ export function payloadFromForm(v: EventFormValues) {
     endsAt: fromLocalInput(v.endsAt),
     region: v.region || undefined,
     city: opt(v.city),
+    commune: opt(v.commune),
     venueName: opt(v.venueName),
     address: opt(v.address),
     styles: v.styles,

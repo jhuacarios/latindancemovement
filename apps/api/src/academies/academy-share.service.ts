@@ -112,7 +112,7 @@ export class AcademyShareService {
     const [academy, cls, rows] = await Promise.all([
       this.prisma.academy.findUniqueOrThrow({
         where: { id: l.academyId },
-        select: { id: true, name: true, logoMime: true, city: true, region: true, instagramHandle: true },
+        select: { id: true, name: true, logoMime: true, city: true, commune: true, region: true, instagramHandle: true },
       }),
       this.prisma.academyClass.findUniqueOrThrow({ where: { id: l.classId } }),
       this.prisma.academyVideo.findMany({
@@ -127,6 +127,7 @@ export class AcademyShareService {
         name: academy.name,
         hasLogo: Boolean(academy.logoMime),
         city: academy.city,
+        commune: academy.commune,
         region: academy.region as ChileRegion,
         instagramHandle: academy.instagramHandle,
       },

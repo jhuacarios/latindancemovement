@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { placeLabel } from '@baile-latino/types';
 import type { ChatConversationDto, ChatMessageDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -263,7 +264,7 @@ export function ChatThread({
           <div className="truncate font-semibold">{other.name}</div>
           <div className="truncate text-xs text-neutral-500">
             {other.role}
-            {other.city ? ` · ${other.city}` : ''}
+            {other.city ? ` · ${placeLabel(other.city, other.commune)}` : ''}
           </div>
         </div>
         {other.instagramHandle && (

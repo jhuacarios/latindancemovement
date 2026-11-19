@@ -23,7 +23,9 @@ model User {
   emailVerified    Boolean  @default(false) // true si un proveedor (Google) verificó el email
   name             String
   role             String   @default("BAILARIN") // UserRole
-  city             String?
+  region           String? // ChileRegion (code)
+  city             String? // ciudad (área urbana, CHILE_CITIES de @baile-latino/types)
+  commune          String? // comuna dentro de la ciudad
   instagramHandle  String?
   styles           String   @default("") // CSV de DanceStyle
   // Preferencia de baile: BACHATA | SALSA | AMBOS. null = todavía no la eligió,
@@ -265,7 +267,8 @@ model Event {
   startsAt           DateTime
   endsAt             DateTime?
   region             String // ChileRegion (code)
-  city               String?
+  city               String? // ciudad (área urbana, CHILE_CITIES de @baile-latino/types)
+  commune            String? // comuna dentro de la ciudad
   venueName          String?
   address            String?
   styles             String    @default("") // CSV de DanceStyle
@@ -296,7 +299,10 @@ model CommunityPlace {
   kind             String // CommunityPlaceKind: OUTDOOR_SOCIAL | SALSOTECA | DJ
   name             String
   region           String // ChileRegion (code)
-  city             String?
+  city             String? // ciudad (área urbana, CHILE_CITIES de @baile-latino/types)
+  commune          String? // comuna dentro de la ciudad
+  lat              Float? // punto en el mapa (sociales al aire libre)
+  lng              Float?
   place            String?
   address          String?
   schedule         String? // texto libre, ej. "Domingos desde las 17:00"
@@ -470,7 +476,8 @@ model Academy {
   id              String   @id @default(cuid())
   name            String
   region          String // ChileRegion (code)
-  city            String?
+  city            String? // ciudad (área urbana, CHILE_CITIES de @baile-latino/types)
+  commune         String? // comuna dentro de la ciudad
   address         String?
   styles          String   @default("") // CSV de DanceStyle
   description     String?

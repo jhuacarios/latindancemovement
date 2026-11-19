@@ -1,4 +1,6 @@
+import { placeData, type PlaceFields } from '../common/place';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -29,6 +31,9 @@ const SELECT = {
   name: true,
   region: true,
   city: true,
+  commune: true,
+  lat: true,
+  lng: true,
   place: true,
   address: true,
   schedule: true,
@@ -59,6 +64,9 @@ export class CommunityPlacesService {
       name: r.name,
       region: r.region as ChileRegion,
       city: r.city,
+      commune: r.commune,
+      lat: r.lat,
+      lng: r.lng,
       place: r.place,
       address: r.address,
       schedule: r.schedule,
@@ -120,12 +128,25 @@ export class CommunityPlacesService {
     return { buffer: Buffer.from(r.photoData, 'base64'), mime: r.photoMime };
   }
 
-  private toData(dto: UpdateCommunityPlaceDto): Prisma.CommunityPlaceUpdateInput {
+  private toData(
+    dto: UpdateCommunityPlaceDto,
+    current?: PlaceFields | null,
+  ): Prisma.CommunityPlaceUpdateInput {
     const data: Prisma.CommunityPlaceUpdateInput = {};
     const text = (v: string | null | undefined) => v?.trim() || null;
     if (dto.name !== undefined) data.name = dto.name.trim();
     if (dto.region !== undefined) data.region = dto.region;
-    if (dto.city !== undefined) data.city = text(dto.city);
+    const place = placeData(dto, current);
+    if (place) Object.assign(data, place);
+    if (dto.lat !== undefined || dto.lng !== undefined) {
+      const lat = dto.lat ?? null;
+      const lng = dto.lng ?? null;
+      if ((lat === null) !== (lng === null)) {
+        throw new BadRequestException('El punto del mapa necesita latitud y longitud.');
+      }
+      data.lat = lat;
+      data.lng = lng;
+    }
     if (dto.place !== undefined) data.place = text(dto.place);
     if (dto.address !== undefined) data.address = text(dto.address);
     if (dto.schedule !== undefined) data.schedule = text(dto.schedule);
@@ -179,9 +200,13 @@ export class CommunityPlacesService {
     dto: UpdateCommunityPlaceDto,
   ): Promise<CommunityPlaceDto> {
     await this.assertOwner(user, id);
+    const current = await this.prisma.communityPlace.findUnique({
+      where: { id },
+      select: { region: true, city: true, commune: true },
+    });
     const r = await this.prisma.communityPlace.update({
       where: { id },
-      data: this.toData(dto),
+      data: this.toData(dto, current),
       select: SELECT,
     });
     return this.toDto(r);

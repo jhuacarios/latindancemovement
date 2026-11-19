@@ -3,6 +3,7 @@
 import { CHILE_REGIONS, DANCE_STYLES, type ChileRegion } from '@baile-latino/types';
 import type { AcademyFormValues } from '@/lib/academies';
 import { Button, Input, Select } from './ui';
+import { CitySelect, CommuneSelect } from './place-selects';
 import { clsx } from './clsx';
 
 export function Field({
@@ -59,11 +60,13 @@ export function AcademyForm({
         <Input value={values.name} onChange={(e) => set('name', e.target.value)} placeholder="Academia Clave" />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Región">
           <Select
             value={values.region}
-            onChange={(e) => set('region', e.target.value as ChileRegion | '')}
+            onChange={(e) =>
+              onChange({ ...values, region: e.target.value as ChileRegion | '', city: '', commune: '' })
+            }
             className="w-full"
           >
             <option value="">Elige una región…</option>
@@ -74,8 +77,11 @@ export function AcademyForm({
             ))}
           </Select>
         </Field>
-        <Field label="Ciudad o comuna">
-          <Input value={values.city} onChange={(e) => set('city', e.target.value)} placeholder="Viña del Mar" />
+        <Field label="Ciudad">
+          <CitySelect region={values.region} value={values} onChange={(p) => onChange({ ...values, ...p })} />
+        </Field>
+        <Field label="Comuna">
+          <CommuneSelect region={values.region} value={values} onChange={(p) => onChange({ ...values, ...p })} />
         </Field>
       </div>
 

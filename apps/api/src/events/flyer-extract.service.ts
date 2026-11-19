@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import {
+  matchPlace,
   CHILE_REGIONS,
   CHILE_REGION_CODES,
   DANCE_STYLES,
@@ -176,7 +177,10 @@ export class FlyerExtractService {
       this.logger.log(
         `Flyer leído · in=${response.usage.input_tokens} cached=${response.usage.cache_read_input_tokens ?? 0} out=${response.usage.output_tokens}`,
       );
-      return parsed;
+      // El modelo entrega la ciudad/comuna como texto; la pasamos a la lista
+      // oficial (Región → Ciudad → Comuna). Si no calza, queda vacía.
+      const place = matchPlace(parsed.region, parsed.city);
+      return { ...parsed, city: place?.city ?? null, commune: place?.commune ?? null };
     } catch (err) {
       if (err instanceof Anthropic.AuthenticationError) {
         throw new ServiceUnavailableException(

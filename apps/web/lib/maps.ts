@@ -5,7 +5,11 @@ export interface MapPlace {
   place?: string | null;
   address?: string | null;
   city?: string | null;
+  commune?: string | null;
   region: string;
+  /** Si hay punto exacto, manda sobre la dirección. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 /**
@@ -13,9 +17,10 @@ export interface MapPlace {
  * nombre del lugar. Siempre con ciudad/región y "Chile" para desambiguar.
  */
 export function mapQuery(p: MapPlace): string | null {
+  if (p.lat != null && p.lng != null) return `${p.lat},${p.lng}`;
   const main = p.address || p.place;
   if (!main) return null;
-  return [p.address ? p.place : null, main, p.city, regionName(p.region), 'Chile']
+  return [p.address ? p.place : null, main, p.commune || p.city, regionName(p.region), 'Chile']
     .filter(Boolean)
     .join(', ');
 }

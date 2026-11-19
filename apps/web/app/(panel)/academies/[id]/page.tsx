@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { regionName, type AcademyClassDto, type AcademyDto, type AcademyVideoDto } from '@baile-latino/types';
+import { placeLabel, regionName, type AcademyClassDto, type AcademyDto, type AcademyVideoDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -77,7 +77,7 @@ export default function AcademyPage() {
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold">{a.name}</h1>
             <p className="text-sm text-neutral-400">
-              {[a.address, a.city, regionName(a.region)].filter(Boolean).join(' · ')}
+              {[a.address, placeLabel(a.city, a.commune), regionName(a.region)].filter(Boolean).join(' · ')}
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {a.styles.map((s) => (

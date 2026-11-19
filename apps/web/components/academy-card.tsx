@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { regionName, type AcademySummaryDto } from '@baile-latino/types';
+import { placeLabel, regionName, type AcademySummaryDto } from '@baile-latino/types';
 import { academyLogoUrl } from '@/lib/academies';
 import { StyleBadge } from './ui';
 import { InstagramLink } from './instagram-link';
@@ -28,7 +28,7 @@ export function AcademyCard({ a }: { a: AcademySummaryDto }) {
         <Link href={`/academies/${a.id}`} className="font-semibold after:absolute after:inset-0">
           {a.name}
         </Link>
-        <div className="text-sm text-neutral-400">{[a.city, regionName(a.region)].filter(Boolean).join(' · ')}</div>
+        <div className="text-sm text-neutral-400">{[placeLabel(a.city, a.commune), regionName(a.region)].filter(Boolean).join(' · ')}</div>
         <div className="mt-1 text-xs text-neutral-500">
           {a.classCount} {a.classCount === 1 ? 'clase' : 'clases'} · {a.videoCount}{' '}
           {a.videoCount === 1 ? 'foto o video' : 'fotos y videos'}

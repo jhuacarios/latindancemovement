@@ -1,3 +1,4 @@
+import { placeData, type PlaceFields } from '../common/place';
 import {
   BadRequestException,
   ConflictException,
@@ -44,6 +45,7 @@ const SUMMARY = {
   name: true,
   region: true,
   city: true,
+  commune: true,
   styles: true,
   instagramHandle: true,
   logoMime: true,
@@ -121,6 +123,7 @@ export class AcademiesService {
       name: r.name,
       region: r.region as ChileRegion,
       city: r.city,
+      commune: r.commune,
       styles: csv(r.styles) as DanceStyle[],
       instagramHandle: r.instagramHandle,
       hasLogo: Boolean(r.logoMime),
@@ -147,11 +150,12 @@ export class AcademiesService {
     };
   }
 
-  private toData(dto: UpdateAcademyDto): Prisma.AcademyUpdateInput {
+  private toData(dto: UpdateAcademyDto, current?: PlaceFields | null): Prisma.AcademyUpdateInput {
     const data: Prisma.AcademyUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name.trim();
     if (dto.region !== undefined) data.region = dto.region;
-    if (dto.city !== undefined) data.city = text(dto.city);
+    const place = placeData(dto, current);
+    if (place) Object.assign(data, place);
     if (dto.address !== undefined) data.address = text(dto.address);
     if (dto.styles !== undefined) data.styles = dto.styles.join(',');
     if (dto.description !== undefined) data.description = text(dto.description);
@@ -237,6 +241,7 @@ export class AcademiesService {
         id: true,
         name: true,
         city: true,
+        commune: true,
         storageQuotaMb: true,
         vaultQuotaMb: true,
         planExpiresAt: true,
@@ -255,6 +260,7 @@ export class AcademiesService {
       id: r.id,
       name: r.name,
       city: r.city,
+      commune: r.commune,
       ownerName: r.members[0]?.user.name ?? null,
       ownerEmail: r.members[0]?.user.email ?? null,
       plan: planOf(r.planExpiresAt),
@@ -334,7 +340,11 @@ export class AcademiesService {
 
   async update(user: AuthUser, id: string, dto: UpdateAcademyDto): Promise<AcademyDto> {
     await this.assertMember(user, id);
-    await this.prisma.academy.update({ where: { id }, data: this.toData(dto) });
+    const current = await this.prisma.academy.findUnique({
+      where: { id },
+      select: { region: true, city: true, commune: true },
+    });
+    await this.prisma.academy.update({ where: { id }, data: this.toData(dto, current) });
     return this.findOne(user, id);
   }
 

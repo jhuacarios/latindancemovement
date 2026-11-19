@@ -93,7 +93,12 @@ export interface PublicUser {
   email: string;
   name: string;
   role: UserRole;
+  /** Ciudad (área urbana, ver `CHILE_CITIES`). */
   city: string | null;
+  /** Comuna (dentro de `city`). */
+  commune: string | null;
+  /** Región de Chile (`ChileRegion`). */
+  region: ChileRegion | null;
   instagramHandle: string | null;
   styles: DanceStyle[];
   /** Preferencia de baile. `null` = todavía no la eligió (se le pregunta). */
@@ -737,6 +742,7 @@ export interface EventDto {
   endsAt: string | null;
   region: ChileRegion;
   city: string | null;
+  commune: string | null;
   venueName: string | null;
   address: string | null;
   styles: DanceStyle[];
@@ -784,6 +790,7 @@ export interface FlyerExtraction {
   venueName: string | null;
   address: string | null;
   city: string | null;
+  commune: string | null;
   region: ChileRegion | null;
   styles: DanceStyle[];
   bachataPct: number | null;
@@ -816,9 +823,13 @@ export interface CommunityPlaceDto {
   name: string;
   region: ChileRegion;
   city: string | null;
+  commune: string | null;
   /** Playa/parque, referencia del local, o academia/colectivo (DJ). */
   place: string | null;
   address: string | null;
+  /** Punto en el mapa (sociales al aire libre). Ambos o ninguno. */
+  lat: number | null;
+  lng: number | null;
   /** Texto libre: horario habitual, o disponibilidad en el caso de un DJ. */
   schedule: string | null;
   styles: DanceStyle[];
@@ -854,6 +865,7 @@ export interface ChatUser {
   name: string;
   role: UserRole;
   city: string | null;
+  commune: string | null;
   instagramHandle: string | null;
 }
 
@@ -1110,6 +1122,7 @@ export interface AcademySummaryDto {
   name: string;
   region: ChileRegion;
   city: string | null;
+  commune: string | null;
   styles: DanceStyle[];
   instagramHandle: string | null;
   hasLogo: boolean;
@@ -1161,6 +1174,7 @@ export interface AcademyAdminRowDto {
   id: string;
   name: string;
   city: string | null;
+  commune: string | null;
   ownerName: string | null;
   ownerEmail: string | null;
   plan: AcademyPlanDto;
@@ -1224,6 +1238,7 @@ export interface SharedClassDto {
     name: string;
     hasLogo: boolean;
     city: string | null;
+    commune: string | null;
     region: ChileRegion;
     instagramHandle: string | null;
   };
@@ -1243,3 +1258,4 @@ export interface AcademyVideoReportDto {
 }
 
 export * from './phrases';
+export * from './chile';

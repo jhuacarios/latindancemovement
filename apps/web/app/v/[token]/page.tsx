@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { regionName } from '@baile-latino/types';
+import { placeLabel, regionName } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import {
   LEVEL_LABEL,
@@ -75,7 +75,7 @@ export default function SharedClassPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm text-neutral-400">
                 {d.academy.name}
-                {d.academy.city && ` · ${d.academy.city}`} · {regionName(d.academy.region)}
+                {d.academy.city && ` · ${placeLabel(d.academy.city, d.academy.commune)}`} · {regionName(d.academy.region)}
                 {d.academy.instagramHandle && (
                   <span className="ml-2 inline-block align-middle">
                     <InstagramLink handle={d.academy.instagramHandle} />

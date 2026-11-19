@@ -8,8 +8,10 @@ import {
   MinLength,
 } from 'class-validator';
 import {
+  CHILE_REGION_CODES,
   DANCE_STYLES,
   USER_ROLES,
+  type ChileRegion,
   type DanceStyle,
   type UserRole,
 } from '@baile-latino/types';
@@ -32,9 +34,19 @@ export class CreateUserDto {
   role!: UserRole;
 
   @IsOptional()
+  @IsIn(CHILE_REGION_CODES)
+  region?: ChileRegion | null;
+
+  @IsOptional()
   @IsString()
   @MaxLength(80)
-  city?: string;
+  city?: string | null;
+
+  /** Comuna dentro de la ciudad (se valida contra CHILE_CITIES). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  commune?: string | null;
 
   @IsOptional()
   @IsArray()
@@ -53,7 +65,17 @@ export class UpdateUserDto {
   name?: string;
 
   @IsOptional()
+  @IsIn(CHILE_REGION_CODES)
+  region?: ChileRegion | null;
+
+  @IsOptional()
   @IsString()
   @MaxLength(80)
-  city?: string;
+  city?: string | null;
+
+  /** Comuna dentro de la ciudad (se valida contra CHILE_CITIES). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  commune?: string | null;
 }

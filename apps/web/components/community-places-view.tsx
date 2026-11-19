@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { placeLabel } from '@baile-latino/types';
 import type {
   CommunityPlaceDto,
   CommunityPlacesByRegionResponse,
@@ -38,8 +39,8 @@ function PlaceCard({
   const isOutdoor = copy.kind === 'OUTDOOR_SOCIAL';
   const isDj = copy.kind === 'DJ';
   const where = isDj
-    ? (p.city ?? '')
-    : [isOutdoor ? p.place : p.address, p.city].filter(Boolean).join(' · ');
+    ? placeLabel(p.city, p.commune)
+    : [isOutdoor ? p.place : p.address, placeLabel(p.city, p.commune)].filter(Boolean).join(' · ');
   const extra = isOutdoor ? p.address : p.place;
   const maps = copy.hideMap
     ? null
@@ -47,7 +48,10 @@ function PlaceCard({
         place: isOutdoor ? p.place : p.name,
         address: p.address,
         city: p.city,
+        commune: p.commune,
         region: p.region,
+        lat: p.lat,
+        lng: p.lng,
       });
   return (
     <div

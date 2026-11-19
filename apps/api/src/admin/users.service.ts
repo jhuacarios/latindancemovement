@@ -1,3 +1,4 @@
+import { placeData } from '../common/place';
 import {
   BadRequestException,
   ConflictException,
@@ -7,6 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import type {
+  ChileRegion,
   DanceStyle,
   PublicUser,
   StylePreference,
@@ -19,7 +21,9 @@ type UserRow = {
   email: string;
   name: string;
   role: string;
+  region: string | null;
   city: string | null;
+  commune: string | null;
   instagramHandle: string | null;
   styles: string;
   stylePreference?: string | null;
@@ -34,7 +38,9 @@ function toPublicUser(u: UserRow): PublicUser {
     email: u.email,
     name: u.name,
     role: u.role as UserRole,
+    region: (u.region as ChileRegion) ?? null,
     city: u.city,
+    commune: u.commune,
     instagramHandle: u.instagramHandle,
     styles: u.styles ? (u.styles.split(',').filter(Boolean) as DanceStyle[]) : [],
     stylePreference: (u.stylePreference as StylePreference) ?? null,
@@ -60,7 +66,9 @@ export class UsersService {
     password: string;
     name: string;
     role: UserRole;
-    city?: string;
+    region?: string | null;
+    city?: string | null;
+    commune?: string | null;
     styles?: DanceStyle[];
   }): Promise<PublicUser> {
     const email = input.email.toLowerCase();
@@ -74,7 +82,8 @@ export class UsersService {
         passwordHash,
         name: input.name,
         role: input.role,
-        city: input.city ?? null,
+        region: input.region || null,
+        ...(placeData(input) ?? {}),
         styles: (input.styles ?? []).join(','),
       },
     });
@@ -83,13 +92,24 @@ export class UsersService {
 
   async update(
     id: string,
-    data: { role?: UserRole; name?: string; city?: string },
+    data: {
+      role?: UserRole;
+      name?: string;
+      region?: string | null;
+      city?: string | null;
+      commune?: string | null;
+    },
   ): Promise<PublicUser> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { role: data.role, name: data.name, city: data.city },
+      data: {
+        role: data.role,
+        name: data.name,
+        ...(data.region !== undefined ? { region: data.region || null } : {}),
+        ...(placeData(data, user) ?? {}),
+      },
     });
     return toPublicUser(updated);
   }

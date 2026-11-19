@@ -21,6 +21,7 @@ const USER_SELECT = {
   name: true,
   role: true,
   city: true,
+  commune: true,
   instagramHandle: true,
 } satisfies Prisma.UserSelect;
 
@@ -57,6 +58,7 @@ export class ChatService {
       name: u.name,
       role: u.role as UserRole,
       city: u.city,
+      commune: u.commune,
       instagramHandle: u.instagramHandle,
     };
   }

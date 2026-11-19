@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { placeLabel } from '@baile-latino/types';
 import type { ChatConversationDto, ChatUser } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import {
@@ -87,7 +88,7 @@ function NewChatModal({
                 <div className="truncate text-sm font-medium">{u.name}</div>
                 <div className="truncate text-xs text-neutral-500">
                   {u.role}
-                  {u.city ? ` · ${u.city}` : ''}
+                  {u.city ? ` · ${placeLabel(u.city, u.commune)}` : ''}
                   {u.instagramHandle ? ` · @${u.instagramHandle}` : ''}
                 </div>
               </div>

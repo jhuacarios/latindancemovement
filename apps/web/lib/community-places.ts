@@ -27,6 +27,8 @@ export interface PlaceKindCopy {
   createPermKey: string;
   /** Ocultar el campo dirección (ej. DJs). */
   hideAddress?: boolean;
+  /** Ubicar con un punto en el mapa en vez de Dirección + Lugar. */
+  mapPoint?: boolean;
   /** Ocultar el botón "Cómo llegar". */
   hideMap?: boolean;
   /** Etiqueta del estado inactivo en la tarjeta. */
@@ -52,6 +54,7 @@ export const PLACE_KINDS: Record<CommunityPlaceKind, PlaceKindCopy> = {
     descriptionPlaceholder:
       'Cómo funciona, si hay parlante, si es gratis, qué llevar…',
     createPermKey: 'community.outdoor.create',
+    mapPoint: true,
     inactiveLabel: 'EN PAUSA',
   },
   SALSOTECA: {
@@ -109,8 +112,11 @@ export interface CommunityPlaceFormValues {
   name: string;
   region: ChileRegion | '';
   city: string;
+  commune: string;
   place: string;
   address: string;
+  /** Punto en el mapa (sociales al aire libre). */
+  point: { lat: number; lng: number } | null;
   schedule: string;
   styles: DanceStyle[];
   description: string;
@@ -123,8 +129,10 @@ export const EMPTY_PLACE_FORM: CommunityPlaceFormValues = {
   name: '',
   region: '',
   city: '',
+  commune: '',
   place: '',
   address: '',
+  point: null,
   schedule: '',
   styles: [],
   description: '',
@@ -137,8 +145,10 @@ export function formFromPlace(s: CommunityPlaceDto): CommunityPlaceFormValues {
     name: s.name,
     region: s.region,
     city: s.city ?? '',
+    commune: s.commune ?? '',
     place: s.place ?? '',
     address: s.address ?? '',
+    point: s.lat != null && s.lng != null ? { lat: s.lat, lng: s.lng } : null,
     schedule: s.schedule ?? '',
     styles: s.styles,
     description: s.description ?? '',
@@ -168,8 +178,11 @@ export function payloadFromPlaceForm(v: CommunityPlaceFormValues) {
     name: v.name.trim(),
     region: v.region || undefined,
     city: opt(v.city),
+    commune: opt(v.commune),
     place: opt(v.place),
     address: opt(v.address),
+    lat: v.point?.lat ?? null,
+    lng: v.point?.lng ?? null,
     schedule: opt(v.schedule),
     styles: v.styles,
     description: opt(v.description),
@@ -178,9 +191,14 @@ export function payloadFromPlaceForm(v: CommunityPlaceFormValues) {
   };
 }
 
-export function validatePlaceForm(v: CommunityPlaceFormValues): string | null {
+export function validatePlaceForm(
+  v: CommunityPlaceFormValues,
+  copy?: Pick<PlaceKindCopy, 'mapPoint'>,
+): string | null {
   if (v.name.trim().length < 2) return 'Ponle un nombre.';
   if (!v.region) return 'Elige la región.';
+  // Los antiguos (con "Lugar" escrito y sin punto) se pueden seguir editando.
+  if (copy?.mapPoint && !v.point && !v.place.trim()) return 'Marca el punto en el mapa.';
   const bad = parseHandles(v.instagramHandles).find(
     (h) => !/^[a-z0-9._]{1,30}$/.test(h),
   );
