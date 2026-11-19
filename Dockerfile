@@ -12,8 +12,10 @@ WORKDIR /app
 # Copia todo el monorepo (el contexto ya excluye node_modules/.env vía .dockerignore).
 COPY . .
 
-# Instala dependencias (postinstall corre prisma generate, ahora en Node 22).
-RUN pnpm install --frozen-lockfile
+# Instala SOLO la API y sus dependencias del workspace (incluye @baile-latino/types):
+# la web y la app móvil (Expo/React Native) no hacen falta en esta imagen.
+# (postinstall corre prisma generate, ahora en Node 22).
+RUN pnpm install --frozen-lockfile --filter "@baile-latino/api..."
 
 # Build de la API + sus deps (turbo encadena @baile-latino/types).
 RUN pnpm exec turbo run build --filter=@baile-latino/api
