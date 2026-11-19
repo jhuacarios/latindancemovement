@@ -480,14 +480,21 @@ export async function uploadAcademyVideo(
       contentHash: input.contentHash,
     },
   });
-  if (preview.thumb) {
-    await putWithProgress(ticket.thumbUploadUrl, ticket.thumbUploadHeaders, preview.thumb).catch(() => undefined);
+  try {
+    if (preview.thumb) {
+      await putWithProgress(ticket.thumbUploadUrl, ticket.thumbUploadHeaders, preview.thumb).catch(() => undefined);
+    }
+    await putWithProgress(ticket.uploadUrl, ticket.uploadHeaders, input.file, onProgress);
+    return await api<AcademyVideoDto>(`/academies/${academyId}/videos/${ticket.videoId}/complete`, {
+      method: 'POST',
+      body: preview.durationMs !== null ? { durationMs: preview.durationMs } : {},
+    });
+  } catch (e) {
+    // Si se corta, borra el registro: si no, queda "subiendo" ocupando cupo y cada
+    // reintento sumaba otro (así se juntaron 26 GB fantasma en una academia).
+    await api(`/academies/${academyId}/videos/${ticket.videoId}`, { method: 'DELETE' }).catch(() => undefined);
+    throw e;
   }
-  await putWithProgress(ticket.uploadUrl, ticket.uploadHeaders, input.file, onProgress);
-  return api<AcademyVideoDto>(`/academies/${academyId}/videos/${ticket.videoId}/complete`, {
-    method: 'POST',
-    body: preview.durationMs !== null ? { durationMs: preview.durationMs } : {},
-  });
 }
 
 // --- llamadas a la API ----------------------------------------------------------

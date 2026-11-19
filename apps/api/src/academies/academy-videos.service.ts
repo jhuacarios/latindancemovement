@@ -1,5 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
   publicName,
@@ -16,6 +25,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import { AcademiesService } from './academies.service';
 import { MediaStorageService } from './media-storage.service';
+import { staleUploadCutoff } from './upload-stale';
 import { AcademyCompatQueue, AcademyCompatService } from './academy-compat.service';
 import {
   CheckDuplicatesDto,
@@ -31,7 +41,6 @@ const THUMB_MIME = 'image/jpeg';
 /** Inicio del mensaje de un archivo repetido (ver lib/academies.ts del web). */
 export const DUPLICATE_PREFIX = 'Ya está en la galería:';
 /** Una subida que no se confirmó en este tiempo se da por abandonada (libera el cupo). */
-const STALE_UPLOAD_MS = 24 * 60 * 60 * 1000;
 
 const EXT: Record<string, string> = {
   'video/mp4': 'mp4',
@@ -114,8 +123,13 @@ const toDate = (ymd: string | null | undefined) => (ymd ? new Date(`${ymd}T12:00
  * bucket privado de media (URL firmada); para verlos, la API firma URLs de 1 h.
  * Los ve cualquier usuario con cuenta; suben y editan el dueño y los profesores.
  */
+const CLEANUP_EVERY_MS = 6 * 60 * 60 * 1000;
+
 @Injectable()
-export class AcademyVideosService {
+export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(AcademyVideosService.name);
+  private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly academies: AcademiesService,
@@ -170,10 +184,43 @@ export class AcademyVideosService {
     return Promise.all(rows.map((r) => this.toDto(r)));
   }
 
+  /**
+   * Limpieza de subidas abandonadas de TODAS las academias: al arrancar (con un
+   * respiro) y cada 6 h. Antes solo se limpiaban cuando alguien volvía a subir en
+   * esa academia, y mientras tanto inflaban el cupo.
+   */
+  onModuleInit(): void {
+    this.cleanupTimer = setTimeout(() => {
+      void this.cleanStaleAll();
+      this.cleanupTimer = setInterval(() => void this.cleanStaleAll(), CLEANUP_EVERY_MS);
+      this.cleanupTimer.unref?.();
+    }, 60_000);
+    this.cleanupTimer.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.cleanupTimer) clearTimeout(this.cleanupTimer);
+  }
+
+  async cleanStaleAll(): Promise<number> {
+    try {
+      const stale = await this.prisma.academyVideo.findMany({
+        where: { status: 'UPLOADING', createdAt: { lt: staleUploadCutoff() } },
+        select: { id: true, storageKey: true, thumbKey: true },
+      });
+      for (const v of stale) await this.removeRow(v);
+      if (stale.length) this.logger.log(`Subidas abandonadas borradas: ${stale.length}`);
+      return stale.length;
+    } catch (e) {
+      this.logger.warn(`No se pudieron limpiar las subidas abandonadas: ${(e as Error).message}`);
+      return 0;
+    }
+  }
+
   /** Borra las subidas abandonadas de la academia (liberan cupo). */
   private async cleanStale(academyId: string): Promise<void> {
     const stale = await this.prisma.academyVideo.findMany({
-      where: { academyId, status: 'UPLOADING', createdAt: { lt: new Date(Date.now() - STALE_UPLOAD_MS) } },
+      where: { academyId, status: 'UPLOADING', createdAt: { lt: staleUploadCutoff() } },
       select: { id: true, storageKey: true, thumbKey: true },
     });
     for (const v of stale) await this.removeRow(v);

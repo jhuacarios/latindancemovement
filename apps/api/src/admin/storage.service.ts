@@ -10,7 +10,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 
 const LIMITS_KEY = 'storage.limits';
-/** Por defecto: volumen de Postgres del plan Hobby de Railway y capa gratis de R2. Editables. */
+/** Por defecto: un tope prudente para la base (el disco del servidor es mayor) y la capa gratis de R2. Editables. */
 const DEFAULT_LIMITS: StorageLimits = { dbGb: 5, r2Gb: 10 };
 /** Precios de R2 (US$ por GB-mes). La capa gratis solo aplica a Standard. */
 const R2_STANDARD_USD = 0.015;

@@ -294,7 +294,7 @@ export default function AdminStoragePage() {
               <Meter
                 used={data.database.totalBytes}
                 limit={data.limits.dbGb * GB}
-                caption="volumen de Postgres en Railway"
+                caption="disco de la base en el servidor"
               />
             </Card>
             <Card className="space-y-3">
@@ -333,7 +333,7 @@ export default function AdminStoragePage() {
           <Card className="space-y-2">
             <h2 className="font-semibold">Límites</h2>
             <p className="text-xs text-neutral-500">
-              Ajústalos a tu plan: el volumen de Postgres lo ves en Railway; el de R2, en tu
+              Ajústalos a tu plan: el de la base, según el disco del servidor; el de R2, según tu
               presupuesto (10 GB es la capa gratis). Los medidores avisan al 70% y al 90%.
             </p>
             <LimitsForm key={`${data.limits.dbGb}-${data.limits.r2Gb}`} limits={data.limits} />

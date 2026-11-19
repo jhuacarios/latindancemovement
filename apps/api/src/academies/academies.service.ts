@@ -1,3 +1,4 @@
+import { countsForQuota } from './upload-stale';
 import { placeData, type PlaceFields } from '../common/place';
 import {
   BadRequestException,
@@ -252,6 +253,7 @@ export class AcademiesService {
     });
     const sums = await this.prisma.academyVideo.groupBy({
       by: ['academyId', 'location'],
+      where: countsForQuota(),
       _sum: { sizeBytes: true },
     });
     const used = (id: string, location: AcademyMediaLocation) =>
@@ -292,12 +294,12 @@ export class AcademiesService {
   }
 
   /**
-   * Bytes ocupados en la galería (los que se están subiendo también cuentan) o en
-   * la bóveda: cada una tiene su propio cupo.
+   * Bytes ocupados en la galería (los que se están subiendo también cuentan, salvo
+   * las subidas abandonadas) o en la bóveda: cada una tiene su propio cupo.
    */
   async usedBytes(academyId: string, location: AcademyMediaLocation = 'GALLERY'): Promise<number> {
     const agg = await this.prisma.academyVideo.aggregate({
-      where: { academyId, location },
+      where: { academyId, location, ...countsForQuota() },
       _sum: { sizeBytes: true },
     });
     return Number(agg._sum.sizeBytes ?? 0);
