@@ -48,7 +48,7 @@ export function StyleMixBar({ pct }: { pct: number }) {
         <span style={{ width: `${100 - pct}%`, background: SALSA }} />
       </span>
       <span className="text-neutral-400">
-        {pct >= 100 ? 'Bachata' : pct <= 0 ? 'Salsa' : `${pct}% B · ${100 - pct}% S`}
+        {pct >= 100 ? 'Bachata' : pct <= 0 ? 'Salsa' : `${pct}% Bachata · ${100 - pct}% Salsa`}
       </span>
     </span>
   );

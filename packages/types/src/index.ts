@@ -92,6 +92,15 @@ export interface PublicUser {
   id: string;
   email: string;
   name: string;
+  /** Apellido(s). */
+  lastName: string | null;
+  /** Nombre visible / pseudónimo. Es lo que ve la comunidad; `null` = se usa `name`. */
+  displayName: string | null;
+  /** Cumpleaños, solo día y mes (dato personal: solo el usuario y el SUPER_ADMIN). */
+  birthDay: number | null;
+  birthMonth: number | null;
+  /** RUT normalizado "12345678-5". Dato personal: solo para el propio usuario y el SUPER_ADMIN. */
+  rut: string | null;
   role: UserRole;
   /** Ciudad (área urbana, ver `CHILE_CITIES`). */
   city: string | null;
@@ -814,6 +823,8 @@ export interface FlyerExtraction {
 // (mismo modelo: ficha por región con horario/disponibilidad, estilos e Instagram)
 // ---------------------------------------------------------------------------
 export const COMMUNITY_PLACE_KINDS = ['OUTDOOR_SOCIAL', 'SALSOTECA', 'DJ'] as const;
+/** Máximo de fotos en la galería de un lugar (grilla 3×3). */
+export const COMMUNITY_PLACE_GALLERY_MAX = 9;
 export type CommunityPlaceKind = (typeof COMMUNITY_PLACE_KINDS)[number];
 
 /** Ficha de un directorio de la comunidad (lugar, junta o DJ), sin fecha única. */
@@ -839,6 +850,11 @@ export interface CommunityPlaceDto {
   /** Handles sin @ de las cuentas que lo organizan/anuncian. */
   instagramHandles: string[];
   hasPhoto: boolean;
+  /** Galería (máx. `COMMUNITY_PLACE_GALLERY_MAX`), en orden. Imagen: `/community/places/:id/gallery/:photoId`. */
+  galleryIds: string[];
+  /** Administrador (lo asigna el SUPER_ADMIN): cambia la foto y la galería. */
+  adminId: string | null;
+  adminName: string | null;
   active: boolean;
   createdById: string;
   createdByName: string;
@@ -1262,3 +1278,26 @@ export interface AcademyVideoReportDto {
 export * from './phrases';
 export * from './chile';
 export * from './style-mix';
+export * from './rut';
+
+/**
+ * Normaliza una cuenta de Instagram escrita a mano: "@Cuenta", "instagram.com/cuenta/"
+ * o el link completo → "cuenta". `null` si queda vacía o no es un usuario válido
+ * (letras, números, punto y guion bajo; máx. 30).
+ */
+export function normalizeInstagramHandle(raw: string): string | null {
+  const h = raw
+    .trim()
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '')
+    .replace(/^(www\.)?instagram\.com\//i, '')
+    .replace(/^@/, '')
+    .replace(/[/?#].*$/, '')
+    .toLowerCase();
+  return /^[a-z0-9._]{1,30}$/.test(h) ? h : null;
+}
+
+/** Nombre que ve la comunidad: el pseudónimo si lo tiene; si no, el nombre. */
+export function publicName(u: { name: string; displayName?: string | null }): string {
+  return u.displayName?.trim() || u.name;
+}
+export * from './birthday';

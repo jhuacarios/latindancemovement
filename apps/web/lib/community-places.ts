@@ -10,6 +10,8 @@ import { api, API_BASE, uploadForm } from './api';
 /** Textos de cada tipo de lugar (título, etiquetas del formulario, etc.). */
 export interface PlaceKindCopy {
   kind: CommunityPlaceKind;
+  /** Página del listado (para volver desde el detalle). */
+  listPath: string;
   emoji: string;
   title: string;
   intro: string;
@@ -39,6 +41,7 @@ export interface PlaceKindCopy {
 export const PLACE_KINDS: Record<CommunityPlaceKind, PlaceKindCopy> = {
   OUTDOOR_SOCIAL: {
     kind: 'OUTDOOR_SOCIAL',
+    listPath: '/community/outdoor',
     emoji: '🌴',
     title: 'Sociales al aire libre',
     intro:
@@ -60,6 +63,7 @@ export const PLACE_KINDS: Record<CommunityPlaceKind, PlaceKindCopy> = {
   },
   SALSOTECA: {
     kind: 'SALSOTECA',
+    listPath: '/community/salsotecas',
     emoji: '🪩',
     title: 'Salsotecas',
     intro:
@@ -80,6 +84,7 @@ export const PLACE_KINDS: Record<CommunityPlaceKind, PlaceKindCopy> = {
   },
   DJ: {
     kind: 'DJ',
+    listPath: '/music/djs',
     emoji: '🎧',
     title: 'DJs disponibles',
     intro:
@@ -233,6 +238,28 @@ export function replacePlacePhoto(id: string, photo: File) {
   const fd = new FormData();
   fd.append('file', photo);
   return uploadForm<CommunityPlaceDto>(`/community/places/${id}/photo`, fd, 'PUT');
+}
+
+/** URL de una foto de la galería (el id es único: se cachea para siempre). */
+export function galleryPhotoUrl(placeId: string, photoId: string): string {
+  return `${API_BASE}/community/places/${placeId}/gallery/${photoId}`;
+}
+
+export function addGalleryPhoto(id: string, photo: File) {
+  const fd = new FormData();
+  fd.append('file', photo);
+  return uploadForm<CommunityPlaceDto>(`/community/places/${id}/gallery`, fd);
+}
+
+export function removeGalleryPhoto(id: string, photoId: string) {
+  return api<CommunityPlaceDto>(`/community/places/${id}/gallery/${photoId}`, {
+    method: 'DELETE',
+  });
+}
+
+/** Ruta del detalle de un lugar. */
+export function placeDetailPath(id: string): string {
+  return `/community/places/${id}`;
 }
 
 export function deletePlace(id: string) {

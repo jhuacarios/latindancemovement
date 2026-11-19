@@ -7,7 +7,9 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  publicName,
   CHILE_REGIONS,
+  COMMUNITY_PLACE_GALLERY_MAX,
   stylesFromPct,
   type ChileRegion,
   type DanceStyle,
@@ -47,7 +49,10 @@ const SELECT = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  createdBy: { select: { name: true } },
+  createdBy: { select: { name: true, displayName: true } },
+  adminId: true,
+  admin: { select: { name: true, displayName: true } },
+  gallery: { select: { id: true }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
 } satisfies Prisma.CommunityPlaceSelect;
 
 type Row = Prisma.CommunityPlaceGetPayload<{ select: typeof SELECT }>;
@@ -77,9 +82,12 @@ export class CommunityPlacesService {
       description: r.description,
       instagramHandles: csv(r.instagramHandles),
       hasPhoto: Boolean(r.photoMime),
+      galleryIds: r.gallery.map((g) => g.id),
+      adminId: r.adminId,
+      adminName: r.admin ? publicName(r.admin) : null,
       active: r.active,
       createdById: r.createdById,
-      createdByName: r.createdBy.name,
+      createdByName: publicName(r.createdBy),
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -191,6 +199,39 @@ export class CommunityPlacesService {
   }
 
   /** Solo quien lo agregó o un SUPER_ADMIN puede modificarlo/eliminarlo. */
+  /** La foto y la galería: solo el SUPER_ADMIN o el administrador asignado. */
+  private async assertImageEditor(user: AuthUser, id: string): Promise<void> {
+    const r = await this.prisma.communityPlace.findUnique({
+      where: { id },
+      select: { adminId: true },
+    });
+    if (!r) throw new NotFoundException('Lugar no encontrado.');
+    if (user.role !== 'SUPER_ADMIN' && r.adminId !== user.id) {
+      throw new ForbiddenException('Solo el administrador de este lugar puede cambiar sus fotos.');
+    }
+  }
+
+  /** Asigna (por correo) o quita (`null`) el administrador. Solo SUPER_ADMIN (lo exige el controller). */
+  async setAdmin(id: string, email: string | null): Promise<CommunityPlaceDto> {
+    let adminId: string | null = null;
+    if (email?.trim()) {
+      const u = await this.prisma.user.findUnique({
+        where: { email: email.trim().toLowerCase() },
+        select: { id: true },
+      });
+      if (!u) {
+        throw new NotFoundException(
+          'No hay ninguna cuenta con ese correo. La persona debe entrar primero a Nectason.',
+        );
+      }
+      adminId = u.id;
+    }
+    const exists = await this.prisma.communityPlace.count({ where: { id } });
+    if (!exists) throw new NotFoundException('Lugar no encontrado.');
+    await this.prisma.communityPlace.update({ where: { id }, data: { adminId } });
+    return this.findOne(id);
+  }
+
   private async assertOwner(user: AuthUser, id: string): Promise<void> {
     const r = await this.prisma.communityPlace.findUnique({
       where: { id },
@@ -225,7 +266,7 @@ export class CommunityPlacesService {
     id: string,
     photo: UploadedImage | null,
   ): Promise<CommunityPlaceDto> {
-    await this.assertOwner(user, id);
+    await this.assertImageEditor(user, id);
     const r = await this.prisma.communityPlace.update({
       where: { id },
       data: {
@@ -235,6 +276,57 @@ export class CommunityPlacesService {
       select: SELECT,
     });
     return this.toDto(r);
+  }
+
+  // --- galería (hasta COMMUNITY_PLACE_GALLERY_MAX fotos) --------------------------
+
+  async addGalleryPhoto(
+    user: AuthUser,
+    id: string,
+    photo: UploadedImage,
+  ): Promise<CommunityPlaceDto> {
+    await this.assertImageEditor(user, id);
+    const count = await this.prisma.communityPlacePhoto.count({ where: { placeId: id } });
+    if (count >= COMMUNITY_PLACE_GALLERY_MAX) {
+      throw new BadRequestException(
+        `La galería admite hasta ${COMMUNITY_PLACE_GALLERY_MAX} fotos. Quita alguna para agregar otra.`,
+      );
+    }
+    const last = await this.prisma.communityPlacePhoto.findFirst({
+      where: { placeId: id },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    await this.prisma.communityPlacePhoto.create({
+      data: {
+        placeId: id,
+        data: photo.buffer.toString('base64'),
+        mime: photo.mime,
+        position: (last?.position ?? -1) + 1,
+      },
+    });
+    return this.findOne(id);
+  }
+
+  async removeGalleryPhoto(
+    user: AuthUser,
+    id: string,
+    photoId: string,
+  ): Promise<CommunityPlaceDto> {
+    await this.assertImageEditor(user, id);
+    const { count } = await this.prisma.communityPlacePhoto.deleteMany({
+      where: { id: photoId, placeId: id },
+    });
+    if (count === 0) throw new NotFoundException('Esa foto no está en la galería.');
+    return this.findOne(id);
+  }
+
+  async getGalleryPhoto(id: string, photoId: string): Promise<UploadedImage | null> {
+    const p = await this.prisma.communityPlacePhoto.findFirst({
+      where: { id: photoId, placeId: id },
+      select: { data: true, mime: true },
+    });
+    return p ? { buffer: Buffer.from(p.data, 'base64'), mime: p.mime } : null;
   }
 
   async remove(user: AuthUser, id: string): Promise<void> {

@@ -6,7 +6,7 @@ import type { DanceStyle } from './index';
 // ---------------------------------------------------------------------------
 
 /** Paso del deslizador (en %). */
-export const STYLE_MIX_STEP = 10;
+export const STYLE_MIX_STEP = 5;
 
 /** 100 → solo bachata · 0 → solo salsa · otro → ambos. */
 export function stylesFromPct(pct: number): DanceStyle[] {

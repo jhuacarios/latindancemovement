@@ -1,5 +1,6 @@
 'use client';
 
+import { publicName } from '@baile-latino/types';
 import { useAuth } from '@/lib/auth';
 import {
   StylePreferencePicker,
@@ -22,7 +23,7 @@ export function StylePreferenceModal() {
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-6 shadow-xl">
         <h2 className="text-xl font-bold">
-          ¡Bienvenido/a{user.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋
+          ¡Bienvenido/a{user.name ? `, ${publicName(user).split(' ')[0]}` : ''}! 👋
         </h2>
         <p className="mt-1 text-sm text-neutral-400">
           ¿Qué bailas más? Lo usamos para mostrarte lo que te interesa. Puedes

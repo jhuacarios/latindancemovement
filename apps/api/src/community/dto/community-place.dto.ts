@@ -4,6 +4,7 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsEmail,
   IsIn,
   IsInt,
   IsNumber,
@@ -123,4 +124,11 @@ export class QueryCommunityPlacesDto {
   @IsOptional()
   @IsIn(CHILE_REGION_CODES)
   region?: ChileRegion;
+}
+
+/** Asignar (correo) o quitar (null / vacío) el administrador del lugar. */
+export class SetPlaceAdminDto {
+  @IsOptional()
+  @IsEmail({}, { message: 'Escribe un correo válido.' })
+  email?: string | null;
 }

@@ -20,6 +20,11 @@ type UserRow = {
   id: string;
   email: string;
   name: string;
+  lastName: string | null;
+  displayName: string | null;
+  birthDay: number | null;
+  birthMonth: number | null;
+  rut: string | null;
   role: string;
   region: string | null;
   city: string | null;
@@ -37,6 +42,11 @@ function toPublicUser(u: UserRow): PublicUser {
     id: u.id,
     email: u.email,
     name: u.name,
+    lastName: u.lastName,
+    displayName: u.displayName,
+    birthDay: u.birthDay,
+    birthMonth: u.birthMonth,
+    rut: u.rut,
     role: u.role as UserRole,
     region: (u.region as ChileRegion) ?? null,
     city: u.city,

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  publicName,
   CHILE_REGIONS,
   type ChileRegion,
   type DanceStyle,
@@ -51,7 +52,7 @@ const EVENT_SELECT = {
   createdById: true,
   createdAt: true,
   updatedAt: true,
-  createdBy: { select: { name: true } },
+  createdBy: { select: { name: true, displayName: true } },
 } satisfies Prisma.EventSelect;
 
 type EventRow = Prisma.EventGetPayload<{ select: typeof EVENT_SELECT }>;
@@ -91,7 +92,7 @@ export class EventsService {
       status: e.status as EventStatus,
       hasFlyer: Boolean(e.flyerMime),
       createdById: e.createdById,
-      createdByName: e.createdBy.name,
+      createdByName: publicName(e.createdBy),
       createdAt: e.createdAt.toISOString(),
       updatedAt: e.updatedAt.toISOString(),
     };

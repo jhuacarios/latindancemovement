@@ -42,12 +42,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function CommunityPlaceModal({
   copy,
   existing,
+  canEditPhoto = true,
   onClose,
   onSaved,
 }: {
   copy: PlaceKindCopy;
   /** Lugar a editar; ausente = crear. */
   existing?: CommunityPlaceDto | null;
+  /** ¿Puede cambiar la foto? Al editar, solo el SUPER_ADMIN o el administrador del lugar. */
+  canEditPhoto?: boolean;
   onClose: () => void;
   onSaved: (s: CommunityPlaceDto) => void;
 }) {
@@ -293,16 +296,22 @@ export function CommunityPlaceModal({
                   {copy.emoji}
                 </div>
               )}
-              <div className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                  className="text-left text-xs text-brand hover:underline"
-                >
-                  {preview ? 'Cambiar foto' : 'Agregar foto (opcional)'}
-                </button>
-                <span className="text-[11px] text-neutral-500">JPG, PNG o WEBP · máx. 5 MB</span>
-              </div>
+              {!existing || canEditPhoto ? (
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                    className="text-left text-xs text-brand hover:underline"
+                  >
+                    {preview ? 'Cambiar foto' : 'Agregar foto (opcional)'}
+                  </button>
+                  <span className="text-[11px] text-neutral-500">JPG, PNG o WEBP · máx. 5 MB</span>
+                </div>
+              ) : (
+                <span className="text-xs text-neutral-500">
+                  La foto la cambia el administrador del lugar.
+                </span>
+              )}
               <input
                 ref={fileInput}
                 type="file"

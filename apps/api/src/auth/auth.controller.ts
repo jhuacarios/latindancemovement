@@ -16,6 +16,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { GoogleExchangeDto } from './dto/google-exchange.dto';
 import { StylePreferenceDto } from './dto/style-preference.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthUser } from './auth.types';
@@ -55,6 +56,13 @@ export class AuthController {
     @Body() dto: StylePreferenceDto,
   ) {
     return this.auth.setStylePreference(user.id, dto.stylePreference);
+  }
+
+  /** Edita el perfil propio (apellido, RUT). */
+  @Patch('me/profile')
+  @UseGuards(JwtAuthGuard)
+  updateProfile(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(user.id, dto);
   }
 
   // --- Login con Google -----------------------------------------------------

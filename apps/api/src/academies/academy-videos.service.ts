@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  publicName,
   ACADEMY_PHOTO_MAX_BYTES,
   type AcademyCompatStatus,
   type AcademyMediaKind,
@@ -64,7 +65,7 @@ export const VIDEO_SELECT = {
   compatKey: true,
   compatSizeBytes: true,
   uploadedById: true,
-  uploadedBy: { select: { name: true } },
+  uploadedBy: { select: { name: true, displayName: true } },
   createdAt: true,
 } satisfies Prisma.AcademyVideoSelect;
 
@@ -145,7 +146,7 @@ export class AcademyVideosService {
       durationMs: v.durationMs,
       thumbUrl: v.thumbKey && this.media.enabled ? await this.media.viewUrl(v.thumbKey) : null,
       uploadedById: v.uploadedById,
-      uploadedByName: v.uploadedBy.name,
+      uploadedByName: publicName(v.uploadedBy),
       createdAt: v.createdAt.toISOString(),
     };
   }

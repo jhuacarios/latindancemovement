@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { USER_ROLES, type UserRole } from '@baile-latino/types';
+import { publicName, USER_ROLES, type UserRole } from '@baile-latino/types';
 import { useAuth } from '@/lib/auth';
 import { Card, Select, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
@@ -344,11 +344,11 @@ export default function PanelLayout({
             <WhatsNew />
             <Link
               href="/profile"
-              title={`Mi perfil — ${user.name}`}
+              title={`Mi perfil — ${publicName(user)}`}
               aria-label="Mi perfil"
               className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white transition hover:bg-brand-dark"
             >
-              {user.name?.trim()?.charAt(0).toUpperCase() || '👤'}
+              {publicName(user).trim().charAt(0).toUpperCase() || '👤'}
             </Link>
             <button
               type="button"

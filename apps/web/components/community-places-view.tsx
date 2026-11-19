@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { pctFromStyles, placeLabel } from '@baile-latino/types';
 import type {
@@ -13,13 +15,55 @@ import { useAuth } from '@/lib/auth';
 import { usePermissions } from '@/lib/permissions';
 import { useEffectiveRole } from '@/lib/view-as-role';
 import { mapsSearchLink } from '@/lib/maps';
-import { deletePlace, placePhotoUrl, type PlaceKindCopy } from '@/lib/community-places';
+import {
+  deletePlace,
+  placeDetailPath,
+  placePhotoUrl,
+  type PlaceKindCopy,
+} from '@/lib/community-places';
 import { Button, Card, Spinner } from '@/components/ui';
 import { StyleMixBar } from '@/components/style-mix';
 import { clsx } from '@/components/clsx';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { CommunityPlaceModal } from '@/components/community-place-modal';
 import { InstagramLink } from '@/components/instagram-link';
+
+/**
+ * Texto cortado en 2 líneas con "Ver más" para leerlo completo. El botón solo
+ * aparece si el texto realmente no cabe. Respeta los saltos de línea.
+ */
+function ExpandableText({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, open]);
+
+  return (
+    <div className="mt-1 text-xs text-neutral-400">
+      <div ref={ref} className={clsx('whitespace-pre-line', !open && 'line-clamp-2')}>
+        {text}
+      </div>
+      {(overflows || open) && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="mt-0.5 font-medium text-neutral-300 hover:text-white"
+        >
+          {open ? 'Ver menos' : 'Ver más'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function PlaceCard({
   p,
@@ -34,6 +78,8 @@ function PlaceCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const router = useRouter();
+  const href = placeDetailPath(p.id);
   const img = placePhotoUrl(p);
   // Sociales: "lugar · ciudad"; salsotecas: "dirección · ciudad" (la referencia va aparte).
   // DJs: solo ciudad, y la academia/colectivo aparte.
@@ -56,8 +102,13 @@ function PlaceCard({
       });
   return (
     <div
+      // Toda la tarjeta abre el detalle, salvo sus links y botones (Instagram, Editar…).
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('a, button')) return;
+        router.push(href);
+      }}
       className={clsx(
-        'flex gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3',
+        'flex cursor-pointer gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 transition hover:border-neutral-600',
         !p.active && 'opacity-60',
       )}
     >
@@ -73,7 +124,9 @@ function PlaceCard({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <div className="font-semibold">{p.name}</div>
+          <Link href={href} className="font-semibold hover:underline">
+            {p.name}
+          </Link>
           {!p.active && (
             <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-400">
               {copy.inactiveLabel}
@@ -84,7 +137,7 @@ function PlaceCard({
         {extra && <div className="text-xs text-neutral-500">{extra}</div>}
         {p.schedule && <div className="text-sm text-brand">{p.schedule}</div>}
         {p.description && (
-          <div className="mt-1 line-clamp-2 text-xs text-neutral-400">{p.description}</div>
+          <ExpandableText text={p.description} />
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           {(p.bachataPct != null || p.styles.length > 0) && (
@@ -291,6 +344,10 @@ export function CommunityPlacesView({ copy }: { copy: PlaceKindCopy }) {
       {modal && (
         <CommunityPlaceModal
           copy={copy}
+          canEditPhoto={Boolean(
+            user &&
+              (user.role === 'SUPER_ADMIN' || (modal.existing && modal.existing.adminId === user.id)),
+          )}
           existing={modal.existing}
           onClose={() => setModal(null)}
           onSaved={() => {

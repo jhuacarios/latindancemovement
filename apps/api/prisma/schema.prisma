@@ -22,6 +22,13 @@ model User {
   googleId         String?  @unique // vinculación con cuenta de Google
   emailVerified    Boolean  @default(false) // true si un proveedor (Google) verificó el email
   name             String
+  lastName         String? // apellido(s)
+  displayName      String? // nombre visible / pseudónimo: lo que ve la comunidad (vacío = `name`)
+  birthDay         Int? // cumpleaños: día (1–31); dato personal, solo usuario y SUPER_ADMIN
+  birthMonth       Int? // 1–12 (sin año, a propósito)
+  /// RUT normalizado "12345678-5". Dato personal: solo lo ve el usuario y el SUPER_ADMIN.
+  /// Único por cuenta, pero lo revisa el service (un @unique haría fallar el `db push` del deploy).
+  rut              String?
   role             String   @default("BAILARIN") // UserRole
   region           String? // ChileRegion (code)
   city             String? // ciudad (área urbana, CHILE_CITIES de @baile-latino/types)
@@ -35,26 +42,28 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  tracksCreated     Track[]               @relation("TrackCreatedBy")
-  tracksAsArtist    Track[]               @relation("TrackArtist")
-  ownedTracks       Track[]               @relation("TrackOwner")
-  library           UserTrack[]
-  trackTags         TrackTag[]
-  playlists         Playlist[]
-  songRequests      SongRequest[]
-  requestVotes      RequestVote[]
-  ytAccessRequest   YoutubeAccessRequest?
-  events            Event[]               @relation("EventCreatedBy")
-  communityPlaces   CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
-  chatMemberships   ChatParticipant[]
-  chatMessages      ChatMessage[]         @relation("ChatMessageSender")
-  audioFiles        AudioFile[]
-  academies         AcademyMember[]
-  academyVideos     AcademyVideo[]        @relation("AcademyVideoUploadedBy")
-  videoReports      AcademyVideoReport[]
-  academyShareLinks AcademyShareLink[]
+  tracksCreated      Track[]               @relation("TrackCreatedBy")
+  tracksAsArtist     Track[]               @relation("TrackArtist")
+  ownedTracks        Track[]               @relation("TrackOwner")
+  library            UserTrack[]
+  trackTags          TrackTag[]
+  playlists          Playlist[]
+  songRequests       SongRequest[]
+  requestVotes       RequestVote[]
+  ytAccessRequest    YoutubeAccessRequest?
+  events             Event[]               @relation("EventCreatedBy")
+  communityPlaces    CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
+  administeredPlaces CommunityPlace[]      @relation("CommunityPlaceAdmin")
+  chatMemberships    ChatParticipant[]
+  chatMessages       ChatMessage[]         @relation("ChatMessageSender")
+  audioFiles         AudioFile[]
+  academies          AcademyMember[]
+  academyVideos      AcademyVideo[]        @relation("AcademyVideoUploadedBy")
+  videoReports       AcademyVideoReport[]
+  academyShareLinks  AcademyShareLink[]
 
   @@index([role])
+  @@index([rut])
 }
 
 /**
@@ -295,7 +304,7 @@ model Event {
 /// disponible…). Sin fecha única: horario/disponibilidad en texto y las cuentas
 /// de Instagram asociadas. `kind` distingue el tipo (CommunityPlaceKind).
 model CommunityPlace {
-  id               String   @id @default(cuid())
+  id               String                @id @default(cuid())
   kind             String // CommunityPlaceKind: OUTDOOR_SOCIAL | SALSOTECA | DJ
   name             String
   region           String // ChileRegion (code)
@@ -307,19 +316,36 @@ model CommunityPlace {
   place            String?
   address          String?
   schedule         String? // texto libre, ej. "Domingos desde las 17:00"
-  styles           String   @default("") // CSV de DanceStyle
+  styles           String                @default("") // CSV de DanceStyle
   description      String?
-  instagramHandles String   @default("") // CSV de handles sin @
+  instagramHandles String                @default("") // CSV de handles sin @
   photoData        String? // base64, sin prefijo data:
   photoMime        String?
-  active           Boolean  @default(true)
+  gallery          CommunityPlacePhoto[]
+  active           Boolean               @default(true)
   createdById      String
-  createdBy        User     @relation("CommunityPlaceCreatedBy", fields: [createdById], references: [id])
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdBy        User                  @relation("CommunityPlaceCreatedBy", fields: [createdById], references: [id])
+  /// Administrador asignado por el SUPER_ADMIN: puede cambiar la foto y la galería.
+  adminId          String?
+  admin            User?                 @relation("CommunityPlaceAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   @@index([kind, region])
   @@index([createdById])
+}
+
+/// Galería del lugar (hasta 9 fotos; en el detalle se ven en grilla 3×3).
+model CommunityPlacePhoto {
+  id        String         @id @default(cuid())
+  placeId   String
+  place     CommunityPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  data      String // base64, sin prefijo data:
+  mime      String
+  position  Int // orden en la grilla (0 = primera)
+  createdAt DateTime       @default(now())
+
+  @@index([placeId, position])
 }
 
 /// Conversación 1 a 1. `pairKey` = los dos userId ordenados y unidos con "|",
@@ -474,25 +500,25 @@ model SongMarker {
 /// Academia de baile: perfil público (para usuarios con cuenta), horario de clases
 /// y videos de las clases. La administran su dueño y los profesores que agregue.
 model Academy {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
   region          String // ChileRegion (code)
   city            String? // ciudad (área urbana, CHILE_CITIES de @baile-latino/types)
   commune         String? // comuna dentro de la ciudad
   address         String?
-  styles          String   @default("") // CSV de DanceStyle
+  styles          String    @default("") // CSV de DanceStyle
   description     String?
   instagramHandle String? // sin @
   logoData        String? // base64, sin prefijo data:
   logoMime        String?
-  storageQuotaMb  Int      @default(51200) // cupo de fotos y videos (50 GB)
-  vaultQuotaMb    Int      @default(204800) // cupo de la bóveda (200 GB): archivo barato, solo descarga
+  storageQuotaMb  Int       @default(51200) // cupo de fotos y videos (50 GB)
+  vaultQuotaMb    Int       @default(204800) // cupo de la bóveda (200 GB): archivo barato, solo descarga
   // Plan Director (la suscripción que paga el dueño): vigente hasta esta fecha.
   // null o vencido = solo lectura (se ve y se descarga, no se sube ni se mueve).
   // Por ahora lo activa el SUPER_ADMIN a mano (Admin → Academias).
   planExpiresAt   DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   members    AcademyMember[]
   classes    AcademyClass[]

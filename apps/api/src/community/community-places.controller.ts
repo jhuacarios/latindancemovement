@@ -25,6 +25,7 @@ import { CommunityPlacesService } from './community-places.service';
 import {
   CreateCommunityPlaceDto,
   QueryCommunityPlacesDto,
+  SetPlaceAdminDto,
   UpdateCommunityPlaceDto,
 } from './dto/community-place.dto';
 
@@ -96,6 +97,55 @@ export class CommunityPlacesController {
   @UseGuards(JwtAuthGuard)
   clearPhoto(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.places.setPhoto(user, id, null);
+  }
+
+  /** Asigna o quita el administrador del lugar (puede cambiar foto y galería). */
+  @Patch(':id/admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  setAdmin(@Param('id') id: string, @Body() dto: SetPlaceAdminDto) {
+    return this.places.setAdmin(id, dto.email?.trim() || null);
+  }
+
+  /** Foto de la galería (pública, para <img>). El id no cambia: se cachea largo. */
+  @Get(':id/gallery/:photoId')
+  async galleryPhoto(
+    @Param('id') id: string,
+    @Param('photoId') photoId: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const f = await this.places.getGalleryPhoto(id, photoId);
+    if (!f) {
+      reply.code(404).send({ message: 'Esa foto no está en la galería.' });
+      return;
+    }
+    reply
+      .header('Content-Type', f.mime)
+      .header('Cache-Control', 'public, max-age=31536000, immutable')
+      .send(f.buffer);
+  }
+
+  /** Agrega una foto a la galería. multipart: `file`. */
+  @Post(':id/gallery')
+  @UseGuards(JwtAuthGuard)
+  async addGalleryPhoto(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Req() req: FastifyRequest,
+  ) {
+    const { file } = await readMultipart(req);
+    if (!file) throw new BadRequestException('Sube una imagen.');
+    return this.places.addGalleryPhoto(user, id, file);
+  }
+
+  @Delete(':id/gallery/:photoId')
+  @UseGuards(JwtAuthGuard)
+  removeGalleryPhoto(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('photoId') photoId: string,
+  ) {
+    return this.places.removeGalleryPhoto(user, id, photoId);
   }
 
   @Delete(':id')

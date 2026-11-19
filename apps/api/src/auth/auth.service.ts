@@ -17,6 +17,7 @@ import type {
   StylePreference,
   UserRole,
 } from '@baile-latino/types';
+import { birthdayError, normalizeInstagramHandle, normalizeRut } from '@baile-latino/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -25,6 +26,11 @@ type UserRecord = {
   id: string;
   email: string;
   name: string;
+  lastName: string | null;
+  displayName: string | null;
+  birthDay: number | null;
+  birthMonth: number | null;
+  rut: string | null;
   role: string;
   region: string | null;
   city: string | null;
@@ -371,6 +377,11 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
+      lastName: user.lastName,
+      displayName: user.displayName,
+      birthDay: user.birthDay,
+      birthMonth: user.birthMonth,
+      rut: user.rut,
       role: user.role as UserRole,
       region: (user.region as ChileRegion) ?? null,
       city: user.city,
@@ -398,6 +409,71 @@ export class AuthService {
       where: { id: userId },
       data: { stylePreference },
     });
+    return this.toPublicUser(user);
+  }
+
+  /** Nombre, nombre visible, apellido y RUT del propio usuario. El RUT se valida (dígito verificador) y es único. */
+  async updateProfile(
+    userId: string,
+    dto: {
+      name?: string;
+      displayName?: string | null;
+      lastName?: string | null;
+      instagramHandle?: string | null;
+      birthDay?: number | null;
+      birthMonth?: number | null;
+      rut?: string | null;
+    },
+  ): Promise<PublicUser> {
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (name.length < 2) throw new BadRequestException('El nombre debe tener al menos 2 letras.');
+      data.name = name;
+    }
+    if (dto.displayName !== undefined) data.displayName = dto.displayName?.trim() || null;
+    if (dto.lastName !== undefined) data.lastName = dto.lastName?.trim() || null;
+    if (dto.birthDay !== undefined || dto.birthMonth !== undefined) {
+      // Se mandan día y mes juntos; lo que no venga, se borra.
+      const err = birthdayError(dto.birthDay, dto.birthMonth);
+      if (err) throw new BadRequestException(err);
+      data.birthDay = dto.birthDay ?? null;
+      data.birthMonth = dto.birthMonth ?? null;
+    }
+    if (dto.instagramHandle !== undefined) {
+      const raw = dto.instagramHandle?.trim() ?? '';
+      if (!raw) {
+        data.instagramHandle = null;
+      } else {
+        const h = normalizeInstagramHandle(raw);
+        if (!h) {
+          throw new BadRequestException(
+            'Esa cuenta de Instagram no es válida (solo letras, números, punto y guion bajo).',
+          );
+        }
+        data.instagramHandle = h;
+      }
+    }
+    if (dto.rut !== undefined) {
+      const raw = dto.rut?.trim() ?? '';
+      if (!raw) {
+        data.rut = null;
+      } else {
+        const rut = normalizeRut(raw);
+        if (!rut) {
+          throw new BadRequestException(
+            'El RUT no es válido: revisa los números y el dígito verificador.',
+          );
+        }
+        const taken = await this.prisma.user.findFirst({
+          where: { rut, id: { not: userId } },
+          select: { id: true },
+        });
+        if (taken) throw new ConflictException('Ese RUT ya está registrado en otra cuenta.');
+        data.rut = rut;
+      }
+    }
+    const user = await this.prisma.user.update({ where: { id: userId }, data });
     return this.toPublicUser(user);
   }
 }

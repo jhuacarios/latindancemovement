@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { publicName } from '@baile-latino/types';
 import type {
   ChatConversationDto,
   ChatMessageDto,
@@ -19,6 +20,7 @@ import type { UploadedImage } from '../common/multipart';
 const USER_SELECT = {
   id: true,
   name: true,
+  displayName: true,
   role: true,
   city: true,
   commune: true,
@@ -55,7 +57,7 @@ export class ChatService {
   private toUser(u: UserRow): ChatUser {
     return {
       id: u.id,
-      name: u.name,
+      name: publicName(u),
       role: u.role as UserRole,
       city: u.city,
       commune: u.commune,
@@ -86,6 +88,7 @@ export class ChatService {
           ? {
               OR: [
                 { name: { contains: term, mode: 'insensitive' } },
+                { displayName: { contains: term, mode: 'insensitive' } },
                 { instagramHandle: { contains: term, mode: 'insensitive' } },
               ],
             }
