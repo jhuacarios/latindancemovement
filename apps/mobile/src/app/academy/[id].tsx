@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Button } from '@/components/button';
 import { useAuth } from '@/lib/auth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -96,6 +96,11 @@ function EnrollRow({ academyId, c, manages }: { academyId: string; c: AcademyCla
       {c.myEnrollment === 'ACCEPTED' ? (
         <View style={styles.row}>
           <Text style={[styles.pill, { color: colors.clave, backgroundColor: '#1a7a4e33' }]}>✓ Inscrito</Text>
+          {c.chatId && (
+            <Text style={styles.link} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: c.chatId! } })}>
+              💬 Chat de la clase
+            </Text>
+          )}
           <Text
             style={styles.linkMuted}
             onPress={() =>

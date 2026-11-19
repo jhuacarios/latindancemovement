@@ -30,7 +30,14 @@
         }
       ],
       "expo-secure-store",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Nectason usa tus fotos para enviarlas por el chat.",
+          "cameraPermission": "Nectason usa la cámara para tomar fotos y enviarlas por el chat."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

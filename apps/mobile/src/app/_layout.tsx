@@ -45,6 +45,26 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="login" options={{ gestureEnabled: false }} />
             <Stack.Screen
+              name="chat/[id]"
+              options={{
+                headerShown: true,
+                headerBackTitle: 'Mensajes',
+                headerStyle: { backgroundColor: colors.selva },
+                headerTintColor: colors.clave,
+              }}
+            />
+            <Stack.Screen
+              name="chat/new"
+              options={{
+                headerShown: true,
+                title: 'Nuevo chat',
+                presentation: 'modal',
+                headerStyle: { backgroundColor: colors.selva },
+                headerTintColor: colors.clave,
+                headerTitleStyle: { color: colors.text },
+              }}
+            />
+            <Stack.Screen
               name="academy/[id]"
               options={{
                 headerShown: true,

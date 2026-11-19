@@ -1,0 +1,370 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ChatMessageDto } from '@baile-latino/types';
+import { ApiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import {
+  POLL_THREAD_MS,
+  chatApi,
+  chatKeys,
+  conversationTitle,
+  dayKey,
+  formatDayLabel,
+  formatMsgTime,
+  messageImageSource,
+} from '@/lib/chat';
+import { colors, radius, space, ui } from '@/lib/theme';
+
+type Picked = { uri: string; width: number; height: number };
+
+/** Achica la foto (lado mayor 1600 px, JPEG 80%) antes de enviarla. */
+async function prepare(asset: ImagePicker.ImagePickerAsset): Promise<Picked> {
+  const big = Math.max(asset.width, asset.height);
+  const ctx = ImageManipulator.manipulate(asset.uri);
+  if (big > 1600) {
+    ctx.resize(asset.width >= asset.height ? { width: 1600 } : { height: 1600 });
+  }
+  const ref = await ctx.renderAsync();
+  const out = await ref.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
+  return { uri: out.uri, width: out.width, height: out.height };
+}
+
+function Bubble({
+  m,
+  mine,
+  showSender,
+  convId,
+  maxWidth,
+}: {
+  m: ChatMessageDto;
+  mine: boolean;
+  showSender: boolean;
+  convId: string;
+  maxWidth: number;
+}) {
+  const imgW = Math.min(maxWidth - 16, 260);
+  const imgH = m.imageWidth && m.imageHeight ? Math.round((imgW * m.imageHeight) / m.imageWidth) : imgW;
+  return (
+    <View style={[styles.bubbleRow, mine ? { justifyContent: 'flex-end' } : null]}>
+      <View style={[styles.bubble, mine ? styles.mine : styles.theirs, { maxWidth }]}>
+        {showSender && <Text style={styles.sender}>{m.senderName}</Text>}
+        {m.hasImage && (
+          <Image
+            source={messageImageSource(convId, m.id)}
+            style={{ width: imgW, height: Math.min(imgH, 360), borderRadius: radius.md, marginBottom: m.body ? 6 : 0 }}
+            contentFit="cover"
+          />
+        )}
+        {m.body ? <Text style={[styles.text, mine && { color: colors.white }]}>{m.body}</Text> : null}
+        <Text style={[styles.meta, mine && { color: '#ffffffb3' }]}>{formatMsgTime(m.createdAt)}</Text>
+      </View>
+    </View>
+  );
+}
+
+export default function ChatThreadScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+
+  const conversations = useQuery({ queryKey: chatKeys.conversations, queryFn: chatApi.conversations });
+  const conv = conversations.data?.find((c) => c.id === id) ?? null;
+  const isGroup = conv ? conv.kind !== 'DIRECT' : false;
+  const head = conv ? conversationTitle(conv) : { title: 'Chat', subtitle: '' };
+
+  const [messages, setMessages] = useState<ChatMessageDto[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [text, setText] = useState('');
+  const [pending, setPending] = useState<Picked | null>(null);
+  const [sending, setSending] = useState(false);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  const refreshLists = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: chatKeys.conversations });
+    void qc.invalidateQueries({ queryKey: chatKeys.unread });
+  }, [qc]);
+
+  // Carga inicial + marcar leído.
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    chatApi
+      .messages(id)
+      .then((page) => {
+        if (!alive) return;
+        setMessages(page.messages);
+        setCursor(page.nextCursor);
+        setLoading(false);
+        void chatApi.markRead(id).then(refreshLists);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setError(e instanceof ApiError ? e.message : 'No se pudo cargar el chat.');
+        setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [id, refreshLists]);
+
+  // Polling de mensajes nuevos.
+  useEffect(() => {
+    if (loading) return;
+    const t = setInterval(async () => {
+      const last = messagesRef.current[messagesRef.current.length - 1];
+      const fresh = last
+        ? await chatApi.since(id, last.id).catch(() => [])
+        : (await chatApi.messages(id).catch(() => null))?.messages ?? [];
+      if (!fresh.length) return;
+      setMessages((prev) => {
+        const known = new Set(prev.map((m) => m.id));
+        return [...prev, ...fresh.filter((m) => !known.has(m.id))];
+      });
+      if (fresh.some((m) => m.senderId !== user?.id)) void chatApi.markRead(id).then(refreshLists);
+    }, POLL_THREAD_MS);
+    return () => clearInterval(t);
+  }, [id, loading, user?.id, refreshLists]);
+
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await chatApi.messages(id, cursor);
+      setMessages((prev) => [...page.messages, ...prev]);
+      setCursor(page.nextCursor);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const pick = async (from: 'camera' | 'library') => {
+    try {
+      const perm =
+        from === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permiso necesario', from === 'camera' ? 'Activa el acceso a la cámara.' : 'Activa el acceso a tus fotos.');
+        return;
+      }
+      const res =
+        from === 'camera'
+          ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 })
+          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      if (res.canceled || !res.assets[0]) return;
+      setPending(await prepare(res.assets[0]));
+    } catch {
+      Alert.alert('No se pudo', 'No se pudo preparar la foto.');
+    }
+  };
+
+  const send = async () => {
+    const body = text.trim();
+    if ((!body && !pending) || sending) return;
+    setSending(true);
+    try {
+      const m = pending ? await chatApi.sendImage(id, pending, body) : await chatApi.send(id, body);
+      setMessages((prev) => [...prev, m]);
+      setText('');
+      setPending(null);
+      refreshLists();
+    } catch (e) {
+      Alert.alert('No se envió', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Lista invertida: el más nuevo primero (queda abajo).
+  const data = useMemo(() => [...messages].reverse(), [messages]);
+  const bubbleMax = Math.round(width * 0.78);
+  const placeholder = !conv
+    ? 'Escribe un mensaje…'
+    : conv.kind === 'CHANNEL'
+      ? `Escribe en ${head.title}…`
+      : conv.kind === 'CLASS'
+        ? 'Escribe a la clase…'
+        : `Escríbele a ${head.title}…`;
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerTitle: () => (
+            <View style={{ alignItems: Platform.OS === 'ios' ? 'center' : 'flex-start' }}>
+              <Text style={styles.headTitle} numberOfLines={1}>{head.title}</Text>
+              {head.subtitle ? <Text style={styles.headSub} numberOfLines={1}>{head.subtitle}</Text> : null}
+            </View>
+          ),
+        }}
+      />
+      <KeyboardAvoidingView
+        style={ui.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
+      >
+        {loading ? (
+          <ActivityIndicator color={colors.clave} style={{ marginTop: space.xl }} />
+        ) : error ? (
+          <Text style={[ui.error, { padding: space.lg }]}>{error}</Text>
+        ) : (
+          <FlatList
+            data={data}
+            inverted
+            keyExtractor={(m) => m.id}
+            contentContainerStyle={{ padding: space.md, gap: 4 }}
+            onEndReached={() => void loadMore()}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.clave} /> : undefined}
+            ListEmptyComponent={
+              <Text style={[ui.muted, { textAlign: 'center', transform: [{ scaleY: -1 }] }]}>
+                Todavía no hay mensajes. ¡Rompe el hielo!
+              </Text>
+            }
+            renderItem={({ item: m, index }) => {
+              const older = data[index + 1];
+              const mine = m.senderId === user?.id;
+              const newDay = !older || dayKey(older.createdAt) !== dayKey(m.createdAt);
+              const showSender = isGroup && !mine && (newDay || older?.senderId !== m.senderId);
+              return (
+                <View>
+                  {newDay && <Text style={styles.day}>{formatDayLabel(m.createdAt)}</Text>}
+                  <Bubble m={m} mine={mine} showSender={showSender} convId={id} maxWidth={bubbleMax} />
+                </View>
+              );
+            }}
+          />
+        )}
+
+        {pending && (
+          <View style={styles.pendingBar}>
+            <Image source={pending.uri} style={styles.pendingImg} contentFit="cover" />
+            <Text style={[ui.small, { flex: 1 }]}>Foto lista para enviar</Text>
+            <Pressable onPress={() => setPending(null)} hitSlop={10}>
+              <Text style={{ color: colors.textMuted, fontSize: 18 }}>✕</Text>
+            </Pressable>
+          </View>
+        )}
+
+        <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
+          <Pressable
+            onPress={() =>
+              Alert.alert('Enviar foto', undefined, [
+                { text: 'Tomar foto', onPress: () => void pick('camera') },
+                { text: 'Elegir de la galería', onPress: () => void pick('library') },
+                { text: 'Cancelar', style: 'cancel' },
+              ])
+            }
+            style={styles.iconBtn}
+            accessibilityLabel="Adjuntar foto"
+          >
+            <Text style={{ fontSize: 20 }}>📷</Text>
+          </Pressable>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            placeholder={pending ? 'Agrega un texto (opcional)…' : placeholder}
+            placeholderTextColor={colors.textFaint}
+            multiline
+            maxLength={2000}
+            style={styles.input}
+          />
+          <Pressable
+            onPress={() => void send()}
+            disabled={sending || (!text.trim() && !pending)}
+            style={[styles.sendBtn, (sending || (!text.trim() && !pending)) && { opacity: 0.4 }]}
+            accessibilityLabel="Enviar"
+          >
+            {sending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.sendText}>➤</Text>}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  headTitle: { color: colors.text, fontSize: 16, fontWeight: '700', maxWidth: 240 },
+  headSub: { color: colors.textFaint, fontSize: 12, maxWidth: 240 },
+  day: {
+    alignSelf: 'center',
+    color: colors.textFaint,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginVertical: space.sm,
+  },
+  bubbleRow: { flexDirection: 'row' },
+  bubble: { borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
+  mine: { backgroundColor: colors.brand, borderBottomRightRadius: 6 },
+  theirs: { backgroundColor: colors.surface, borderBottomLeftRadius: 6 },
+  sender: { color: colors.bachata, fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  text: { color: colors.text, fontSize: 15, lineHeight: 20 },
+  meta: { color: colors.textFaint, fontSize: 10, alignSelf: 'flex-end', marginTop: 2 },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+    backgroundColor: colors.selva,
+  },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  input: {
+    flex: 1,
+    maxHeight: 120,
+    minHeight: 40,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+    color: colors.text,
+    fontSize: 15,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendText: { color: colors.white, fontSize: 18 },
+  pendingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
+  pendingImg: { width: 48, height: 48, borderRadius: radius.sm },
+});

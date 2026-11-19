@@ -212,6 +212,11 @@ function MyClasses() {
                 </Text>
               </View>
               <Text
+                onPress={
+                  e.status === 'ACCEPTED' && e.chatId
+                    ? () => router.push({ pathname: '/chat/[id]', params: { id: e.chatId! } })
+                    : undefined
+                }
                 style={[
                   styles.status,
                   e.status === 'ACCEPTED'
@@ -219,7 +224,7 @@ function MyClasses() {
                     : { color: colors.bachata, backgroundColor: '#f59e0b22' },
                 ]}
               >
-                {e.status === 'ACCEPTED' ? '✓ Inscrito' : '⏳ Pendiente'}
+                {e.status === 'ACCEPTED' ? (e.chatId ? '💬 Chat' : '✓ Inscrito') : '⏳ Pendiente'}
               </Text>
             </Pressable>
           );
