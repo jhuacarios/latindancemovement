@@ -4,18 +4,14 @@ import type { ChileRegion } from './index';
 // Geografía de Chile: Región → Ciudad → Comuna
 // ---------------------------------------------------------------------------
 // Las 346 comunas oficiales, agrupadas por "ciudad". La ciudad no es una
-// división oficial: acá es el área urbana que la gente reconoce. Las grandes
-// conurbaciones (Santiago, Gran Valparaíso, Gran Concepción…) agrupan varias
-// comunas; cualquier otra comuna es su propia ciudad (mismo nombre).
+// división oficial: es como la gente nombra el lugar. Solo Santiago agrupa
+// varias comunas (alguien de Ñuñoa dice "vivo en Santiago"); en el resto la
+// gente nombra la comuna (Viña del Mar, Concepción…), así que cada comuna es
+// su propia ciudad y el formulario no pide la comuna aparte.
 // En la DB se guardan los NOMBRES (`city` y `commune`), no códigos.
 
-/** Áreas urbanas de varias comunas, por región. */
+/** Ciudades de varias comunas, por región. */
 const CONURBATIONS: Partial<Record<ChileRegion, Record<string, string[]>>> = {
-  TARAPACA: { 'Iquique-Alto Hospicio': ['Iquique', 'Alto Hospicio'] },
-  COQUIMBO: { 'La Serena-Coquimbo': ['La Serena', 'Coquimbo'] },
-  VALPARAISO: {
-    'Gran Valparaíso': ['Valparaíso', 'Viña del Mar', 'Concón', 'Quilpué', 'Villa Alemana'],
-  },
   METROPOLITANA: {
     Santiago: [
       'Santiago', 'Cerrillos', 'Cerro Navia', 'Conchalí', 'El Bosque', 'Estación Central',
@@ -26,15 +22,6 @@ const CONURBATIONS: Partial<Record<ChileRegion, Record<string, string[]>>> = {
       'Vitacura', 'Puente Alto', 'San Bernardo',
     ],
   },
-  OHIGGINS: { 'Gran Rancagua': ['Rancagua', 'Machalí'] },
-  NUBLE: { 'Gran Chillán': ['Chillán', 'Chillán Viejo'] },
-  BIOBIO: {
-    'Gran Concepción': [
-      'Concepción', 'Talcahuano', 'Hualpén', 'San Pedro de la Paz', 'Chiguayante',
-      'Penco', 'Tomé', 'Coronel', 'Lota', 'Hualqui',
-    ],
-  },
-  ARAUCANIA: { 'Gran Temuco': ['Temuco', 'Padre Las Casas'] },
 };
 
 /** Las 346 comunas por región (orden alfabético dentro de la región). */
@@ -206,7 +193,7 @@ const COMUNA_ALIASES: Record<string, string> = {
 /**
  * Interpreta un texto libre ("Vina del mar", "Providencia", "Santiago") dentro
  * de una región. Devuelve la ciudad y, si se pudo, la comuna. Si el texto es el
- * nombre de una ciudad de varias comunas (ej. "Gran Valparaíso") no elige comuna.
+ * nombre de una ciudad de varias comunas (ej. "Santiago") no elige comuna.
  * `null` si no calza.
  */
 export function matchPlace(
@@ -257,8 +244,13 @@ export function resolvePlace(
   return { city: c.name, commune: c.comunas.length === 1 ? c.comunas[0] : null };
 }
 
-/** Texto para mostrar: "Ñuñoa, Santiago" · "Talca" · "Gran Valparaíso". */
+/** Texto para mostrar: "Ñuñoa, Santiago" · "Viña del Mar" · "Santiago" (sin comuna). */
 export function placeLabel(city: string | null | undefined, commune: string | null | undefined): string {
   if (commune && city && commune !== city) return `${commune}, ${city}`;
   return commune || city || '';
+}
+
+/** ¿La ciudad tiene varias comunas? (Solo entonces se pide la comuna aparte.) */
+export function cityHasCommunes(region: string | null | undefined, city: string | null | undefined): boolean {
+  return comunasOf(region, city).length > 1;
 }

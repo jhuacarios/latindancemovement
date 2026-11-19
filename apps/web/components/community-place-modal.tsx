@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  cityHasCommunes,
   CHILE_REGIONS,
   DANCE_STYLES,
   type CommunityPlaceDto,
@@ -201,13 +202,15 @@ export function CommunityPlaceModal({
                 onChange={(p) => setValues({ ...values, ...p })}
               />
             </Field>
-            <Field label="Comuna">
-              <CommuneSelect
-                region={values.region}
-                value={values}
-                onChange={(p) => setValues({ ...values, ...p })}
-              />
-            </Field>
+            {cityHasCommunes(values.region, values.city) && (
+              <Field label="Comuna">
+                <CommuneSelect
+                  region={values.region}
+                  value={values}
+                  onChange={(p) => setValues({ ...values, ...p })}
+                />
+              </Field>
+            )}
           </div>
 
           {copy.mapPoint ? (

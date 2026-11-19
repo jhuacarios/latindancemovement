@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  cityHasCommunes,
   CHILE_REGIONS,
   USER_ROLES,
   placeLabel,
@@ -129,11 +130,13 @@ export default function AdminUsersPage() {
             value={form}
             onChange={(p) => setForm({ ...form, ...p })}
           />
-          <CommuneSelect
-            region={form.region}
-            value={form}
-            onChange={(p) => setForm({ ...form, ...p })}
-          />
+          {cityHasCommunes(form.region, form.city) && (
+            <CommuneSelect
+              region={form.region}
+              value={form}
+              onChange={(p) => setForm({ ...form, ...p })}
+            />
+          )}
           <div className="flex items-center">
             <Button
               disabled={

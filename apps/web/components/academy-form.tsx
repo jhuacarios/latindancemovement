@@ -1,6 +1,7 @@
 'use client';
 
-import { CHILE_REGIONS, DANCE_STYLES, type ChileRegion } from '@baile-latino/types';
+import {
+  cityHasCommunes, CHILE_REGIONS, DANCE_STYLES, type ChileRegion } from '@baile-latino/types';
 import type { AcademyFormValues } from '@/lib/academies';
 import { Button, Input, Select } from './ui';
 import { CitySelect, CommuneSelect } from './place-selects';
@@ -80,9 +81,11 @@ export function AcademyForm({
         <Field label="Ciudad">
           <CitySelect region={values.region} value={values} onChange={(p) => onChange({ ...values, ...p })} />
         </Field>
-        <Field label="Comuna">
-          <CommuneSelect region={values.region} value={values} onChange={(p) => onChange({ ...values, ...p })} />
-        </Field>
+        {cityHasCommunes(values.region, values.city) && (
+          <Field label="Comuna">
+            <CommuneSelect region={values.region} value={values} onChange={(p) => onChange({ ...values, ...p })} />
+          </Field>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

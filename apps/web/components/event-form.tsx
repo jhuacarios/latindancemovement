@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  cityHasCommunes,
   CHILE_REGIONS,
   DANCE_STYLES,
   type DanceStyle,
@@ -177,14 +178,16 @@ export function EventForm({
             className={hintClass(h('city'))}
           />
         </Field>
-        <Field label="Comuna" hint={h('city')}>
-          <CommuneSelect
-            region={values.region}
-            value={values}
-            onChange={(p) => onChange({ ...values, ...p })}
-            className={hintClass(h('city'))}
-          />
-        </Field>
+        {cityHasCommunes(values.region, values.city) && (
+          <Field label="Comuna" hint={h('city')}>
+            <CommuneSelect
+              region={values.region}
+              value={values}
+              onChange={(p) => onChange({ ...values, ...p })}
+              className={hintClass(h('city'))}
+            />
+          </Field>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
