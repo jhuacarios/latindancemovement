@@ -65,6 +65,16 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="place/[id]"
+              options={{
+                headerShown: true,
+                headerBackTitle: 'Sociales',
+                headerStyle: { backgroundColor: colors.selva },
+                headerTintColor: colors.clave,
+                headerTitleStyle: { color: colors.text },
+              }}
+            />
+            <Stack.Screen
               name="academy/[id]"
               options={{
                 headerShown: true,

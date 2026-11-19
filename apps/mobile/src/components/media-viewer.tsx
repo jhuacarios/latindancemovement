@@ -3,8 +3,6 @@ import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
-import type { AcademyVideoDto } from '@baile-latino/types';
-import { academiesApi } from '@/lib/academies';
 import { ApiError } from '@/lib/api';
 import { colors, radius, space, ui } from '@/lib/theme';
 
@@ -24,8 +22,13 @@ function VideoPlayerView({ url }: { url: string }) {
   );
 }
 
+/** Lo mínimo para mostrar un archivo (sirve para academias y sociales). */
+export type MediaItem = { id: string; kind: 'PHOTO' | 'VIDEO'; title: string };
+
 type Props = {
-  items: AcademyVideoDto[];
+  items: MediaItem[];
+  /** De dónde sacar la URL firmada (1 h) de cada archivo. */
+  urlFor: (id: string) => Promise<{ url: string }>;
   index: number | null;
   onIndex: (i: number) => void;
   onClose: () => void;
@@ -37,12 +40,12 @@ type Props = {
  * Nada se superpone al video: arriba la barra (título + ✕), al medio el archivo y
  * abajo anterior/siguiente; así los controles nativos del video quedan tocables.
  */
-function ViewerBody({ items, index, onIndex, onClose }: Props) {
+function ViewerBody({ items, urlFor, index, onIndex, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const item = index !== null ? items[index] : null;
   const { data, isLoading, error } = useQuery({
-    queryKey: ['academy-media-url', item?.id],
-    queryFn: () => academiesApi.mediaUrl(item!.academyId, item!.id),
+    queryKey: ['media-url', item?.id],
+    queryFn: () => urlFor(item!.id),
     enabled: Boolean(item),
     staleTime: 50 * 60_000, // la URL dura 1 h
   });

@@ -225,7 +225,13 @@ function Gallery({ a }: { a: AcademyDto }) {
           ))}
         </View>
       )}
-      <MediaViewer items={items} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
+      <MediaViewer
+        items={items}
+        urlFor={(vid) => academiesApi.mediaUrl(a.id, vid)}
+        index={open}
+        onIndex={setOpen}
+        onClose={() => setOpen(null)}
+      />
     </View>
   );
 }
