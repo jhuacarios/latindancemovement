@@ -22,6 +22,9 @@ import { compressImage, type CompressedImage } from '@/lib/image-compress';
 import { clsx } from '@/components/clsx';
 import { Spinner } from '@/components/ui';
 import { InstagramLink } from '@/components/instagram-link';
+import Link from 'next/link';
+import { ChannelAvatar } from '@/components/channel-avatar';
+import { placeDetailPath } from '@/lib/community-places';
 import { ChatImage } from '@/components/chat-image';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
@@ -239,9 +242,11 @@ export function ChatThread({
   };
 
   const other = conversation.other;
-  // Leído si el otro marcó lectura después de que se envió el mensaje.
+  const channel = conversation.kind === 'CHANNEL' ? conversation.channel : null;
+  // Leído si el otro marcó lectura después de que se envió el mensaje (solo 1 a 1).
   const otherReadAt = conversation.otherReadAt;
   const isRead = (m: ChatMessageDto) => Boolean(otherReadAt && otherReadAt >= m.createdAt);
+  const placeholder = channel ? `Escribe en #${channel.name}…` : `Escríbele a ${other?.name ?? ''}…`;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -257,19 +262,36 @@ export function ChatThread({
             ←
           </button>
         )}
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
-          {other.name.slice(0, 1).toUpperCase()}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold">{other.name}</div>
-          <div className="truncate text-xs text-neutral-500">
-            {other.role}
-            {other.city ? ` · ${placeLabel(other.city, other.commune)}` : ''}
-          </div>
-        </div>
-        {other.instagramHandle && (
-          <InstagramLink handle={other.instagramHandle} size="sm" />
-        )}
+        {channel ? (
+          <>
+            <ChannelAvatar channel={channel} size="sm" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold"># {channel.name}</div>
+              <div className="truncate text-xs text-neutral-500">
+                <Link href={placeDetailPath(channel.placeId)} className="hover:text-neutral-300 hover:underline">
+                  {channel.placeName}
+                </Link>
+                {` · ${channel.memberCount} ${channel.memberCount === 1 ? 'miembro' : 'miembros'}`}
+              </div>
+            </div>
+          </>
+        ) : other ? (
+          <>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
+              {other.name.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold">{other.name}</div>
+              <div className="truncate text-xs text-neutral-500">
+                {other.role}
+                {other.city ? ` · ${placeLabel(other.city, other.commune)}` : ''}
+              </div>
+            </div>
+            {other.instagramHandle && (
+              <InstagramLink handle={other.instagramHandle} size="sm" />
+            )}
+          </>
+        ) : null}
       </div>
 
       {/* Mensajes */}
@@ -320,6 +342,9 @@ export function ChatThread({
           const mine = m.senderId === user?.id;
           const prev = messages[i - 1];
           const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
+          // En canales, el nombre arriba del globo cuando cambia quien escribe.
+          const showSender =
+            Boolean(channel) && !mine && (newDay || !prev || prev.senderId !== m.senderId);
           return (
             <div key={m.id}>
               {newDay && (
@@ -336,6 +361,9 @@ export function ChatThread({
                       : 'rounded-bl-md bg-neutral-800 text-neutral-100',
                   )}
                 >
+                  {showSender && (
+                    <div className="mb-0.5 text-xs font-semibold text-amber-300">{m.senderName}</div>
+                  )}
                   {m.hasImage && (
                     <div className={clsx(m.body && 'mb-1.5')}>
                       <ChatImage message={m} />
@@ -351,7 +379,7 @@ export function ChatThread({
                     )}
                   >
                     {formatMsgTime(m.createdAt)}
-                    {mine && <Ticks read={isRead(m)} />}
+                    {mine && !channel && <Ticks read={isRead(m)} />}
                   </div>
                 </div>
               </div>
@@ -430,7 +458,7 @@ export function ChatThread({
             }}
             rows={1}
             maxLength={2000}
-            placeholder={pending ? 'Agrega un texto (opcional)…' : `Escríbele a ${other.name}…`}
+            placeholder={pending ? 'Agrega un texto (opcional)…' : placeholder}
             className="max-h-32 min-h-10 flex-1 resize-y rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm placeholder:text-neutral-500 focus:border-brand focus:outline-none"
           />
           <button

@@ -875,7 +875,7 @@ export interface CommunityPlacesByRegionResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Chat (mensajes directos 1 a 1, historial permanente)
+// Chat (mensajes directos 1 a 1 y canales de comunidades, historial permanente)
 // ---------------------------------------------------------------------------
 /** Datos mínimos de un usuario para mostrarlo en el chat (sin email). */
 export interface ChatUser {
@@ -891,6 +891,8 @@ export interface ChatMessageDto {
   id: string;
   conversationId: string;
   senderId: string;
+  /** Nombre visible de quien lo envió (se muestra en los canales). */
+  senderName: string;
   /** Texto; vacío si el mensaje es solo una imagen. */
   body: string;
   /** La imagen se pide aparte: GET /chat/conversations/:id/messages/:mid/image */
@@ -900,10 +902,25 @@ export interface ChatMessageDto {
   createdAt: string;
 }
 
+/** Datos de un canal de comunidad, para mostrarlo en el chat. */
+export interface ChatChannelInfo {
+  placeId: string;
+  placeName: string;
+  /** Foto principal del lugar (avatar del canal): `/community/places/:id/photo?v=placeUpdatedAt`. */
+  placeHasPhoto: boolean;
+  placeUpdatedAt: string;
+  name: string;
+  isGeneral: boolean;
+  memberCount: number;
+}
+
 export interface ChatConversationDto {
   id: string;
-  /** El otro participante (para 1 a 1). */
-  other: ChatUser;
+  kind: 'DIRECT' | 'CHANNEL';
+  /** El otro participante (solo DIRECT). */
+  other: ChatUser | null;
+  /** El canal (solo CHANNEL). */
+  channel: ChatChannelInfo | null;
   lastMessage: ChatMessageDto | null;
   lastMessageAt: string | null;
   unreadCount: number;
@@ -920,6 +937,32 @@ export interface ChatMessagesPage {
 
 export interface ChatUnreadResponse {
   total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Comunidad de un lugar (canales tipo comunidades de WhatsApp)
+// ---------------------------------------------------------------------------
+export interface CommunityChannelDto {
+  /** Id de la conversación del chat: se abre en /chat/:id. */
+  id: string;
+  name: string;
+  description: string | null;
+  isGeneral: boolean;
+  memberCount: number;
+  /** ¿El usuario está en este canal? */
+  joined: boolean;
+  /** No leídos del usuario (0 si no está). */
+  unreadCount: number;
+}
+
+export interface CommunityDto {
+  placeId: string;
+  isMember: boolean;
+  memberCount: number;
+  /** ¿Puede crear/editar/borrar canales? (administrador del lugar o SUPER_ADMIN) */
+  canManage: boolean;
+  /** General primero; luego por nombre. Se listan aunque no estés (para unirte). */
+  channels: CommunityChannelDto[];
 }
 
 // ─── Módulo Estudio (análisis musical) ──────────────────────────────────────
@@ -1301,3 +1344,59 @@ export function publicName(u: { name: string; displayName?: string | null }): st
   return u.displayName?.trim() || u.name;
 }
 export * from './birthday';
+
+// ---------------------------------------------------------------------------
+// Admin → Almacenamiento (para vigilar los límites del plan)
+// ---------------------------------------------------------------------------
+export interface StorageTableDto {
+  /** Nombre de la tabla en la DB. */
+  table: string;
+  /** Qué guarda, en español. */
+  label: string;
+  bytes: number;
+  rows: number;
+}
+
+export interface StorageGroupDto {
+  label: string;
+  bytes: number;
+  count: number;
+}
+
+export interface StorageBucketDto {
+  key: 'studio' | 'media';
+  label: string;
+  /** Nombre del bucket; null si no está configurado. */
+  bucket: string | null;
+  configured: boolean;
+  totalBytes: number;
+  objectCount: number;
+  /** Clase STANDARD (cuenta para la capa gratis de R2). */
+  standardBytes: number;
+  /** Clase STANDARD_IA (bóveda: más barata, sin capa gratis). */
+  infrequentBytes: number;
+  groups: StorageGroupDto[];
+  /** Se cortó el listado por cantidad de objetos (el total es un mínimo). */
+  truncated: boolean;
+  error: string | null;
+}
+
+export interface StorageLimits {
+  /** Límite del volumen de Postgres (GB), según el plan de Railway. */
+  dbGb: number;
+  /** Capa gratis / presupuesto de R2 Standard (GB). */
+  r2Gb: number;
+}
+
+export interface StorageReportDto {
+  generatedAt: string;
+  limits: StorageLimits;
+  database: {
+    totalBytes: number;
+    /** Tablas más pesadas, de mayor a menor. */
+    tables: StorageTableDto[];
+  };
+  buckets: StorageBucketDto[];
+  /** Costo mensual estimado de R2 en US$ (Standard sobre la capa gratis + bóveda). */
+  r2EstimatedUsd: number;
+}

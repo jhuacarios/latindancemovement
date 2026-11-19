@@ -25,6 +25,7 @@ import { StyleMixBar } from '@/components/style-mix';
 import { InstagramLink } from '@/components/instagram-link';
 import { CommunityPlaceModal } from '@/components/community-place-modal';
 import { PlaceGallery } from '@/components/place-gallery';
+import { PlaceCommunity } from '@/components/place-community';
 import { compressImage } from '@/lib/image-compress';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 
@@ -114,7 +115,7 @@ function AdminAssign({
     <Card className="space-y-2">
       <h2 className="text-sm font-semibold text-neutral-300">Administrador</h2>
       <p className="text-xs text-neutral-500">
-        Puede cambiar la foto y la galería de fotos. Solo tú lo asignas.
+        Puede cambiar la foto y la galería, y crear y administrar los canales de la comunidad. Solo tú lo asignas.
       </p>
       {place.adminName ? (
         <div className="flex items-center justify-between gap-2 text-sm">
@@ -309,6 +310,8 @@ export default function CommunityPlaceDetailPage() {
             <Row label="Agregado por">{p.createdByName}</Row>
             {p.adminName && !isSuperAdmin && <Row label="Administrador">{p.adminName}</Row>}
           </Card>
+
+          {isOutdoor && <PlaceCommunity placeId={p.id} />}
 
           {isSuperAdmin && <AdminAssign place={p} onChange={updated} />}
 

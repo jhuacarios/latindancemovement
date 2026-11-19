@@ -42,25 +42,26 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  tracksCreated      Track[]               @relation("TrackCreatedBy")
-  tracksAsArtist     Track[]               @relation("TrackArtist")
-  ownedTracks        Track[]               @relation("TrackOwner")
-  library            UserTrack[]
-  trackTags          TrackTag[]
-  playlists          Playlist[]
-  songRequests       SongRequest[]
-  requestVotes       RequestVote[]
-  ytAccessRequest    YoutubeAccessRequest?
-  events             Event[]               @relation("EventCreatedBy")
-  communityPlaces    CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
-  administeredPlaces CommunityPlace[]      @relation("CommunityPlaceAdmin")
-  chatMemberships    ChatParticipant[]
-  chatMessages       ChatMessage[]         @relation("ChatMessageSender")
-  audioFiles         AudioFile[]
-  academies          AcademyMember[]
-  academyVideos      AcademyVideo[]        @relation("AcademyVideoUploadedBy")
-  videoReports       AcademyVideoReport[]
-  academyShareLinks  AcademyShareLink[]
+  tracksCreated        Track[]               @relation("TrackCreatedBy")
+  tracksAsArtist       Track[]               @relation("TrackArtist")
+  ownedTracks          Track[]               @relation("TrackOwner")
+  library              UserTrack[]
+  trackTags            TrackTag[]
+  playlists            Playlist[]
+  songRequests         SongRequest[]
+  requestVotes         RequestVote[]
+  ytAccessRequest      YoutubeAccessRequest?
+  events               Event[]               @relation("EventCreatedBy")
+  communityPlaces      CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
+  administeredPlaces   CommunityPlace[]      @relation("CommunityPlaceAdmin")
+  communityMemberships CommunityMember[]
+  chatMemberships      ChatParticipant[]
+  chatMessages         ChatMessage[]         @relation("ChatMessageSender")
+  audioFiles           AudioFile[]
+  academies            AcademyMember[]
+  academyVideos        AcademyVideo[]        @relation("AcademyVideoUploadedBy")
+  videoReports         AcademyVideoReport[]
+  academyShareLinks    AcademyShareLink[]
 
   @@index([role])
   @@index([rut])
@@ -322,6 +323,8 @@ model CommunityPlace {
   photoData        String? // base64, sin prefijo data:
   photoMime        String?
   gallery          CommunityPlacePhoto[]
+  members          CommunityMember[]
+  channels         ChatConversation[]
   active           Boolean               @default(true)
   createdById      String
   createdBy        User                  @relation("CommunityPlaceCreatedBy", fields: [createdById], references: [id])
@@ -348,19 +351,43 @@ model CommunityPlacePhoto {
   @@index([placeId, position])
 }
 
+/// Miembro de la comunidad de un lugar (hoy solo sociales al aire libre).
+/// Al unirse entra al canal General; los demás canales los elige.
+model CommunityMember {
+  placeId  String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  place CommunityPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([placeId, userId])
+  @@index([userId])
+}
+
 /// Conversación 1 a 1. `pairKey` = los dos userId ordenados y unidos con "|",
 /// así la misma pareja siempre reutiliza la conversación (única).
 model ChatConversation {
-  id            String    @id @default(cuid())
-  pairKey       String    @unique
+  id            String          @id @default(cuid())
+  /// DIRECT = 1 a 1 (usa pairKey) · CHANNEL = canal de la comunidad de un lugar.
+  kind          String          @default("DIRECT")
+  pairKey       String?         @unique // solo DIRECT
+  /// Solo CHANNEL: el lugar dueño, nombre, descripción y si es el General.
+  placeId       String?
+  place         CommunityPlace? @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  name          String?
+  description   String?
+  isGeneral     Boolean         @default(false)
+  createdById   String?
   lastMessageAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   participants ChatParticipant[]
   messages     ChatMessage[]
 
   @@index([lastMessageAt])
+  @@index([placeId])
 }
 
 model ChatParticipant {

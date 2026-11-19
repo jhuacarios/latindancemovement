@@ -16,6 +16,7 @@ import {
 } from '@/lib/chat';
 import { useDebounced } from '@/lib/use-debounce';
 import { clsx } from '@/components/clsx';
+import { ChannelAvatar } from '@/components/channel-avatar';
 import { Button, Card, Input, Spinner } from '@/components/ui';
 import { ChatThread } from '@/components/chat-thread';
 
@@ -109,9 +110,14 @@ function ConversationRow({
   active: boolean;
   onClick: () => void;
 }) {
-  const preview = c.lastMessage
+  const isChannel = c.kind === 'CHANNEL' && c.channel;
+  const title = isChannel ? `# ${c.channel!.name}` : (c.other?.name ?? '—');
+  const text = c.lastMessage
     ? c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : '')
     : 'Sin mensajes todavía';
+  // En los canales, quién escribió el último mensaje.
+  const preview =
+    isChannel && c.lastMessage ? `${c.lastMessage.senderName}: ${text}` : text;
   return (
     <button
       type="button"
@@ -121,9 +127,13 @@ function ConversationRow({
         active ? 'bg-brand/10' : 'hover:bg-neutral-800/70',
       )}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
-        {c.other.name.slice(0, 1).toUpperCase()}
-      </div>
+      {isChannel ? (
+        <ChannelAvatar channel={c.channel!} />
+      ) : (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
+          {title.slice(0, 1).toUpperCase()}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <div
@@ -132,7 +142,12 @@ function ConversationRow({
               c.unreadCount > 0 ? 'font-semibold text-neutral-100' : 'font-medium',
             )}
           >
-            {c.other.name}
+            {title}
+            {isChannel && (
+              <span className="ml-1.5 text-xs font-normal text-neutral-500">
+                {c.channel!.placeName}
+              </span>
+            )}
           </div>
           {c.lastMessageAt && (
             <div className="shrink-0 text-[11px] text-neutral-500">

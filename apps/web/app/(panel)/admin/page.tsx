@@ -30,6 +30,14 @@ export default function AdminHomePage() {
             </div>
           </Card>
         </Link>
+        <Link href="/admin/storage">
+          <Card className="h-full transition hover:border-brand/60">
+            <div className="font-semibold">Almacenamiento</div>
+            <div className="mt-1 text-sm text-neutral-400">
+              Cuánto ocupan la base de datos y los archivos frente a los límites del plan.
+            </div>
+          </Card>
+        </Link>
         <Link href="/admin/tags">
           <Card className="h-full transition hover:border-brand/60">
             <div className="font-semibold">Estilos y sub-estilos</div>
