@@ -31,6 +31,10 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Eventos</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="calendar" md="event" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="academies">
+        <NativeTabs.Trigger.Label>Academias</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="graduationcap" md="school" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="messages">
         <NativeTabs.Trigger.Label>Mensajes</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="bubble.left.and.bubble.right" md="chat" />

@@ -24,8 +24,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import { AcademiesService } from './academies.service';
-import { MediaStorageService } from './media-storage.service';
+import { MediaStorageService } from '../media/media-storage.service';
 import { staleUploadCutoff } from './upload-stale';
+import { DUPLICATE_PREFIX, EXT, THUMB_MIME, downloadName, kindOf, ymdToDate } from '../media/media-files';
 import { AcademyCompatQueue, AcademyCompatService } from './academy-compat.service';
 import {
   CheckDuplicatesDto,
@@ -37,21 +38,8 @@ import {
   UpdateVideoDto,
 } from './dto/academy.dto';
 
-const THUMB_MIME = 'image/jpeg';
-/** Inicio del mensaje de un archivo repetido (ver lib/academies.ts del web). */
-export const DUPLICATE_PREFIX = 'Ya está en la galería:';
-/** Una subida que no se confirmó en este tiempo se da por abandonada (libera el cupo). */
-
-const EXT: Record<string, string> = {
-  'video/mp4': 'mp4',
-  'video/quicktime': 'mov',
-  'video/webm': 'webm',
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
-
-const kindOf = (mime: string): AcademyMediaKind => (mime.startsWith('image/') ? 'PHOTO' : 'VIDEO');
+/** Re-export: el controller y el web dependen de este nombre. */
+export { DUPLICATE_PREFIX };
 
 export const VIDEO_SELECT = {
   id: true,
@@ -81,10 +69,7 @@ export const VIDEO_SELECT = {
 export type VideoRow = Prisma.AcademyVideoGetPayload<{ select: typeof VIDEO_SELECT }>;
 
 /** Nombre con que se descarga: el título, con la extensión si no la trae. */
-export function downloadName(v: { title: string; mimeType: string }): string {
-  const ext = EXT[v.mimeType];
-  return ext && !/\.[a-z0-9]{2,4}$/i.test(v.title) ? `${v.title}.${ext}` : v.title;
-}
+export { downloadName };
 
 /** Nombre de la copia MP4: el título sin su extensión, terminado en .mp4. */
 export function compatDownloadName(v: { title: string }): string {
@@ -116,7 +101,7 @@ export function downloadTarget(
   return { key: v.storageKey, name: downloadName(v) };
 }
 
-const toDate = (ymd: string | null | undefined) => (ymd ? new Date(`${ymd}T12:00:00Z`) : null);
+const toDate = ymdToDate;
 
 /**
  * Videos de las academias. El navegador sube el video y su miniatura directo al

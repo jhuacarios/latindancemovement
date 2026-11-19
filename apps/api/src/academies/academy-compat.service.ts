@@ -4,8 +4,8 @@ import { ACADEMY_COMPAT_MAX_MINUTES } from '@baile-latino/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { postJson } from '../common/post-json';
 import { redisConnection } from '../common/redis';
-import { MEDIA_CONFIG, type MediaConfig } from './media.config';
-import { MediaStorageService } from './media-storage.service';
+import { MEDIA_CONFIG, type MediaConfig } from '../media/media.config';
+import { MediaStorageService } from '../media/media-storage.service';
 
 const QUEUE_NAME = 'academy-compat';
 const ATTEMPTS = 2;

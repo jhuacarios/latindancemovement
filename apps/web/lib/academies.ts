@@ -251,7 +251,7 @@ export function mediaMaxBytes(mime: string): number {
 }
 
 /** Miniatura JPG (máx. 640 px de ancho) de una foto. */
-function photoThumb(file: File): Promise<Blob | null> {
+export function photoThumb(file: File): Promise<Blob | null> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -403,7 +403,7 @@ export async function replaceThumbnail(academyId: string, videoId: string, jpg: 
 }
 
 /** PUT directo al storage con progreso (fetch no informa progreso de subida). */
-function putWithProgress(
+export function putWithProgress(
   url: string,
   headers: Record<string, string>,
   body: Blob,

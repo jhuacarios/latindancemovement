@@ -18,7 +18,7 @@ import {
   playableKey,
   type DownloadFormat,
 } from './academy-videos.service';
-import { MediaStorageService } from './media-storage.service';
+import { MediaStorageService } from '../media/media-storage.service';
 
 /**
  * Links para compartir las fotos y videos de UNA clase con personas externas.

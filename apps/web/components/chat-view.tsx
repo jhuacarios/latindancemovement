@@ -175,6 +175,138 @@ function ConversationRow({
   );
 }
 
+type InboxItem =
+  | { kind: 'direct'; c: ChatConversationDto }
+  | { kind: 'community'; placeId: string; channels: ChatConversationDto[] };
+
+/**
+ * Agrupa los canales por comunidad (como las comunidades de WhatsApp): cada social
+ * aparece una vez, en la posición de su canal con actividad más reciente, con sus
+ * canales debajo (General primero). Solo vienen los canales donde el usuario
+ * participa, así que no se muestra nada a lo que no tenga acceso.
+ */
+function groupInbox(list: ChatConversationDto[]): InboxItem[] {
+  const items: InboxItem[] = [];
+  const groups = new Map<string, Extract<InboxItem, { kind: 'community' }>>();
+  for (const c of list) {
+    if (c.kind === 'CHANNEL' && c.channel) {
+      const g = groups.get(c.channel.placeId);
+      if (g) g.channels.push(c);
+      else {
+        const ng = { kind: 'community' as const, placeId: c.channel.placeId, channels: [c] };
+        groups.set(c.channel.placeId, ng);
+        items.push(ng);
+      }
+    } else {
+      items.push({ kind: 'direct', c });
+    }
+  }
+  for (const g of groups.values()) {
+    g.channels.sort((a, b) => Number(b.channel!.isGeneral) - Number(a.channel!.isGeneral));
+  }
+  return items;
+}
+
+/** Cabecera de una comunidad + sus canales como sub-filas. */
+function CommunityGroup({
+  channels,
+  activeId,
+  onOpen,
+}: {
+  channels: ChatConversationDto[];
+  activeId?: string;
+  onOpen: (id: string) => void;
+}) {
+  const info = channels[0].channel!;
+  const containsActive = channels.some((c) => c.id === activeId);
+  const [open, setOpen] = useState(true);
+  const unread = channels.reduce((n, c) => n + c.unreadCount, 0);
+  const lastAt = channels
+    .map((c) => c.lastMessageAt)
+    .filter((x): x is string => Boolean(x))
+    .sort()
+    .at(-1);
+  const expanded = open || containsActive;
+
+  return (
+    <div className="border-b border-neutral-800/60">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-neutral-800/70"
+      >
+        <ChannelAvatar channel={info} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <div className={clsx('truncate text-sm', unread > 0 ? 'font-semibold text-neutral-100' : 'font-medium')}>
+              {info.placeName}
+            </div>
+            {lastAt && <div className="shrink-0 text-[11px] text-neutral-500">{formatListTime(lastAt)}</div>}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="truncate text-xs text-neutral-500">
+              Comunidad · {channels.length} {channels.length === 1 ? 'canal' : 'canales'}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {!expanded && unread > 0 && (
+                <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                  {unread}
+                </span>
+              )}
+              <span aria-hidden className={clsx('text-[10px] text-neutral-500 transition-transform', expanded && 'rotate-90')}>
+                ▶
+              </span>
+            </div>
+          </div>
+        </div>
+      </button>
+      {expanded &&
+        channels.map((c) => {
+          const text = c.lastMessage
+            ? c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : '')
+            : 'Sin mensajes todavía';
+          const preview = c.lastMessage ? `${c.lastMessage.senderName}: ${text}` : text;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onOpen(c.id)}
+              className={clsx(
+                'flex w-full items-center gap-2 py-2 pl-9 pr-3 text-left transition',
+                c.id === activeId ? 'bg-brand/10' : 'hover:bg-neutral-800/70',
+              )}
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-xs font-bold text-amber-300">
+                #
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className={clsx('truncate text-sm', c.unreadCount > 0 ? 'font-semibold text-neutral-100' : 'text-neutral-300')}>
+                    {c.channel!.name}
+                  </div>
+                  {c.lastMessageAt && (
+                    <div className="shrink-0 text-[11px] text-neutral-500">{formatListTime(c.lastMessageAt)}</div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className={clsx('truncate text-xs', c.unreadCount > 0 ? 'text-neutral-200' : 'text-neutral-500')}>
+                    {preview}
+                  </div>
+                  {c.unreadCount > 0 && (
+                    <span className="shrink-0 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                      {c.unreadCount}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+    </div>
+  );
+}
+
 /**
  * Vista de mensajes: lista de conversaciones a la izquierda y el hilo activo a
  * la derecha. En móvil se muestra una u otra.
@@ -216,7 +348,7 @@ export function ChatView({ activeId }: { activeId?: string }) {
         <div>
           <h1 className="text-2xl font-bold">💬 Mensajes</h1>
           <p className="hidden text-sm text-neutral-400 sm:block">
-            Chat directo con otros miembros. El historial se guarda para siempre.
+            Chats directos y los canales de tus comunidades. El historial se guarda para siempre.
           </p>
         </div>
         <Button type="button" onClick={() => setNewChat(true)}>
@@ -244,14 +376,24 @@ export function ChatView({ activeId }: { activeId?: string }) {
               Aún no tienes conversaciones. Parte una con «Nuevo chat».
             </div>
           )}
-          {conversations?.map((c) => (
-            <ConversationRow
-              key={c.id}
-              c={c}
-              active={c.id === activeId}
-              onClick={() => open(c.id)}
-            />
-          ))}
+          {conversations &&
+            groupInbox(conversations).map((it) =>
+              it.kind === 'community' ? (
+                <CommunityGroup
+                  key={`place-${it.placeId}`}
+                  channels={it.channels}
+                  activeId={activeId}
+                  onOpen={open}
+                />
+              ) : (
+                <ConversationRow
+                  key={it.c.id}
+                  c={it.c}
+                  active={it.c.id === activeId}
+                  onClick={() => open(it.c.id)}
+                />
+              ),
+            )}
         </aside>
 
         {/* Hilo */}

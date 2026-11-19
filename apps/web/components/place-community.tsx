@@ -37,6 +37,8 @@ export function PlaceCommunity({ placeId }: { placeId: string }) {
       qc.setQueryData(key(placeId), d);
       void qc.invalidateQueries({ queryKey: chatKeys.conversations });
       void qc.invalidateQueries({ queryKey: chatKeys.unread });
+      // Unirse o salir cambia el acceso a las fotos y videos del social.
+      void qc.invalidateQueries({ queryKey: ['place-media', placeId] });
       return true;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo completar.');

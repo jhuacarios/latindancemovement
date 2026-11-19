@@ -1,5 +1,5 @@
 /**
- * Storage de media (fotos y videos de academias; luego la galería de eventos). Usa
+ * Storage de media (fotos y videos de academias y de los sociales; luego eventos). Usa
  * el mismo endpoint y credenciales S3 que el Estudio, con OTRO bucket privado
  * (S3_MEDIA_BUCKET). Si falta algo, solo los archivos responden 503: el resto de
  * Academias funciona igual.

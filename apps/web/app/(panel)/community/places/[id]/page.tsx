@@ -26,6 +26,7 @@ import { InstagramLink } from '@/components/instagram-link';
 import { CommunityPlaceModal } from '@/components/community-place-modal';
 import { PlaceGallery } from '@/components/place-gallery';
 import { PlaceCommunity } from '@/components/place-community';
+import { PlaceMedia } from '@/components/place-media';
 import { compressImage } from '@/lib/image-compress';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 
@@ -312,6 +313,7 @@ export default function CommunityPlaceDetailPage() {
           </Card>
 
           {isOutdoor && <PlaceCommunity placeId={p.id} />}
+          {isOutdoor && <PlaceMedia placeId={p.id} isMember={false} />}
 
           {isSuperAdmin && <AdminAssign place={p} onChange={updated} />}
 

@@ -1400,3 +1400,53 @@ export interface StorageReportDto {
   /** Costo mensual estimado de R2 en US$ (Standard sobre la capa gratis + bóveda). */
   r2EstimatedUsd: number;
 }
+
+// ---------------------------------------------------------------------------
+// Fotos y videos de los sociales (mismo esquema que las academias: galería + bóveda)
+// ---------------------------------------------------------------------------
+/** Versión gratis: cupos por defecto de cada social (editables por el SUPER_ADMIN). */
+export const PLACE_MEDIA_FREE_QUOTA_MB = 5 * 1024;
+export const PLACE_VAULT_FREE_QUOTA_MB = 20 * 1024;
+
+export interface PlaceMediaDto {
+  id: string;
+  placeId: string;
+  kind: AcademyMediaKind;
+  location: AcademyMediaLocation;
+  title: string;
+  description: string | null;
+  /** YYYY-MM-DD: día del social. */
+  recordedOn: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  durationMs: number | null;
+  /** URL firmada de la miniatura (1 h), o null. */
+  thumbUrl: string | null;
+  uploadedByName: string;
+  createdAt: string;
+}
+
+export interface PlaceMediaStorage {
+  usedBytes: number;
+  quotaBytes: number;
+  vaultUsedBytes: number;
+  vaultQuotaBytes: number;
+}
+
+/** GET /community/places/:id/media — solo miembros de la comunidad (o quien la administra). */
+export interface PlaceMediaListDto {
+  /** Lo de la galería, listo (no la bóveda). */
+  items: PlaceMediaDto[];
+  /** ¿Puede subir, borrar y mover a la bóveda? (administrador o SUPER_ADMIN) */
+  canManage: boolean;
+  /** Uso y cupos (solo para quien administra; null para el resto). */
+  storage: PlaceMediaStorage | null;
+}
+
+export interface PlaceMediaUploadTicket {
+  mediaId: string;
+  uploadUrl: string;
+  uploadHeaders: Record<string, string>;
+  thumbUploadUrl: string;
+  thumbUploadHeaders: Record<string, string>;
+}

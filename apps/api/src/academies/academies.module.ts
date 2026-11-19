@@ -5,15 +5,12 @@ import { AcademyVideosService } from './academy-videos.service';
 import { AcademyShareService } from './academy-share.service';
 import { AcademyCompatClient, AcademyCompatQueue, AcademyCompatService } from './academy-compat.service';
 import { ShareController } from './share.controller';
-import { MediaStorageService } from './media-storage.service';
-import { MEDIA_CONFIG, loadMediaConfig } from './media.config';
+import { MediaModule } from '../media/media.module';
 
 @Module({
+  imports: [MediaModule],
   controllers: [AcademiesController, ShareController],
   providers: [
-    // Factory (no valor fijo): se evalúa después de que ConfigModule cargó el .env.
-    { provide: MEDIA_CONFIG, useFactory: () => loadMediaConfig() },
-    MediaStorageService,
     AcademiesService,
     AcademyVideosService,
     AcademyShareService,

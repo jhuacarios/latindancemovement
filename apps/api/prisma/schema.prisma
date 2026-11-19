@@ -55,6 +55,7 @@ model User {
   communityPlaces      CommunityPlace[]      @relation("CommunityPlaceCreatedBy")
   administeredPlaces   CommunityPlace[]      @relation("CommunityPlaceAdmin")
   communityMemberships CommunityMember[]
+  placeMedia           PlaceMedia[]          @relation("PlaceMediaUploadedBy")
   chatMemberships      ChatParticipant[]
   chatMessages         ChatMessage[]         @relation("ChatMessageSender")
   audioFiles           AudioFile[]
@@ -324,6 +325,10 @@ model CommunityPlace {
   photoMime        String?
   gallery          CommunityPlacePhoto[]
   members          CommunityMember[]
+  media            PlaceMedia[]
+  /// Espacio de fotos y videos (versión gratis: 5 GB galería + 20 GB bóveda). Editable por el SUPER_ADMIN.
+  mediaQuotaMb     Int                   @default(5120)
+  vaultQuotaMb     Int                   @default(20480)
   channels         ChatConversation[]
   active           Boolean               @default(true)
   createdById      String
@@ -363,6 +368,33 @@ model CommunityMember {
 
   @@id([placeId, userId])
   @@index([userId])
+}
+
+/// Fotos y videos de un social (bucket privado de media, prefijo `places/<id>/`).
+/// Sube el administrador del lugar (o el SUPER_ADMIN); ven y descargan los miembros.
+/// Mismo esquema que AcademyVideo: galería + bóveda (STANDARD_IA), sin copia MP4 por ahora.
+model PlaceMedia {
+  id           String         @id @default(cuid())
+  placeId      String
+  place        CommunityPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  recordedOn   DateTime? // día del social
+  storageKey   String         @unique
+  thumbKey     String?
+  mimeType     String
+  sizeBytes    BigInt
+  durationMs   Int?
+  contentHash  String? // SHA-256 (lo calcula el navegador): evita subir el mismo dos veces
+  status       String         @default("UPLOADING") // UPLOADING | READY
+  location     String         @default("GALLERY") // GALLERY | VAULT
+  vaultedAt    DateTime?
+  uploadedById String
+  uploadedBy   User           @relation("PlaceMediaUploadedBy", fields: [uploadedById], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([placeId, status, location])
 }
 
 /// Conversación 1 a 1. `pairKey` = los dos userId ordenados y unidos con "|",

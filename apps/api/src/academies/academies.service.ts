@@ -23,7 +23,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import type { UploadedImage } from '../common/multipart';
-import { MediaStorageService } from './media-storage.service';
+import { MediaStorageService } from '../media/media-storage.service';
 import {
   AddMemberDto,
   CreateAcademyDto,

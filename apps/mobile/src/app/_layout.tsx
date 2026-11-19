@@ -44,6 +44,16 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+            <Stack.Screen
+              name="academy/[id]"
+              options={{
+                headerShown: true,
+                headerBackTitle: 'Academias',
+                headerStyle: { backgroundColor: colors.selva },
+                headerTintColor: colors.clave,
+                headerTitleStyle: { color: colors.text },
+              }}
+            />
           </Stack>
         </ThemeProvider>
       </AuthProvider>
