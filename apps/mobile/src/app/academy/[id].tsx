@@ -80,6 +80,7 @@ function EnrollRow({ academyId, c, manages }: { academyId: string; c: AcademyCla
       setMessage('');
       await qc.invalidateQueries({ queryKey: ['academy', academyId] });
       await qc.invalidateQueries({ queryKey: ['academy-media', academyId] });
+      await qc.invalidateQueries({ queryKey: ['my-enrollments'] });
     } catch (e) {
       Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
     } finally {

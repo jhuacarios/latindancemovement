@@ -18,6 +18,7 @@ import { useAuth } from '@/lib/auth';
 import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Select, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
+import { MyClasses } from '@/components/my-classes';
 import {
   StylePreferencePicker,
   useSaveStylePreference,
@@ -110,6 +111,12 @@ function PerfilSection({ user }: { user: PublicUser }) {
           value={user.styles?.length ? user.styles.join(', ') : '—'}
         />
       </Card>
+
+      <SectionHeader
+        title="Mis clases"
+        desc="Las clases de academias en que estás inscrito o pediste inscripción."
+      />
+      <MyClasses />
 
       <SectionHeader
         title="Datos personales"

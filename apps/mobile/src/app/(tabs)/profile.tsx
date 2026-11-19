@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Pressable,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,6 +13,10 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import { WEEKDAYS, academiesApi, academyLogoUrl } from '@/lib/academies';
 import {
   MONTH_NAMES,
   birthdayError,
@@ -170,6 +176,59 @@ function PersonalData({ user }: { user: PublicUser }) {
   );
 }
 
+/** Mis clases de academias (aceptadas primero, luego pendientes). */
+function MyClasses() {
+  const { data, isLoading } = useQuery({ queryKey: ['my-enrollments'], queryFn: academiesApi.myEnrollments });
+  const list = [...(data ?? [])].sort((a, b) => Number(b.status === 'ACCEPTED') - Number(a.status === 'ACCEPTED'));
+  return (
+    <View style={ui.card}>
+      <Text style={ui.h2}>Mis clases</Text>
+      {isLoading ? (
+        <ActivityIndicator color={colors.clave} />
+      ) : list.length === 0 ? (
+        <Text style={ui.muted}>
+          Todavía no estás inscrito en ninguna clase. Busca una academia y pide inscripción.
+        </Text>
+      ) : (
+        list.map((e) => {
+          const logo = academyLogoUrl({ id: e.academyId, hasLogo: e.academyHasLogo });
+          return (
+            <Pressable
+              key={e.id}
+              onPress={() => router.push({ pathname: '/academy/[id]', params: { id: e.academyId } })}
+              style={({ pressed }) => [styles.classRow, pressed && { opacity: 0.7 }]}
+            >
+              {logo ? (
+                <Image source={logo} style={styles.classLogo} contentFit="cover" />
+              ) : (
+                <View style={[styles.classLogo, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text>🎓</Text>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={ui.body} numberOfLines={1}>{e.classTitle}</Text>
+                <Text style={ui.small} numberOfLines={1}>
+                  {e.academyName} · {WEEKDAYS[e.weekday]} {e.startTime}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.status,
+                  e.status === 'ACCEPTED'
+                    ? { color: colors.clave, backgroundColor: '#1a7a4e33' }
+                    : { color: colors.bachata, backgroundColor: '#f59e0b22' },
+                ]}
+              >
+                {e.status === 'ACCEPTED' ? '✓ Inscrito' : '⏳ Pendiente'}
+              </Text>
+            </Pressable>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   if (!user) return null;
@@ -191,6 +250,8 @@ export default function ProfileScreen() {
               {where ? <Text style={ui.small}>{where}</Text> : null}
             </View>
           </View>
+
+          <MyClasses />
 
           <PersonalData user={user} />
 
@@ -222,6 +283,9 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: colors.white, fontSize: 26, fontWeight: '700' },
   months: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  classRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  classLogo: { width: 40, height: 40, borderRadius: radius.sm, backgroundColor: colors.selva },
+  status: { fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, overflow: 'hidden' },
   month: {
     color: colors.textMuted,
     borderColor: colors.line,

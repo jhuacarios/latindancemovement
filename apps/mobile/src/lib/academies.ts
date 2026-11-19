@@ -4,6 +4,7 @@ import type {
   AcademyVideoDto,
   ChileRegion,
   ClassLevel,
+  MyEnrollmentDto,
 } from '@baile-latino/types';
 import { API_BASE, api } from './api';
 
@@ -52,6 +53,8 @@ export const academiesApi = {
     }),
   unenroll: (id: string, classId: string) =>
     api<void>(`/academies/${id}/classes/${classId}/enroll`, { method: 'DELETE' }),
+  /** Mis clases: inscripciones aceptadas y solicitudes pendientes. */
+  myEnrollments: () => api<MyEnrollmentDto[]>('/academies/enrollments/mine'),
   /** URL firmada (1 h) para ver una foto o reproducir un video. */
   mediaUrl: (id: string, videoId: string) =>
     api<{ url: string }>(`/academies/${id}/videos/${videoId}/url`),
