@@ -1,7 +1,7 @@
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import type { AcademyVideoDto } from '@baile-latino/types';
 import { academiesApi } from '@/lib/academies';
@@ -24,21 +24,21 @@ function VideoPlayerView({ url }: { url: string }) {
   );
 }
 
-/**
- * Visor a pantalla completa de la galería: fotos y videos, con anterior/siguiente.
- * La URL es firmada y dura 1 h: se pide al abrir cada archivo.
- */
-export function MediaViewer({
-  items,
-  index,
-  onIndex,
-  onClose,
-}: {
+type Props = {
   items: AcademyVideoDto[];
   index: number | null;
   onIndex: (i: number) => void;
   onClose: () => void;
-}) {
+};
+
+/**
+ * Contenido del visor. Va dentro de su propio SafeAreaProvider: en un <Modal> de
+ * iOS no llegan los márgenes del notch, y sin ellos la barra quedaba bajo la hora.
+ * Nada se superpone al video: arriba la barra (título + ✕), al medio el archivo y
+ * abajo anterior/siguiente; así los controles nativos del video quedan tocables.
+ */
+function ViewerBody({ items, index, onIndex, onClose }: Props) {
+  const insets = useSafeAreaInsets();
   const item = index !== null ? items[index] : null;
   const { data, isLoading, error } = useQuery({
     queryKey: ['academy-media-url', item?.id],
@@ -48,81 +48,87 @@ export function MediaViewer({
   });
 
   return (
-    <Modal visible={Boolean(item)} animationType="fade" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
-      <View style={styles.backdrop}>
-        <View style={StyleSheet.absoluteFill}>
-          {isLoading && <ActivityIndicator color={colors.white} style={styles.center} />}
-          {error && (
-            <Text style={[ui.error, styles.center]}>
-              {error instanceof ApiError ? error.message : 'No se pudo abrir el archivo.'}
-            </Text>
-          )}
-          {data?.url && item?.kind === 'PHOTO' && (
-            <Image source={data.url} style={StyleSheet.absoluteFill} contentFit="contain" />
-          )}
-          {data?.url && item?.kind !== 'PHOTO' && <VideoPlayerView key={data.url} url={data.url} />}
+    <View style={styles.backdrop}>
+      <View style={[styles.topBar, { paddingTop: insets.top + space.sm }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title} numberOfLines={1}>{item?.title}</Text>
         </View>
-
-        <SafeAreaView style={styles.topBar} edges={['top']} pointerEvents="box-none">
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title} numberOfLines={1}>{item?.title}</Text>
-            {index !== null && (
-              <Text style={styles.counter}>{index + 1} / {items.length}</Text>
-            )}
-          </View>
-          <Pressable onPress={onClose} style={styles.btn} accessibilityLabel="Cerrar" hitSlop={10}>
-            <Text style={styles.btnText}>✕</Text>
-          </Pressable>
-        </SafeAreaView>
-
-        {index !== null && items.length > 1 && (
-          <SafeAreaView style={styles.bottomBar} edges={['bottom']} pointerEvents="box-none">
-            <Pressable
-              onPress={() => onIndex((index - 1 + items.length) % items.length)}
-              style={styles.btn}
-              accessibilityLabel="Anterior"
-              hitSlop={10}
-            >
-              <Text style={styles.btnText}>‹</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onIndex((index + 1) % items.length)}
-              style={styles.btn}
-              accessibilityLabel="Siguiente"
-              hitSlop={10}
-            >
-              <Text style={styles.btnText}>›</Text>
-            </Pressable>
-          </SafeAreaView>
-        )}
+        <Pressable onPress={onClose} style={styles.btn} accessibilityLabel="Cerrar" hitSlop={12}>
+          <Text style={styles.btnText}>✕</Text>
+        </Pressable>
       </View>
+
+      <View style={styles.stage}>
+        {isLoading && <ActivityIndicator color={colors.white} />}
+        {error && (
+          <Text style={[ui.error, { textAlign: 'center', paddingHorizontal: space.xl }]}>
+            {error instanceof ApiError ? error.message : 'No se pudo abrir el archivo.'}
+          </Text>
+        )}
+        {data?.url && item?.kind === 'PHOTO' && (
+          <Image source={data.url} style={StyleSheet.absoluteFill} contentFit="contain" />
+        )}
+        {data?.url && item?.kind !== 'PHOTO' && <VideoPlayerView key={data.url} url={data.url} />}
+      </View>
+
+      {index !== null && items.length > 1 && (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + space.sm }]}>
+          <Pressable
+            onPress={() => onIndex((index - 1 + items.length) % items.length)}
+            style={styles.btn}
+            accessibilityLabel="Anterior"
+            hitSlop={12}
+          >
+            <Text style={styles.btnText}>‹</Text>
+          </Pressable>
+          <Text style={styles.counter}>{index + 1} / {items.length}</Text>
+          <Pressable
+            onPress={() => onIndex((index + 1) % items.length)}
+            style={styles.btn}
+            accessibilityLabel="Siguiente"
+            hitSlop={12}
+          >
+            <Text style={styles.btnText}>›</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Visor a pantalla completa de la galería: fotos y videos, con anterior/siguiente. */
+export function MediaViewer(props: Props) {
+  return (
+    <Modal
+      visible={props.index !== null}
+      animationType="fade"
+      onRequestClose={props.onClose}
+      supportedOrientations={['portrait', 'landscape']}
+      statusBarTranslucent
+    >
+      <SafeAreaProvider>
+        <ViewerBody {...props} />
+      </SafeAreaProvider>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000' },
-  center: { position: 'absolute', top: '50%', alignSelf: 'center', textAlign: 'center', paddingHorizontal: space.xl },
   topBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     paddingHorizontal: space.lg,
     paddingBottom: space.sm,
-    backgroundColor: '#00000088',
   },
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   bottomBar: {
-    position: 'absolute',
-    bottom: 80,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: space.lg,
+    paddingTop: space.sm,
   },
   title: { color: colors.white, fontSize: 15, fontWeight: '600' },
   counter: { color: '#ffffffaa', fontSize: 12 },
@@ -130,7 +136,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.pill,
-    backgroundColor: '#000000aa',
+    backgroundColor: '#ffffff22',
     alignItems: 'center',
     justifyContent: 'center',
   },
