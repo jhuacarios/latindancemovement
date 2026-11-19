@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Nectason",
+    "slug": "nectason",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "nectason",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "app.nectason",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "app.nectason",
+      "adaptiveIcon": {
+        "backgroundColor": "#0d1f1a",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0d1f1a",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "backgroundColor": "#0d1f1a"
+  }
+}

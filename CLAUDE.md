@@ -54,7 +54,7 @@ Estas reglas hacen que separar un módulo en el futuro sea una tarde de trabajo,
 - Adapter de Fastify para rendimiento (`@nestjs/platform-fastify`).
 
 ### Clientes
-- `apps/web/` → Next.js 14 (panel del organizador + super admin). Escritorio.
+- `apps/web/` → Next.js 15 (panel del organizador + super admin). Escritorio.
 - `apps/mobile/` → React Native + Expo (app de la comunidad). Todos los demás roles.
 - El super admin vive bajo `apps/web/app/admin/` con middleware de rol `SUPER_ADMIN`. No necesita app separada.
 
@@ -95,7 +95,7 @@ baile-latino/
 │   │   ├── .env.example
 │   │   └── package.json
 │   │
-│   ├── web/                   ← Next.js 14 (panel organizador + admin)
+│   ├── web/                   ← Next.js 15 (panel organizador + admin)
 │   │   ├── app/
 │   │   │   ├── (organizer)/   ← rutas del organizador
 │   │   │   │   ├── events/
@@ -130,14 +130,14 @@ baile-latino/
 
 | Capa | Tecnología |
 |------|-----------|
-| API | NestJS 10 + Fastify adapter + TypeScript strict |
-| ORM | Prisma 5 |
-| DB | PostgreSQL (dev: SQLite con `file:./dev.db`) |
-| Auth | JWT + Passport + Supabase Auth |
-| Realtime | Socket.io (`@nestjs/platform-socket.io`) |
+| API | NestJS 11 + Fastify adapter + TypeScript strict |
+| ORM | Prisma 7 (driver adapter `@prisma/adapter-pg`; schema con `db push`, sin migraciones) |
+| DB | PostgreSQL (dev: Docker `docker compose up -d db`) |
+| Auth | Login con Google (OAuth propio) + JWT con refresh token rotativo. La app móvil usa el mismo flujo vía navegador del sistema (`?app=` + `MOBILE_AUTH_RETURN_PREFIXES`) |
+| Realtime | Hoy polling (chat cada 3 s). Pendiente: Socket.io para el chat (sobre todo en móvil) |
 | Queues | BullMQ + Redis |
-| Web | Next.js 14 App Router + Tailwind + React Query |
-| Mobile | React Native + Expo 51 + NativeWind + Expo Router |
+| Web | Next.js 15 App Router + Tailwind 4 + React Query |
+| Mobile | React Native + Expo SDK 58 + Expo Router (pestañas nativas) + `StyleSheet` con la paleta de la web + React Query + `expo-secure-store` (tokens) + `react-native-maps` |
 | Monorepo | Turborepo + pnpm workspaces |
 | Pagos | Flow + Transbank Webpay Plus |
 | IA | Anthropic Claude API (`claude-sonnet-4-6`) |
@@ -148,7 +148,7 @@ baile-latino/
 | Push | Expo Push + Firebase FCM |
 | Social | Meta Graph API (Instagram login + importar contenido) |
 | Boletas | API SII (boletas electrónicas) |
-| Hosting | Railway o Render |
+| Hosting | Web: Vercel (auto-deploy). API + analizador + Postgres + Redis: servidor Hetzner con Docker Compose (`deploy/`, **sin auto-deploy**: `deploy/update.sh` por SSH) |
 | CDN | Cloudflare |
 | Monitoreo | Sentry + PostHog |
 | CI/CD | GitHub Actions |
@@ -537,7 +537,9 @@ región (qué suena dónde — el moat de "data premium DJs").
 
 ### Mobile (React Native)
 - Expo Router para navegación (misma convención de carpetas que Next.js)
-- NativeWind para estilos (misma sintaxis que Tailwind)
+- Estilos con `StyleSheet` y los tokens de `src/lib/theme.ts` (misma paleta que la web). NativeWind se descartó (2026-11): Expo no lo recomienda y es una dependencia más que puede romperse con cada SDK
+- Expo cambia en cada SDK: leer `apps/mobile/AGENTS.md` y la documentación versionada antes de usar una API de Expo; instalar con `npx expo install`
+- Se prueba con Expo Go contra la API de producción (ver `apps/mobile/README.md`)
 - Componentes en `components/`, screens en `app/`
 - NO compartir componentes con web — plataformas distintas, UX distinta
 - SÍ compartir tipos desde `@baile-latino/types`

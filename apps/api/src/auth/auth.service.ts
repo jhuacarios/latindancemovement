@@ -188,19 +188,50 @@ export class AuthService {
     );
   }
 
-  /** URL de consentimiento de Google (con state anti-CSRF). */
-  async buildGoogleAuthUrl(): Promise<string> {
+  /**
+   * ¿Se permite volver a esta URL de la app móvil tras el login? Solo prefijos de
+   * MOBILE_AUTH_RETURN_PREFIXES (separados por coma; por defecto "nectason://").
+   * Para Expo Go en desarrollo se agrega "exp://". Nunca http(s): eso sería un
+   * redirect abierto que podría desviar el código de un solo uso.
+   */
+  isAllowedAppReturn(url: string): boolean {
+    const prefixes = (process.env.MOBILE_AUTH_RETURN_PREFIXES ?? 'nectason://')
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => p && !/^https?:/i.test(p));
+    return url.length <= 300 && prefixes.some((p) => url.startsWith(p));
+  }
+
+  /** A dónde volver tras el login según el state (la app móvil, o null = la web). */
+  async returnToForState(state: string | undefined): Promise<string | null> {
+    if (!state) return null;
+    const row = await this.prisma.setting.findUnique({ where: { key: `gauth_state:${state}` } });
+    if (!row) return null;
+    try {
+      const v = JSON.parse(row.value) as { returnTo?: string };
+      return v.returnTo && this.isAllowedAppReturn(v.returnTo) ? v.returnTo : null;
+    } catch {
+      return null; // formato antiguo: solo el timestamp (web)
+    }
+  }
+
+  /** URL de consentimiento de Google (con state anti-CSRF). `returnTo` = la app móvil. */
+  async buildGoogleAuthUrl(returnTo?: string): Promise<string> {
     if (!this.googleConfigured) {
       throw new BadRequestException(
         'Falta configurar GOOGLE_LOGIN_CLIENT_ID / GOOGLE_LOGIN_CLIENT_SECRET ' +
           '(o los GOOGLE_OAUTH_* de respaldo).',
       );
     }
+    if (returnTo && !this.isAllowedAppReturn(returnTo)) {
+      throw new BadRequestException('Destino de retorno no permitido.');
+    }
     const state = randomBytes(16).toString('hex');
+    const value = JSON.stringify({ ts: Date.now(), ...(returnTo ? { returnTo } : {}) });
     await this.prisma.setting.upsert({
       where: { key: `gauth_state:${state}` },
-      create: { key: `gauth_state:${state}`, value: String(Date.now()) },
-      update: { value: String(Date.now()) },
+      create: { key: `gauth_state:${state}`, value },
+      update: { value },
     });
     const params = new URLSearchParams({
       client_id: this.loginClientId,
@@ -227,7 +258,16 @@ export class AuthService {
     await this.prisma.setting
       .delete({ where: { key: `gauth_state:${state}` } })
       .catch(() => undefined);
-    if (Date.now() - Number(stateRow.value) > 10 * 60_000) {
+    // El state guarda { ts, returnTo? } (antes era solo el timestamp).
+    let ts = Number(stateRow.value);
+    if (Number.isNaN(ts)) {
+      try {
+        ts = (JSON.parse(stateRow.value) as { ts: number }).ts;
+      } catch {
+        ts = 0;
+      }
+    }
+    if (Date.now() - ts > 10 * 60_000) {
       throw new BadRequestException('State expirado.');
     }
 

@@ -66,10 +66,13 @@ export class AuthController {
   }
 
   // --- Login con Google -----------------------------------------------------
-  /** Redirige al consentimiento de Google. */
+  /**
+   * Redirige al consentimiento de Google. `?app=<url>` = login desde la app móvil:
+   * al terminar vuelve a esa URL (solo prefijos permitidos) en vez de a la web.
+   */
   @Get('google')
-  async google(@Res() reply: FastifyReply) {
-    const url = await this.auth.buildGoogleAuthUrl();
+  async google(@Query('app') app: string | undefined, @Res() reply: FastifyReply) {
+    const url = await this.auth.buildGoogleAuthUrl(app || undefined);
     reply.header('location', url).code(302).send();
   }
 
@@ -86,13 +89,17 @@ export class AuthController {
     const web = (process.env.WEB_URL ?? 'http://localhost:3001')
       .split(',')[0]
       .trim();
+    // Si el login empezó en la app móvil, se vuelve a la app (no a la web).
+    const app = await this.auth.returnToForState(state);
+    const back = (q: string) =>
+      app ? `${app}${app.includes('?') ? '&' : '?'}${q}` : `${web}/auth/google?${q}`;
     try {
       if (error) throw new Error(error);
       if (!code || !state) throw new Error('Faltan parámetros.');
       const oneTime = await this.auth.handleGoogleCallback(code, state);
-      reply.header('location', `${web}/auth/google?code=${oneTime}`).code(302).send();
+      reply.header('location', back(`code=${oneTime}`)).code(302).send();
     } catch {
-      reply.header('location', `${web}/auth/google?error=1`).code(302).send();
+      reply.header('location', back('error=1')).code(302).send();
     }
   }
 
