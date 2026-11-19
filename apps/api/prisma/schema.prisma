@@ -303,6 +303,7 @@ model CommunityPlace {
   commune          String? // comuna dentro de la ciudad
   lat              Float? // punto en el mapa (sociales al aire libre)
   lng              Float?
+  bachataPct       Int? // mezcla: % de bachata (el resto salsa)
   place            String?
   address          String?
   schedule         String? // texto libre, ej. "Domingos desde las 17:00"

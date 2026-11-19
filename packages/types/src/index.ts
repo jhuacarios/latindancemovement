@@ -830,6 +830,8 @@ export interface CommunityPlaceDto {
   /** Punto en el mapa (sociales al aire libre). Ambos o ninguno. */
   lat: number | null;
   lng: number | null;
+  /** Mezcla: % de bachata (el resto salsa). `null` = antiguo, solo con `styles`. */
+  bachataPct: number | null;
   /** Texto libre: horario habitual, o disponibilidad en el caso de un DJ. */
   schedule: string | null;
   styles: DanceStyle[];
@@ -1259,3 +1261,4 @@ export interface AcademyVideoReportDto {
 
 export * from './phrases';
 export * from './chile';
+export * from './style-mix';

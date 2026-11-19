@@ -8,6 +8,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import {
   CHILE_REGIONS,
+  stylesFromPct,
   type ChileRegion,
   type DanceStyle,
   type CommunityPlaceDto,
@@ -34,6 +35,7 @@ const SELECT = {
   commune: true,
   lat: true,
   lng: true,
+  bachataPct: true,
   place: true,
   address: true,
   schedule: true,
@@ -67,6 +69,7 @@ export class CommunityPlacesService {
       commune: r.commune,
       lat: r.lat,
       lng: r.lng,
+      bachataPct: r.bachataPct,
       place: r.place,
       address: r.address,
       schedule: r.schedule,
@@ -151,6 +154,11 @@ export class CommunityPlacesService {
     if (dto.address !== undefined) data.address = text(dto.address);
     if (dto.schedule !== undefined) data.schedule = text(dto.schedule);
     if (dto.styles !== undefined) data.styles = dto.styles.join(',');
+    if (dto.bachataPct !== undefined) {
+      data.bachataPct = dto.bachataPct;
+      // Los estilos salen del % (para filtros y avisos por estilo).
+      if (dto.bachataPct !== null) data.styles = stylesFromPct(dto.bachataPct).join(',');
+    }
     if (dto.description !== undefined) data.description = text(dto.description);
     if (dto.instagramHandles !== undefined) {
       data.instagramHandles = [

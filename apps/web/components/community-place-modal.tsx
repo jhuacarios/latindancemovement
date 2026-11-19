@@ -4,9 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   cityHasCommunes,
   CHILE_REGIONS,
-  DANCE_STYLES,
   type CommunityPlaceDto,
-  type DanceStyle,
 } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import {
@@ -24,7 +22,7 @@ import {
 import { Button, Input, Select } from '@/components/ui';
 import { CitySelect, CommuneSelect } from '@/components/place-selects';
 import { MapPointPicker } from '@/components/map-point-picker';
-import { clsx } from '@/components/clsx';
+import { StyleMixSlider } from '@/components/style-mix';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
 
@@ -83,14 +81,6 @@ export function CommunityPlaceModal({
     k: K,
     v: CommunityPlaceFormValues[K],
   ) => setValues((prev) => ({ ...prev, [k]: v }));
-
-  const toggleStyle = (s: DanceStyle) =>
-    set(
-      'styles',
-      values.styles.includes(s)
-        ? values.styles.filter((x) => x !== s)
-        : [...values.styles, s],
-    );
 
   const pick = (f: File | undefined | null) => {
     if (!f) return;
@@ -255,29 +245,8 @@ export function CommunityPlaceModal({
               />
             </Field>
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-neutral-400">Estilos</span>
-              <div className="flex gap-2">
-                {DANCE_STYLES.map((s) => {
-                  const on = values.styles.includes(s);
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => toggleStyle(s)}
-                      className={clsx(
-                        'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
-                        on
-                          ? s === 'BACHATA'
-                            ? 'border-amber-400/60 bg-amber-500/15 text-amber-300'
-                            : 'border-red-400/60 bg-red-500/15 text-red-300'
-                          : 'border-neutral-700 text-neutral-400 hover:border-neutral-500',
-                      )}
-                    >
-                      {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="text-xs font-medium text-neutral-400">Mezcla de estilos</span>
+              <StyleMixSlider value={values.bachataPct} onChange={(pct) => set('bachataPct', pct)} />
             </div>
           </div>
 

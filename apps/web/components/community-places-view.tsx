@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { placeLabel } from '@baile-latino/types';
+import { pctFromStyles, placeLabel } from '@baile-latino/types';
 import type {
   CommunityPlaceDto,
   CommunityPlacesByRegionResponse,
@@ -14,7 +14,8 @@ import { usePermissions } from '@/lib/permissions';
 import { useEffectiveRole } from '@/lib/view-as-role';
 import { mapsSearchLink } from '@/lib/maps';
 import { deletePlace, placePhotoUrl, type PlaceKindCopy } from '@/lib/community-places';
-import { Button, Card, Spinner, StyleBadge } from '@/components/ui';
+import { Button, Card, Spinner } from '@/components/ui';
+import { StyleMixBar } from '@/components/style-mix';
 import { clsx } from '@/components/clsx';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { CommunityPlaceModal } from '@/components/community-place-modal';
@@ -86,9 +87,9 @@ function PlaceCard({
           <div className="mt-1 line-clamp-2 text-xs text-neutral-400">{p.description}</div>
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {p.styles.map((st) => (
-            <StyleBadge key={st} style={st} />
-          ))}
+          {(p.bachataPct != null || p.styles.length > 0) && (
+            <StyleMixBar pct={p.bachataPct ?? pctFromStyles(p.styles)} />
+          )}
           {p.instagramHandles.map((h) => (
             <InstagramLink key={h} handle={h} />
           ))}

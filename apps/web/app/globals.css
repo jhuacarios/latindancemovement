@@ -59,3 +59,32 @@ body {
     font-size: 16px;
   }
 }
+
+/* Deslizador de mezcla bachata/salsa (components/style-mix.tsx). El fondo
+   (degradado ámbar → rojo hasta el %) lo pone el componente inline. */
+.mix-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 0.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+}
+.mix-range:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 4px; }
+.mix-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #171717;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.mix-range::-moz-range-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid #171717;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}

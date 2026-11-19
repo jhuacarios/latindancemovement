@@ -3,13 +3,12 @@
 import {
   cityHasCommunes,
   CHILE_REGIONS,
-  DANCE_STYLES,
-  type DanceStyle,
   type ExtractionConfidence,
   type FlyerExtraction,
 } from '@baile-latino/types';
 import { Button, Input, Select } from '@/components/ui';
 import { CitySelect, CommuneSelect } from '@/components/place-selects';
+import { StyleMixSlider } from '@/components/style-mix';
 import { clsx } from '@/components/clsx';
 import type { EventFormValues } from '@/lib/events';
 
@@ -96,13 +95,6 @@ export function EventForm({
     const key = HINT_FIELD[k];
     return key ? hints?.[key] : undefined;
   };
-  const toggleStyle = (s: DanceStyle) =>
-    set(
-      'styles',
-      values.styles.includes(s)
-        ? values.styles.filter((x) => x !== s)
-        : [...values.styles, s],
-    );
 
   return (
     <form
@@ -208,42 +200,9 @@ export function EventForm({
         </Field>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-neutral-400">Estilos</span>
-          <div className="flex gap-2">
-            {DANCE_STYLES.map((s) => {
-              const on = values.styles.includes(s);
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => toggleStyle(s)}
-                  className={clsx(
-                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
-                    on
-                      ? s === 'BACHATA'
-                        ? 'border-amber-400/60 bg-amber-500/15 text-amber-300'
-                        : 'border-red-400/60 bg-red-500/15 text-red-300'
-                      : 'border-neutral-700 text-neutral-400 hover:border-neutral-500',
-                  )}
-                >
-                  {s === 'BACHATA' ? 'Bachata' : 'Salsa'}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <Field label="% de bachata (opcional)">
-          <Input
-            type="number"
-            min={0}
-            max={100}
-            value={values.bachataPct}
-            onChange={(e) => set('bachataPct', e.target.value)}
-            placeholder="70"
-          />
-        </Field>
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-neutral-400">Mezcla de estilos</span>
+        <StyleMixSlider value={values.bachataPct} onChange={(pct) => set('bachataPct', pct)} />
       </div>
 
       <Field label="Precios y preventas" hint={h('priceInfo')}>

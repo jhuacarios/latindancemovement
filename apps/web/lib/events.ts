@@ -1,9 +1,10 @@
-import type {
-  ChileRegion,
-  DanceStyle,
-  EventDto,
-  EventStatus,
-  FlyerExtraction,
+import {
+  pctFromStyles,
+  stylesFromPct,
+  type ChileRegion,
+  type EventDto,
+  type EventStatus,
+  type FlyerExtraction,
 } from '@baile-latino/types';
 import { api, API_BASE, uploadForm } from './api';
 
@@ -82,8 +83,8 @@ export interface EventFormValues {
   commune: string;
   venueName: string;
   address: string;
-  styles: DanceStyle[];
-  bachataPct: string;
+  /** Mezcla: % de bachata (el resto salsa). */
+  bachataPct: number;
   priceInfo: string;
   ticketUrl: string;
   instagramUrl: string;
@@ -102,8 +103,7 @@ export const EMPTY_EVENT_FORM: EventFormValues = {
   commune: '',
   venueName: '',
   address: '',
-  styles: [],
-  bachataPct: '',
+  bachataPct: 50,
   priceInfo: '',
   ticketUrl: '',
   instagramUrl: '',
@@ -123,8 +123,7 @@ export function formFromEvent(ev: EventDto): EventFormValues {
     commune: ev.commune ?? '',
     venueName: ev.venueName ?? '',
     address: ev.address ?? '',
-    styles: ev.styles,
-    bachataPct: ev.bachataPct != null ? String(ev.bachataPct) : '',
+    bachataPct: ev.bachataPct ?? pctFromStyles(ev.styles),
     priceInfo: ev.priceInfo ?? '',
     ticketUrl: ev.ticketUrl ?? '',
     instagramUrl: ev.instagramUrl ?? '',
@@ -158,8 +157,7 @@ export function formFromExtraction(x: FlyerExtraction): EventFormValues {
     commune: x.commune ?? '',
     venueName: x.venueName ?? '',
     address: x.address ?? '',
-    styles: x.styles,
-    bachataPct: x.bachataPct != null ? String(x.bachataPct) : '',
+    bachataPct: x.bachataPct ?? pctFromStyles(x.styles),
     priceInfo: x.priceInfo ?? '',
     ticketUrl: x.ticketUrl ?? '',
     instagramUrl: x.instagramUrl ?? '',
@@ -172,7 +170,6 @@ export function formFromExtraction(x: FlyerExtraction): EventFormValues {
 /** Formulario → payload JSON de la API (CreateEventDto / UpdateEventDto). */
 export function payloadFromForm(v: EventFormValues) {
   const opt = (s: string) => (s.trim() ? s.trim() : null);
-  const pct = v.bachataPct.trim() === '' ? null : Number(v.bachataPct);
   return {
     title: v.title.trim(),
     description: opt(v.description),
@@ -183,8 +180,8 @@ export function payloadFromForm(v: EventFormValues) {
     commune: opt(v.commune),
     venueName: opt(v.venueName),
     address: opt(v.address),
-    styles: v.styles,
-    bachataPct: pct != null && Number.isFinite(pct) ? Math.round(pct) : null,
+    styles: stylesFromPct(v.bachataPct),
+    bachataPct: v.bachataPct,
     priceInfo: opt(v.priceInfo),
     ticketUrl: opt(v.ticketUrl),
     instagramUrl: opt(v.instagramUrl),

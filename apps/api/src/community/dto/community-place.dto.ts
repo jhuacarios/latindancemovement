@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   Max,
@@ -68,6 +69,13 @@ export class CreateCommunityPlaceDto {
   @Min(-180)
   @Max(180)
   lng?: number | null;
+
+  /** % de bachata (0–100); el resto es salsa. Define también `styles`. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  bachataPct?: number | null;
 
   @IsOptional()
   @IsString()

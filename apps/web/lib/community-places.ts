@@ -1,8 +1,9 @@
-import type {
-  ChileRegion,
-  CommunityPlaceDto,
-  CommunityPlaceKind,
-  DanceStyle,
+import {
+  pctFromStyles,
+  stylesFromPct,
+  type ChileRegion,
+  type CommunityPlaceDto,
+  type CommunityPlaceKind,
 } from '@baile-latino/types';
 import { api, API_BASE, uploadForm } from './api';
 
@@ -118,7 +119,8 @@ export interface CommunityPlaceFormValues {
   /** Punto en el mapa (sociales al aire libre). */
   point: { lat: number; lng: number } | null;
   schedule: string;
-  styles: DanceStyle[];
+  /** Mezcla: % de bachata (el resto salsa). */
+  bachataPct: number;
   description: string;
   /** Un handle por línea o separados por coma/espacio; se normaliza al enviar. */
   instagramHandles: string;
@@ -134,7 +136,7 @@ export const EMPTY_PLACE_FORM: CommunityPlaceFormValues = {
   address: '',
   point: null,
   schedule: '',
-  styles: [],
+  bachataPct: 50,
   description: '',
   instagramHandles: '',
   active: true,
@@ -150,7 +152,7 @@ export function formFromPlace(s: CommunityPlaceDto): CommunityPlaceFormValues {
     address: s.address ?? '',
     point: s.lat != null && s.lng != null ? { lat: s.lat, lng: s.lng } : null,
     schedule: s.schedule ?? '',
-    styles: s.styles,
+    bachataPct: s.bachataPct ?? pctFromStyles(s.styles),
     description: s.description ?? '',
     instagramHandles: s.instagramHandles.map((h) => `@${h}`).join('\n'),
     active: s.active,
@@ -184,7 +186,8 @@ export function payloadFromPlaceForm(v: CommunityPlaceFormValues) {
     lat: v.point?.lat ?? null,
     lng: v.point?.lng ?? null,
     schedule: opt(v.schedule),
-    styles: v.styles,
+    styles: stylesFromPct(v.bachataPct),
+    bachataPct: v.bachataPct,
     description: opt(v.description),
     instagramHandles: parseHandles(v.instagramHandles),
     active: v.active,
