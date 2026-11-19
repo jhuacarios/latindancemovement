@@ -24,6 +24,7 @@ import { readMultipart, validateJsonField } from '../common/multipart';
 import { AcademiesService } from './academies.service';
 import { AcademyVideosService } from './academy-videos.service';
 import { AcademyShareService } from './academy-share.service';
+import { AcademyEnrollmentsService } from './academy-enrollments.service';
 import {
   AddMemberDto,
   CheckDuplicatesDto,
@@ -35,6 +36,7 @@ import {
   MoveMediaDto,
   QueryAcademiesDto,
   ReportVideoDto,
+  RequestEnrollmentDto,
   SetAcademyPlanDto,
   SetDirectorDto,
   UpdateAcademyDto,
@@ -52,12 +54,20 @@ export class AcademiesController {
     private readonly academies: AcademiesService,
     private readonly videos: AcademyVideosService,
     private readonly share: AcademyShareService,
+    private readonly enrollments: AcademyEnrollmentsService,
   ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)
   list(@CurrentUser() user: AuthUser, @Query() q: QueryAcademiesDto) {
     return this.academies.list(user, q);
+  }
+
+  /** Mis clases: solicitudes pendientes e inscripciones aceptadas. */
+  @Get('enrollments/mine')
+  @UseGuards(JwtAuthGuard)
+  myEnrollments(@CurrentUser() user: AuthUser) {
+    return this.enrollments.mine(user);
   }
 
   /** Las academias que administro (dueño o profesor). */
@@ -202,6 +212,58 @@ export class AcademiesController {
   @HttpCode(204)
   async removeClass(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('classId') classId: string) {
     await this.academies.removeClass(user, id, classId);
+  }
+
+  // --- inscripción a clases (solicitud → director) ----------------------------------
+
+  /** El alumno pide inscribirse (mensaje opcional): le llega al director por el chat. */
+  @Post(':id/classes/:classId/enroll')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
+  async enroll(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('classId') classId: string,
+    @Body() dto: RequestEnrollmentDto,
+  ) {
+    await this.enrollments.request(user, id, classId, dto.message);
+  }
+
+  /** El alumno cancela su solicitud o deja la clase. */
+  @Delete(':id/classes/:classId/enroll')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
+  async unenroll(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('classId') classId: string) {
+    await this.enrollments.cancel(user, id, classId);
+  }
+
+  /** Solicitudes e inscritos (solo director). `?status=PENDING|ACCEPTED|REJECTED`. */
+  @Get(':id/enrollments')
+  @UseGuards(JwtAuthGuard)
+  listEnrollments(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query('status') status?: string) {
+    const st = status === 'PENDING' || status === 'ACCEPTED' || status === 'REJECTED' ? status : undefined;
+    return this.enrollments.list(user, id, st);
+  }
+
+  @Post(':id/enrollments/:enrollmentId/accept')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  accept(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('enrollmentId') eid: string) {
+    return this.enrollments.accept(user, id, eid);
+  }
+
+  @Post(':id/enrollments/:enrollmentId/reject')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(200)
+  reject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('enrollmentId') eid: string) {
+    return this.enrollments.reject(user, id, eid);
+  }
+
+  /** Saca a un alumno de la clase. */
+  @Delete(':id/enrollments/:enrollmentId')
+  @UseGuards(JwtAuthGuard)
+  removeEnrollment(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('enrollmentId') eid: string) {
+    return this.enrollments.remove(user, id, eid);
   }
 
   // --- link para compartir una clase (dueño y profesores) ---------------------------

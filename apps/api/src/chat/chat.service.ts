@@ -146,6 +146,9 @@ export class ChatService {
         isGeneral: true,
         placeId: true,
         place: { select: { name: true, photoMime: true, updatedAt: true } },
+        academyId: true,
+        classId: true,
+        description: true,
         _count: { select: { participants: true } },
         lastMessageAt: true,
         createdAt: true,
@@ -164,7 +167,7 @@ export class ChatService {
     });
 
     // En los 1 a 1, el otro participante (una sola consulta para todos).
-    const directIds = rows.filter((r) => r.kind !== 'CHANNEL').map((r) => r.id);
+    const directIds = rows.filter((r) => r.kind === 'DIRECT').map((r) => r.id);
     const others = directIds.length
       ? await this.prisma.chatParticipant.findMany({
           where: { conversationId: { in: directIds }, userId: { not: me.id } },
@@ -194,6 +197,29 @@ export class ChatService {
 
     return rows.flatMap((r): ChatConversationDto[] => {
       const last = r.messages[0];
+      if (r.kind === 'CLASS') {
+        if (!r.academyId || !r.classId) return [];
+        return [
+          {
+            id: r.id,
+            kind: 'CLASS',
+            other: null,
+            channel: null,
+            classGroup: {
+              academyId: r.academyId,
+              academyName: r.description ?? 'Academia',
+              classId: r.classId,
+              title: r.name ?? 'Clase',
+              memberCount: r._count.participants,
+            },
+            lastMessage: last ? this.toMessage(last) : null,
+            lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
+            unreadCount: unread.get(r.id) ?? 0,
+            otherReadAt: null,
+            createdAt: r.createdAt.toISOString(),
+          },
+        ];
+      }
       if (r.kind === 'CHANNEL') {
         if (!r.placeId || !r.place) return [];
         const channel: ChatChannelInfo = {
@@ -211,6 +237,7 @@ export class ChatService {
             kind: 'CHANNEL',
             other: null,
             channel,
+            classGroup: null,
             lastMessage: last ? this.toMessage(last) : null,
             lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
             unreadCount: unread.get(r.id) ?? 0,
@@ -226,6 +253,7 @@ export class ChatService {
           id: r.id,
           kind: 'DIRECT',
           channel: null,
+          classGroup: null,
           other: this.toUser(otherP.user),
           lastMessage: last ? this.toMessage(last) : null,
           lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
@@ -499,6 +527,70 @@ export class ChatService {
     data: { name?: string; description?: string | null },
   ): Promise<void> {
     await this.prisma.chatConversation.update({ where: { id: conversationId }, data });
+  }
+
+  // --- Chat de una clase de academia (lo usa AcademiesModule) ---------------------
+
+  /** El grupo de la clase; lo crea si no existe. `academyName` se guarda para mostrarlo. */
+  async ensureClassGroup(input: {
+    academyId: string;
+    academyName: string;
+    classId: string;
+    title: string;
+    createdById: string;
+  }): Promise<string> {
+    const found = await this.prisma.chatConversation.findFirst({
+      where: { kind: 'CLASS', classId: input.classId },
+      select: { id: true },
+    });
+    if (found) return found.id;
+    const c = await this.prisma.chatConversation.create({
+      data: {
+        kind: 'CLASS',
+        academyId: input.academyId,
+        classId: input.classId,
+        name: input.title,
+        description: input.academyName,
+        createdById: input.createdById,
+      },
+      select: { id: true },
+    });
+    return c.id;
+  }
+
+  /** Renombra el grupo de la clase (al cambiar el título de la clase o la academia). */
+  async renameClassGroup(classId: string, data: { title?: string; academyName?: string }): Promise<void> {
+    await this.prisma.chatConversation.updateMany({
+      where: { kind: 'CLASS', classId },
+      data: {
+        ...(data.title !== undefined ? { name: data.title } : {}),
+        ...(data.academyName !== undefined ? { description: data.academyName } : {}),
+      },
+    });
+  }
+
+  /** Actualiza el nombre de la academia en todos sus grupos de clase. */
+  async renameAcademyGroups(academyId: string, academyName: string): Promise<void> {
+    await this.prisma.chatConversation.updateMany({
+      where: { kind: 'CLASS', academyId },
+      data: { description: academyName },
+    });
+  }
+
+  /** Borra el grupo de la clase con sus mensajes (al borrar la clase). */
+  async deleteClassGroup(classId: string): Promise<void> {
+    await this.prisma.chatConversation.deleteMany({ where: { kind: 'CLASS', classId } });
+  }
+
+  /**
+   * Mensaje automático de `fromUserId` a `toUserId` por el chat 1 a 1 (lo abre si
+   * no existe). Se usa para avisar solicitudes de inscripción y sus respuestas.
+   */
+  async notifyDirect(fromUserId: string, toUserId: string, body: string): Promise<void> {
+    if (fromUserId === toUserId) return;
+    const me = { id: fromUserId } as AuthUser;
+    const conv = await this.startConversation(me, toUserId);
+    await this.sendMessage(me, conv.id, body);
   }
 
   /** Borra el canal con sus mensajes (cascade). */

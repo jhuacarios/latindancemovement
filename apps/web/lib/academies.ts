@@ -5,6 +5,9 @@ import {
   type AcademyAdminRowDto,
   type AcademyClassDto,
   type AcademyDto,
+  type AcademyEnrollmentDto,
+  type AcademyEnrollmentStatus,
+  type MyEnrollmentDto,
   type AcademyMemberRole,
   type AcademyShareLinkDto,
   type AcademySummaryDto,
@@ -107,6 +110,8 @@ export interface ClassFormValues {
   priceInfo: string;
   description: string;
   active: boolean;
+  /** Cupo de alumnos ('' = sin cupo). */
+  capacity: string;
 }
 
 export const EMPTY_CLASS: ClassFormValues = {
@@ -121,6 +126,7 @@ export const EMPTY_CLASS: ClassFormValues = {
   priceInfo: '',
   description: '',
   active: true,
+  capacity: '',
 };
 
 export function classFormFrom(c: AcademyClassDto): ClassFormValues {
@@ -136,6 +142,7 @@ export function classFormFrom(c: AcademyClassDto): ClassFormValues {
     priceInfo: c.priceInfo ?? '',
     description: c.description ?? '',
     active: c.active,
+    capacity: c.capacity != null ? String(c.capacity) : '',
   };
 }
 
@@ -153,6 +160,7 @@ function classPayload(v: ClassFormValues) {
     priceInfo: opt(v.priceInfo),
     description: opt(v.description),
     active: v.active,
+    capacity: v.capacity.trim() ? Math.max(1, Math.round(Number(v.capacity))) : null,
   };
 }
 
@@ -533,6 +541,20 @@ export const academiesApi = {
     api<AcademyClassDto>(`/academies/${id}/classes/${classId}`, { method: 'PATCH', body: classPayload(v) }),
   removeClass: (id: string, classId: string) =>
     api<void>(`/academies/${id}/classes/${classId}`, { method: 'DELETE' }),
+  // --- inscripción a clases ---
+  enroll: (id: string, classId: string, message?: string) =>
+    api<void>(`/academies/${id}/classes/${classId}/enroll`, { method: 'POST', body: { message: message?.trim() || null } }),
+  unenroll: (id: string, classId: string) =>
+    api<void>(`/academies/${id}/classes/${classId}/enroll`, { method: 'DELETE' }),
+  enrollments: (id: string, status?: AcademyEnrollmentStatus) =>
+    api<AcademyEnrollmentDto[]>(`/academies/${id}/enrollments${status ? `?status=${status}` : ''}`),
+  acceptEnrollment: (id: string, eid: string) =>
+    api<AcademyEnrollmentDto[]>(`/academies/${id}/enrollments/${eid}/accept`, { method: 'POST' }),
+  rejectEnrollment: (id: string, eid: string) =>
+    api<AcademyEnrollmentDto[]>(`/academies/${id}/enrollments/${eid}/reject`, { method: 'POST' }),
+  removeEnrollment: (id: string, eid: string) =>
+    api<AcademyEnrollmentDto[]>(`/academies/${id}/enrollments/${eid}`, { method: 'DELETE' }),
+  myEnrollments: () => api<MyEnrollmentDto[]>('/academies/enrollments/mine'),
   videos: (id: string, classId?: string) =>
     api<AcademyVideoDto[]>(`/academies/${id}/videos${classId ? `?classId=${classId}` : ''}`),
   videoUrl: (id: string, videoId: string) => api<{ url: string }>(`/academies/${id}/videos/${videoId}/url`),

@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client';
 import type {
   AcademyAdminRowDto,
   AcademyClassDto,
+  AcademyEnrollmentStatus,
   AcademyDto,
   AcademyMediaLocation,
   AcademyMemberRole,
@@ -24,6 +25,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/auth.types';
 import type { UploadedImage } from '../common/multipart';
 import { MediaStorageService } from '../media/media-storage.service';
+import { ChatService } from '../chat/chat.service';
 import {
   AddMemberDto,
   CreateAcademyDto,
@@ -59,6 +61,12 @@ const SUMMARY = {
 type SummaryRow = Prisma.AcademyGetPayload<{ select: typeof SUMMARY }>;
 type ClassRow = Prisma.AcademyClassGetPayload<object>;
 
+interface ClassExtras {
+  enrolledCount: number;
+  pendingCount: number;
+  myEnrollment: AcademyEnrollmentStatus | null;
+}
+
 const GB_MB = 1024;
 
 /** Plan Director vigente = tiene fecha y no ha vencido. */
@@ -81,7 +89,70 @@ export class AcademiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaStorageService,
+    private readonly chat: ChatService,
   ) {}
+
+  // --- inscripciones (los usa AcademyEnrollmentsService y los videos) --------------
+
+  /** El director (dueño) de la academia, o null. */
+  async ownerId(academyId: string): Promise<string | null> {
+    const m = await this.prisma.academyMember.findFirst({
+      where: { academyId, role: 'OWNER' },
+      select: { userId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return m?.userId ?? null;
+  }
+
+  /** Director y profesores (entran a los chats de clase). */
+  async staffIds(academyId: string): Promise<string[]> {
+    const rows = await this.prisma.academyMember.findMany({ where: { academyId }, select: { userId: true } });
+    return rows.map((r) => r.userId);
+  }
+
+  /**
+   * Clases cuyos videos puede ver el usuario: `null` = todas (administra la
+   * academia); si no, las clases en que está inscrito (aceptado). Los videos sin
+   * clase los ve cualquiera con cuenta.
+   */
+  async visibleClassIds(user: AuthUser, academyId: string): Promise<string[] | null> {
+    if (await this.roleIn(user, academyId)) return null;
+    const rows = await this.prisma.academyEnrollment.findMany({
+      where: { userId: user.id, status: 'ACCEPTED', class: { academyId } },
+      select: { classId: true },
+    });
+    return rows.map((r) => r.classId);
+  }
+
+  /** Datos de inscripción por clase para el usuario actual. */
+  private async classExtras(
+    user: AuthUser,
+    classIds: string[],
+    manages: boolean,
+  ): Promise<Map<string, ClassExtras>> {
+    const out = new Map<string, ClassExtras>();
+    if (classIds.length === 0) return out;
+    const [counts, mine] = await Promise.all([
+      this.prisma.academyEnrollment.groupBy({
+        by: ['classId', 'status'],
+        where: { classId: { in: classIds }, status: { in: ['ACCEPTED', 'PENDING'] } },
+        _count: { _all: true },
+      }),
+      this.prisma.academyEnrollment.findMany({
+        where: { classId: { in: classIds }, userId: user.id },
+        select: { classId: true, status: true },
+      }),
+    ]);
+    for (const id of classIds) {
+      const n = (st: string) => counts.find((c) => c.classId === id && c.status === st)?._count._all ?? 0;
+      out.set(id, {
+        enrolledCount: n('ACCEPTED'),
+        pendingCount: manages ? n('PENDING') : 0,
+        myEnrollment: (mine.find((m) => m.classId === id)?.status as AcademyEnrollmentStatus | undefined) ?? null,
+      });
+    }
+    return out;
+  }
 
   // --- permisos -----------------------------------------------------------------
 
@@ -134,7 +205,8 @@ export class AcademiesService {
     };
   }
 
-  private toClass(c: ClassRow): AcademyClassDto {
+  private toClass(c: ClassRow, extra?: ClassExtras, manages = false): AcademyClassDto {
+    const my = extra?.myEnrollment ?? null;
     return {
       id: c.id,
       title: c.title,
@@ -148,6 +220,11 @@ export class AcademiesService {
       priceInfo: c.priceInfo,
       description: c.description,
       active: c.active,
+      capacity: c.capacity,
+      enrolledCount: extra?.enrolledCount ?? 0,
+      pendingCount: extra?.pendingCount ?? 0,
+      myEnrollment: my,
+      chatId: manages || my === 'ACCEPTED' ? c.chatId : null,
     };
   }
 
@@ -206,12 +283,15 @@ export class AcademiesService {
     if (!a) throw new NotFoundException('Academia no encontrada.');
     const summary = this.toSummary(a, user);
     const manages = summary.myRole !== null || user.role === 'SUPER_ADMIN';
+    const isDirector = summary.myRole === 'OWNER' || user.role === 'SUPER_ADMIN';
+    const visibleClasses = a.classes.filter((c) => manages || c.active);
+    const extras = await this.classExtras(user, visibleClasses.map((c) => c.id), isDirector);
     return {
       ...summary,
       address: a.address,
       description: a.description,
       // Quien no la administra ve solo las clases activas, y no ve correos ni el cupo.
-      classes: a.classes.filter((c) => manages || c.active).map((c) => this.toClass(c)),
+      classes: visibleClasses.map((c) => this.toClass(c, extras.get(c.id), manages)),
       members: manages
         ? a.members.map((m) => ({
             userId: m.userId,
@@ -229,6 +309,9 @@ export class AcademiesService {
           }
         : null,
       plan: manages ? planOf(a.planExpiresAt) : null,
+      pendingEnrollments: isDirector
+        ? [...extras.values()].reduce((n, e) => n + e.pendingCount, 0)
+        : 0,
       createdAt: a.createdAt.toISOString(),
     };
   }
@@ -347,6 +430,7 @@ export class AcademiesService {
       select: { region: true, city: true, commune: true },
     });
     await this.prisma.academy.update({ where: { id }, data: this.toData(dto, current) });
+    if (dto.name !== undefined) await this.chat.renameAcademyGroups(id, dto.name.trim());
     return this.findOne(user, id);
   }
 
@@ -422,6 +506,10 @@ export class AcademiesService {
     });
     if (exists) throw new ConflictException('Esa persona ya administra la academia.');
     await this.prisma.academyMember.create({ data: { academyId: id, userId: target.id, role: 'TEACHER' } });
+    // El profesor nuevo entra a los chats de clase que ya existan.
+    for (const c of await this.prisma.academyClass.findMany({ where: { academyId: id, chatId: { not: null } }, select: { chatId: true } })) {
+      await this.chat.addParticipant(c.chatId!, target.id);
+    }
     return this.findOne(user, id);
   }
 
@@ -433,6 +521,9 @@ export class AcademiesService {
     if (!m) throw new NotFoundException('Esa persona no es profesor de la academia.');
     if (m.role === 'OWNER') throw new BadRequestException('No se puede quitar al dueño de la academia.');
     await this.prisma.academyMember.delete({ where: { id: m.id } });
+    for (const c of await this.prisma.academyClass.findMany({ where: { academyId: id, chatId: { not: null } }, select: { chatId: true } })) {
+      await this.chat.removeParticipant(c.chatId!, userId);
+    }
     return this.findOne(user, id);
   }
 
@@ -451,6 +542,7 @@ export class AcademiesService {
     if (dto.priceInfo !== undefined) data.priceInfo = text(dto.priceInfo);
     if (dto.description !== undefined) data.description = text(dto.description);
     if (dto.active !== undefined) data.active = dto.active;
+    if (dto.capacity !== undefined) data.capacity = dto.capacity ?? null;
     return data;
   }
 
@@ -465,7 +557,7 @@ export class AcademiesService {
         startTime: dto.startTime,
       },
     });
-    return this.toClass(c);
+    return this.toClass(c, undefined, true);
   }
 
   /** Valida que la clase sea de la academia (404 si no). */
@@ -484,7 +576,9 @@ export class AcademiesService {
     await this.assertMember(user, academyId);
     await this.assertClass(academyId, classId);
     const c = await this.prisma.academyClass.update({ where: { id: classId }, data: this.classData(dto) });
-    return this.toClass(c);
+    if (dto.title !== undefined && c.chatId) await this.chat.renameClassGroup(classId, { title: c.title });
+    const extras = await this.classExtras(user, [classId], true);
+    return this.toClass(c, extras.get(classId), true);
   }
 
   /** Los videos de la clase quedan como contenido general (classId = null). */
@@ -492,5 +586,6 @@ export class AcademiesService {
     await this.assertMember(user, academyId);
     await this.assertClass(academyId, classId);
     await this.prisma.academyClass.delete({ where: { id: classId } });
+    await this.chat.deleteClassGroup(classId);
   }
 }

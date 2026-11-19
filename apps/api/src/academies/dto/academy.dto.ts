@@ -148,9 +148,25 @@ export class CreateClassDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  /** Cupo máximo de alumnos (null = sin cupo). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  capacity?: number | null;
 }
 
 export class UpdateClassDto extends PartialType(CreateClassDto) {}
+
+/** Solicitud de inscripción: mensaje opcional para el director. */
+export class RequestEnrollmentDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  message?: string | null;
+}
 
 export class CreateVideoUploadDto {
   @IsString()

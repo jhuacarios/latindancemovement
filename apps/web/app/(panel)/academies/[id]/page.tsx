@@ -42,10 +42,11 @@ import { AcademyVault, StorageBar, downloadMedia } from '@/components/academy-va
 import { AcademyShareModal } from '@/components/academy-share-modal';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
 import { InstagramLink } from '@/components/instagram-link';
+import { ClassEnrollmentInfo, EnrollBox, RequestsTab } from '@/components/academy-enrollment';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 
-type Tab = 'clases' | 'videos' | 'vault' | 'admin';
+type Tab = 'clases' | 'solicitudes' | 'videos' | 'vault' | 'admin';
 
 export default function AcademyPage() {
   const { id } = useParams<{ id: string }>();
@@ -55,6 +56,8 @@ export default function AcademyPage() {
   const q = useQuery({ queryKey: ['academies', 'detail', id], queryFn: () => academiesApi.get(id) });
   const a = q.data;
   const manages = Boolean(a && (a.myRole || user?.role === 'SUPER_ADMIN'));
+  // Las solicitudes de inscripción las decide solo el director (y el SUPER_ADMIN).
+  const isDirector = Boolean(a && (a.myRole === 'OWNER' || user?.role === 'SUPER_ADMIN'));
   const refresh = () => qc.invalidateQueries({ queryKey: ['academies'] });
 
   if (q.isLoading) return <Spinner label="Cargando academia…" />;
@@ -102,6 +105,9 @@ export default function AcademyPage() {
         {(
           [
             ['clases', `Clases (${a.classCount})`],
+            ...(isDirector
+              ? [['solicitudes', `Solicitudes${a.pendingEnrollments ? ` (${a.pendingEnrollments})` : ''}`]]
+              : []),
             ['videos', `Fotos y videos (${a.videoCount})`],
             ...(manages ? [['vault', '🗄️ Bóveda'], ['admin', 'Administrar']] : []),
           ] as [Tab, string][]
@@ -120,7 +126,10 @@ export default function AcademyPage() {
         ))}
       </div>
 
-      {tab === 'clases' && <ClassesTab a={a} manages={manages} onChanged={refresh} />}
+      {tab === 'clases' && (
+        <ClassesTab a={a} manages={manages} onChanged={refresh} onRequests={() => setTab('solicitudes')} />
+      )}
+      {tab === 'solicitudes' && isDirector && <RequestsTab a={a} onChanged={refresh} />}
       {tab === 'videos' && <VideosTab a={a} manages={manages} onChanged={refresh} />}
       {tab === 'vault' && manages && <AcademyVault a={a} onChanged={refresh} />}
       {tab === 'admin' && manages && <AdminTab a={a} onChanged={refresh} />}
@@ -171,7 +180,17 @@ function StorageAlerts({ a }: { a: AcademyDto }) {
 
 // --- Clases -----------------------------------------------------------------------
 
-function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean; onChanged: () => void }) {
+function ClassesTab({
+  a,
+  manages,
+  onChanged,
+  onRequests,
+}: {
+  a: AcademyDto;
+  manages: boolean;
+  onChanged: () => void;
+  onRequests: () => void;
+}) {
   const [modal, setModal] = useState<AcademyClassDto | 'new' | null>(null);
   const [sharing, setSharing] = useState<AcademyClassDto | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
@@ -218,6 +237,11 @@ function ClassesTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean
                 </div>
                 {c.priceInfo && <div className="text-xs text-neutral-300">{c.priceInfo}</div>}
                 {c.description && <div className="text-xs text-neutral-500">{c.description}</div>}
+                {manages ? (
+                  <ClassEnrollmentInfo c={c} onRequests={onRequests} />
+                ) : (
+                  c.active && <EnrollBox a={a} c={c} onChanged={onChanged} />
+                )}
                 {manages && (
                   <div className="flex gap-3 pt-1 text-xs">
                     <button type="button" onClick={() => setSharing(c)} className="text-brand hover:underline">
@@ -311,6 +335,11 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
 
   return (
     <div className="space-y-4">
+      {!manages && a.classes.some((c) => c.myEnrollment !== 'ACCEPTED') && (
+        <p className="text-xs text-neutral-500">
+          🔒 Los videos de cada clase los ven solo sus alumnos inscritos. Aquí ves los generales y los de tus clases.
+        </p>
+      )}
       {manages && writable && (
         <AcademyVideoUpload academyId={a.id} classes={a.classes} freeBytes={free} onUploaded={onChanged} />
       )}

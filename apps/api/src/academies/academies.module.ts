@@ -6,14 +6,17 @@ import { AcademyShareService } from './academy-share.service';
 import { AcademyCompatClient, AcademyCompatQueue, AcademyCompatService } from './academy-compat.service';
 import { ShareController } from './share.controller';
 import { MediaModule } from '../media/media.module';
+import { ChatModule } from '../chat/chat.module';
+import { AcademyEnrollmentsService } from './academy-enrollments.service';
 
 @Module({
-  imports: [MediaModule],
+  imports: [MediaModule, ChatModule],
   controllers: [AcademiesController, ShareController],
   providers: [
     AcademiesService,
     AcademyVideosService,
     AcademyShareService,
+    AcademyEnrollmentsService,
     AcademyCompatClient,
     AcademyCompatService,
     AcademyCompatQueue,

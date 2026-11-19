@@ -17,6 +17,7 @@ import {
 import { useDebounced } from '@/lib/use-debounce';
 import { clsx } from '@/components/clsx';
 import { ChannelAvatar } from '@/components/channel-avatar';
+import { ClassAvatar } from '@/components/class-avatar';
 import { Button, Card, Input, Spinner } from '@/components/ui';
 import { ChatThread } from '@/components/chat-thread';
 
@@ -111,13 +112,14 @@ function ConversationRow({
   onClick: () => void;
 }) {
   const isChannel = c.kind === 'CHANNEL' && c.channel;
-  const title = isChannel ? `# ${c.channel!.name}` : (c.other?.name ?? '—');
+  const cls = c.kind === 'CLASS' ? c.classGroup : null;
+  const title = isChannel ? `# ${c.channel!.name}` : cls ? cls.title : (c.other?.name ?? '—');
   const text = c.lastMessage
     ? c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : '')
     : 'Sin mensajes todavía';
   // En los canales, quién escribió el último mensaje.
   const preview =
-    isChannel && c.lastMessage ? `${c.lastMessage.senderName}: ${text}` : text;
+    (isChannel || cls) && c.lastMessage ? `${c.lastMessage.senderName}: ${text}` : text;
   return (
     <button
       type="button"
@@ -127,7 +129,9 @@ function ConversationRow({
         active ? 'bg-brand/10' : 'hover:bg-neutral-800/70',
       )}
     >
-      {isChannel ? (
+      {cls ? (
+        <ClassAvatar academyId={cls.academyId} />
+      ) : isChannel ? (
         <ChannelAvatar channel={c.channel!} />
       ) : (
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
@@ -143,6 +147,9 @@ function ConversationRow({
             )}
           >
             {title}
+            {cls && (
+              <span className="ml-1.5 text-xs font-normal text-neutral-500">Clase · {cls.academyName}</span>
+            )}
             {isChannel && (
               <span className="ml-1.5 text-xs font-normal text-neutral-500">
                 {c.channel!.placeName}

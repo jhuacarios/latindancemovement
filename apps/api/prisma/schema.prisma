@@ -56,6 +56,7 @@ model User {
   administeredPlaces   CommunityPlace[]      @relation("CommunityPlaceAdmin")
   communityMemberships CommunityMember[]
   placeMedia           PlaceMedia[]          @relation("PlaceMediaUploadedBy")
+  academyEnrollments   AcademyEnrollment[]   @relation("AcademyEnrollmentUser")
   chatMemberships      ChatParticipant[]
   chatMessages         ChatMessage[]         @relation("ChatMessageSender")
   audioFiles           AudioFile[]
@@ -410,6 +411,9 @@ model ChatConversation {
   name          String?
   description   String?
   isGeneral     Boolean         @default(false)
+  /// Solo CLASS: academia y clase (sin relación: la clase vive en el módulo de academias).
+  academyId     String?
+  classId       String?
   createdById   String?
   lastMessageAt DateTime?
   createdAt     DateTime        @default(now())
@@ -420,6 +424,7 @@ model ChatConversation {
 
   @@index([lastMessageAt])
   @@index([placeId])
+  @@index([classId])
 }
 
 model ChatParticipant {
@@ -617,13 +622,37 @@ model AcademyClass {
   priceInfo   String?
   description String?
   active      Boolean  @default(true)
+  /// Cupo máximo de alumnos (null = sin cupo).
+  capacity    Int?
+  /// Chat de grupo de la clase (ChatConversation kind CLASS); se crea al aceptar al primer alumno.
+  chatId      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  videos     AcademyVideo[]
-  shareLinks AcademyShareLink[]
+  videos      AcademyVideo[]
+  shareLinks  AcademyShareLink[]
+  enrollments AcademyEnrollment[]
 
   @@index([academyId])
+}
+
+/// Solicitud / inscripción de un alumno a una clase. La acepta o rechaza el director.
+/// Aceptado = aparece en la lista, ve los videos de la clase y entra a su chat.
+model AcademyEnrollment {
+  id        String       @id @default(cuid())
+  classId   String
+  class     AcademyClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation("AcademyEnrollmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  status    String       @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  message   String? // lo que escribió el alumno al pedir
+  decidedAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([classId, userId])
+  @@index([userId])
+  @@index([classId, status])
 }
 
 /// Video o foto de una academia (el tipo sale de mimeType) en el bucket de media (R2, privado: se ve por URL firmada).

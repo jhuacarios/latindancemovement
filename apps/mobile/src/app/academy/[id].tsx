@@ -1,17 +1,21 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/button';
+import { useAuth } from '@/lib/auth';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { placeLabel, regionName, type AcademyClassDto, type AcademyDto } from '@baile-latino/types';
 import {
   LEVEL_LABEL,
@@ -59,8 +63,88 @@ function Header({ a }: { a: AcademyDto }) {
   );
 }
 
+/** Pedir inscripción / estado (pendiente, inscrito, rechazado). Lo decide el director. */
+function EnrollRow({ academyId, c, manages }: { academyId: string; c: AcademyClassDto; manages: boolean }) {
+  const qc = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const full = c.capacity !== null && c.enrolledCount >= c.capacity;
+  const count = c.capacity ? `${c.enrolledCount}/${c.capacity} inscritos` : `${c.enrolledCount} inscritos`;
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+      setAsking(false);
+      setMessage('');
+      await qc.invalidateQueries({ queryKey: ['academy', academyId] });
+      await qc.invalidateQueries({ queryKey: ['academy-media', academyId] });
+    } catch (e) {
+      Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (manages) return <Text style={ui.small}>{count}{c.pendingCount ? ` · ${c.pendingCount} solicitudes` : ''}</Text>;
+
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={ui.small}>{count}{full ? ' · clase llena' : ''}</Text>
+      {c.myEnrollment === 'ACCEPTED' ? (
+        <View style={styles.row}>
+          <Text style={[styles.pill, { color: colors.clave, backgroundColor: '#1a7a4e33' }]}>✓ Inscrito</Text>
+          <Text
+            style={styles.linkMuted}
+            onPress={() =>
+              Alert.alert('Dejar la clase', `Saldrás de "${c.title}" y de su chat.`, [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Dejar', style: 'destructive', onPress: () => void run(() => academiesApi.unenroll(academyId, c.id)) },
+              ])
+            }
+          >
+            Dejar la clase
+          </Text>
+        </View>
+      ) : c.myEnrollment === 'PENDING' ? (
+        <View style={styles.row}>
+          <Text style={[styles.pill, { color: colors.bachata, backgroundColor: '#f59e0b22' }]}>
+            ⏳ Solicitud enviada{full ? ' (en espera)' : ''}
+          </Text>
+          <Text style={styles.linkMuted} onPress={() => void run(() => academiesApi.unenroll(academyId, c.id))}>
+            Cancelar
+          </Text>
+        </View>
+      ) : asking ? (
+        <View style={{ gap: space.sm }}>
+          <TextInput
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Mensaje para el director (opcional)"
+            placeholderTextColor={colors.textFaint}
+            multiline
+            maxLength={500}
+            style={[ui.input, { minHeight: 64, textAlignVertical: 'top' }]}
+          />
+          <View style={styles.row}>
+            <Button title="Enviar solicitud" onPress={() => void run(() => academiesApi.enroll(academyId, c.id, message))} loading={busy} style={{ flex: 1 }} />
+            <Button title="Cancelar" variant="ghost" onPress={() => setAsking(false)} />
+          </View>
+        </View>
+      ) : (
+        <Button
+          title={c.myEnrollment === 'REJECTED' ? 'Volver a pedir inscripción' : 'Solicitar inscripción'}
+          variant="ghost"
+          onPress={() => setAsking(true)}
+        />
+      )}
+    </View>
+  );
+}
+
 /** Horario semanal informativo, agrupado por día (lunes primero). */
-function Schedule({ classes }: { classes: AcademyClassDto[] }) {
+function Schedule({ classes, academyId, manages }: { classes: AcademyClassDto[]; academyId: string; manages: boolean }) {
   const active = classes.filter((c) => c.active);
   if (active.length === 0) return null;
   return (
@@ -80,6 +164,7 @@ function Schedule({ classes }: { classes: AcademyClassDto[] }) {
                   <Text style={ui.small}>
                     {[LEVEL_LABEL[c.level], c.teacherName, c.place, c.priceInfo].filter(Boolean).join(' · ')}
                   </Text>
+                  <EnrollRow academyId={academyId} c={c} manages={manages} />
                 </View>
               </View>
             ))}
@@ -141,6 +226,7 @@ function Gallery({ a }: { a: AcademyDto }) {
 
 export default function AcademyScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const { data: a, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['academy', id],
     queryFn: () => academiesApi.get(id),
@@ -164,7 +250,7 @@ export default function AcademyScreen() {
                 <Text style={ui.body}>{a.description}</Text>
               </View>
             ) : null}
-            <Schedule classes={a.classes} />
+            <Schedule classes={a.classes} academyId={a.id} manages={a.myRole !== null || user?.role === 'SUPER_ADMIN'} />
             <Gallery a={a} />
           </>
         )}
@@ -177,6 +263,8 @@ const styles = StyleSheet.create({
   logo: { width: 76, height: 76, borderRadius: radius.md, backgroundColor: colors.selva },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   link: { color: colors.clave, fontSize: 13, fontWeight: '600' },
+  linkMuted: { color: colors.textMuted, fontSize: 13 },
+  pill: { fontSize: 12, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, overflow: 'hidden' },
   day: { color: colors.clave, fontSize: 13, fontWeight: '700', textTransform: 'uppercase' },
   classRow: { flexDirection: 'row', gap: space.md },
   time: { color: colors.text, fontSize: 14, fontWeight: '600', width: 96, fontVariant: ['tabular-nums'] },

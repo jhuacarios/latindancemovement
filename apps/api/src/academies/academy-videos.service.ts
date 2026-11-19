@@ -160,9 +160,17 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
   }
 
   async list(user: AuthUser, academyId: string, q: ListVideosQueryDto): Promise<AcademyVideoDto[]> {
-    await this.academies.roleIn(user, academyId); // 404 si la academia no existe
+    // Los videos de una clase solo los ven sus inscritos (y quienes administran);
+    // los que no tienen clase, cualquiera con cuenta. (404 si la academia no existe.)
+    const visible = await this.academies.visibleClassIds(user, academyId);
     const rows = await this.prisma.academyVideo.findMany({
-      where: { academyId, status: 'READY', location: 'GALLERY', ...(q.classId ? { classId: q.classId } : {}) },
+      where: {
+        academyId,
+        status: 'READY',
+        location: 'GALLERY',
+        ...(q.classId ? { classId: q.classId } : {}),
+        ...(visible ? { OR: [{ classId: null }, { classId: { in: visible } }] } : {}),
+      },
       select: VIDEO_SELECT,
       orderBy: [{ recordedOn: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     });
@@ -384,6 +392,12 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('Este archivo está en la bóveda: no se reproduce, solo se descarga.');
     }
     if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
+    if (v.classId) {
+      const visible = await this.academies.visibleClassIds(user, academyId);
+      if (visible && !visible.includes(v.classId)) {
+        throw new ForbiddenException('Este video es de una clase: inscríbete para verlo.');
+      }
+    }
     return { url: await this.media.viewUrl(playableKey(v)) };
   }
 

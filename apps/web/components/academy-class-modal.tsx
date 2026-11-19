@@ -176,6 +176,17 @@ export function AcademyClassModal({
             />
           </Field>
 
+          <Field label="Cupo de alumnos (opcional)">
+            <Input
+              type="number"
+              min={1}
+              max={1000}
+              value={v.capacity}
+              onChange={(e) => set("capacity", e.target.value)}
+              placeholder="Sin cupo"
+            />
+          </Field>
+
           <Field label="Descripción (opcional)">
             <textarea
               value={v.description}

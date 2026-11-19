@@ -914,13 +914,25 @@ export interface ChatChannelInfo {
   memberCount: number;
 }
 
+/** Datos del chat de una clase de academia. */
+export interface ChatClassInfo {
+  academyId: string;
+  academyName: string;
+  classId: string;
+  /** Título de la clase. */
+  title: string;
+  memberCount: number;
+}
+
 export interface ChatConversationDto {
   id: string;
-  kind: 'DIRECT' | 'CHANNEL';
+  kind: 'DIRECT' | 'CHANNEL' | 'CLASS';
   /** El otro participante (solo DIRECT). */
   other: ChatUser | null;
   /** El canal (solo CHANNEL). */
   channel: ChatChannelInfo | null;
+  /** La clase (solo CLASS). */
+  classGroup: ChatClassInfo | null;
   lastMessage: ChatMessageDto | null;
   lastMessageAt: string | null;
   unreadCount: number;
@@ -1215,6 +1227,50 @@ export interface AcademyClassDto {
   priceInfo: string | null;
   description: string | null;
   active: boolean;
+  /** Cupo máximo de alumnos (null = sin cupo). */
+  capacity: number | null;
+  /** Alumnos aceptados. */
+  enrolledCount: number;
+  /** Solicitudes pendientes (solo para el director; 0 para el resto). */
+  pendingCount: number;
+  /** Estado de la inscripción del usuario actual (null = no pidió). */
+  myEnrollment: AcademyEnrollmentStatus | null;
+  /** Chat de la clase (si el usuario está inscrito o la administra y ya existe). */
+  chatId: string | null;
+}
+
+export const ACADEMY_ENROLLMENT_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED'] as const;
+export type AcademyEnrollmentStatus = (typeof ACADEMY_ENROLLMENT_STATUSES)[number];
+
+/** Una solicitud/inscripción, como la ve el director. */
+export interface AcademyEnrollmentDto {
+  id: string;
+  classId: string;
+  classTitle: string;
+  weekday: number;
+  startTime: string;
+  userId: string;
+  /** Nombre visible del alumno. */
+  userName: string;
+  instagramHandle: string | null;
+  status: AcademyEnrollmentStatus;
+  message: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+/** Mis clases (perfil del alumno). */
+export interface MyEnrollmentDto {
+  id: string;
+  academyId: string;
+  academyName: string;
+  academyHasLogo: boolean;
+  classId: string;
+  classTitle: string;
+  weekday: number;
+  startTime: string;
+  status: AcademyEnrollmentStatus;
+  chatId: string | null;
 }
 
 export interface AcademyDto extends AcademySummaryDto {
@@ -1227,6 +1283,8 @@ export interface AcademyDto extends AcademySummaryDto {
   storage: { usedBytes: number; quotaBytes: number; vaultUsedBytes: number; vaultQuotaBytes: number } | null;
   /** Plan Director (solo para quienes la administran; null para el resto). */
   plan: AcademyPlanDto | null;
+  /** Solicitudes de inscripción pendientes en todas sus clases (solo director; 0 para el resto). */
+  pendingEnrollments: number;
   createdAt: string;
 }
 

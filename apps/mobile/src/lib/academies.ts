@@ -45,6 +45,13 @@ export const academiesApi = {
   /** Galería (solo lo listo, no la bóveda). */
   media: (id: string, classId?: string | null) =>
     api<AcademyVideoDto[]>(`/academies/${id}/videos${classId ? `?classId=${classId}` : ''}`),
+  enroll: (id: string, classId: string, message?: string) =>
+    api<void>(`/academies/${id}/classes/${classId}/enroll`, {
+      method: 'POST',
+      body: { message: message?.trim() || null },
+    }),
+  unenroll: (id: string, classId: string) =>
+    api<void>(`/academies/${id}/classes/${classId}/enroll`, { method: 'DELETE' }),
   /** URL firmada (1 h) para ver una foto o reproducir un video. */
   mediaUrl: (id: string, videoId: string) =>
     api<{ url: string }>(`/academies/${id}/videos/${videoId}/url`),

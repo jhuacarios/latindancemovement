@@ -24,6 +24,7 @@ import { Spinner } from '@/components/ui';
 import { InstagramLink } from '@/components/instagram-link';
 import Link from 'next/link';
 import { ChannelAvatar } from '@/components/channel-avatar';
+import { ClassAvatar } from '@/components/class-avatar';
 import { placeDetailPath } from '@/lib/community-places';
 import { ChatImage } from '@/components/chat-image';
 
@@ -243,10 +244,16 @@ export function ChatThread({
 
   const other = conversation.other;
   const channel = conversation.kind === 'CHANNEL' ? conversation.channel : null;
+  const cls = conversation.kind === 'CLASS' ? conversation.classGroup : null;
+  const isGroup = Boolean(channel || cls);
   // Leído si el otro marcó lectura después de que se envió el mensaje (solo 1 a 1).
   const otherReadAt = conversation.otherReadAt;
   const isRead = (m: ChatMessageDto) => Boolean(otherReadAt && otherReadAt >= m.createdAt);
-  const placeholder = channel ? `Escribe en #${channel.name}…` : `Escríbele a ${other?.name ?? ''}…`;
+  const placeholder = channel
+    ? `Escribe en #${channel.name}…`
+    : cls
+      ? `Escribe a la clase ${cls.title}…`
+      : `Escríbele a ${other?.name ?? ''}…`;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -262,7 +269,20 @@ export function ChatThread({
             ←
           </button>
         )}
-        {channel ? (
+        {cls ? (
+          <>
+            <ClassAvatar academyId={cls.academyId} size="sm" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold">🎓 {cls.title}</div>
+              <div className="truncate text-xs text-neutral-500">
+                <Link href={`/academies/${cls.academyId}`} className="hover:text-neutral-300 hover:underline">
+                  {cls.academyName}
+                </Link>
+                {` · ${cls.memberCount} ${cls.memberCount === 1 ? 'participante' : 'participantes'}`}
+              </div>
+            </div>
+          </>
+        ) : channel ? (
           <>
             <ChannelAvatar channel={channel} size="sm" />
             <div className="min-w-0 flex-1">
@@ -344,7 +364,7 @@ export function ChatThread({
           const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
           // En canales, el nombre arriba del globo cuando cambia quien escribe.
           const showSender =
-            Boolean(channel) && !mine && (newDay || !prev || prev.senderId !== m.senderId);
+            isGroup && !mine && (newDay || !prev || prev.senderId !== m.senderId);
           return (
             <div key={m.id}>
               {newDay && (
@@ -379,7 +399,7 @@ export function ChatThread({
                     )}
                   >
                     {formatMsgTime(m.createdAt)}
-                    {mine && !channel && <Ticks read={isRead(m)} />}
+                    {mine && !isGroup && <Ticks read={isRead(m)} />}
                   </div>
                 </div>
               </div>
