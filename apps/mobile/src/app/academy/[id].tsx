@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -93,13 +92,14 @@ function Schedule({ classes }: { classes: AcademyClassDto[] }) {
 function Gallery({ a }: { a: AcademyDto }) {
   const [classId, setClassId] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
-  const { width } = useWindowDimensions();
+  // Ancho real de la grilla (medido): así caben 3 columnas en cualquier pantalla.
+  const [gridWidth, setGridWidth] = useState(0);
   const { data, isLoading } = useQuery({
     queryKey: ['academy-media', a.id, classId],
     queryFn: () => academiesApi.media(a.id, classId),
   });
-  // 3 columnas, con el padding de la pantalla y de la tarjeta.
-  const cell = Math.floor((width - space.lg * 4 - 4) / 3);
+  const GAP = 2;
+  const cell = gridWidth > 0 ? Math.floor((gridWidth - GAP * 2) / 3) : 0;
   const classOptions = useMemo(
     () => a.classes.map((c) => ({ value: c.id, label: c.title })),
     [a.classes],
@@ -117,8 +117,8 @@ function Gallery({ a }: { a: AcademyDto }) {
       ) : items.length === 0 ? (
         <Text style={ui.muted}>Todavía no hay fotos ni videos{classId ? ' de esta clase' : ''}.</Text>
       ) : (
-        <View style={styles.grid}>
-          {items.map((v, i) => (
+        <View style={styles.grid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+          {cell > 0 && items.map((v, i) => (
             <Pressable key={v.id} onPress={() => setOpen(i)} style={{ width: cell, height: cell }}>
               {v.thumbUrl ? (
                 <Image source={v.thumbUrl} style={styles.thumb} contentFit="cover" transition={150} />
