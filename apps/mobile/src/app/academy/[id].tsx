@@ -23,6 +23,7 @@ import {
   WEEK_ORDER,
   academiesApi,
   academyLogoUrl,
+  bumpLogoVersion,
   academyMapsLink,
   timeRange,
   uploadMode,
@@ -63,6 +64,37 @@ function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
       await uploadImage(`/academies/${a.id}/cover`, jpg);
     });
   };
+  const uploadLogo = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
+    const asset = res.canceled ? null : res.assets[0];
+    if (!asset) return;
+    await run(async () => {
+      // Cuadrado, 512 px, en JPG (también si era HEIC).
+      const jpg = await toJpeg(asset.uri, asset.width > 512 ? 512 : null, 0.9);
+      await uploadImage(`/academies/${a.id}/logo`, jpg);
+      bumpLogoVersion(a.id);
+      void qc.invalidateQueries({ queryKey: ['academies'] });
+    });
+  };
+  const editLogo = () =>
+    Alert.alert('Logo de la academia', 'Se recorta en cuadrado.', [
+      { text: a.hasLogo ? 'Cambiar logo' : 'Elegir logo', onPress: () => void uploadLogo() },
+      ...(a.hasLogo
+        ? [
+            {
+              text: 'Quitar logo',
+              style: 'destructive' as const,
+              onPress: () =>
+                void run(async () => {
+                  await api(`/academies/${a.id}/logo`, { method: 'DELETE' });
+                  bumpLogoVersion(a.id);
+                  void qc.invalidateQueries({ queryKey: ['academies'] });
+                }),
+            },
+          ]
+        : []),
+      { text: 'Cancelar', style: 'cancel' as const },
+    ]);
   const edit = () =>
     Alert.alert(
       'Foto de portada',
@@ -121,13 +153,20 @@ function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
         )}
       </View>
       <View style={styles.heroBody}>
-        {logo ? (
-          <Image source={logo} style={styles.logo} contentFit="cover" />
-        ) : (
-          <View style={[styles.logo, { alignItems: 'center', justifyContent: 'center' }]}>
-            <Text style={{ fontSize: 34 }}>🎓</Text>
-          </View>
-        )}
+        <Pressable onPress={manages ? editLogo : undefined} disabled={!manages || busy} style={styles.logoWrap}>
+          {logo ? (
+            <Image source={logo} style={styles.logo} contentFit="cover" />
+          ) : (
+            <View style={[styles.logo, { alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ fontSize: 34 }}>🎓</Text>
+            </View>
+          )}
+          {manages && (
+            <View style={styles.logoBadge}>
+              <Text style={styles.logoBadgeText}>✎</Text>
+            </View>
+          )}
+        </Pressable>
         <Text style={ui.h1}>{a.name}</Text>
         {where ? <Text style={ui.muted}>{where}</Text> : null}
         <View style={styles.row}>
@@ -292,6 +331,21 @@ const styles = StyleSheet.create({
   mosaic: { height: 190, flexDirection: 'row', gap: 2, backgroundColor: colors.selva },
   shade: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0d1f1a55' },
   heroBody: { marginTop: -44, padding: space.lg, paddingTop: 0, gap: 6 },
+  logoWrap: { alignSelf: 'flex-start' },
+  logoBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoBadgeText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   logo: {
     width: 88,
     height: 88,

@@ -20,9 +20,17 @@ export const LEVEL_LABEL: Record<ClassLevel, string> = {
   TODOS: 'Todo nivel',
 };
 
+/** Cambia cuando se sube o quita un logo en esta sesión (la API y el teléfono lo cachean). */
+const logoVersions = new Map<string, number>();
+export function bumpLogoVersion(academyId: string): void {
+  logoVersions.set(academyId, Date.now());
+}
+
 /** El logo es público (para <Image>); la API lo cachea 1 h. */
 export function academyLogoUrl(a: Pick<AcademySummaryDto, 'id' | 'hasLogo'>): string | null {
-  return a.hasLogo ? `${API_BASE}/academies/${a.id}/logo` : null;
+  if (!a.hasLogo) return null;
+  const v = logoVersions.get(a.id);
+  return `${API_BASE}/academies/${a.id}/logo${v ? `?v=${v}` : ''}`;
 }
 
 /** "18:30" + 60 → "18:30–19:30". */
