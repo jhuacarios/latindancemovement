@@ -917,7 +917,8 @@ export interface GifSearchResponse {
 }
 
 // --- Stickers ------------------------------------------------------------------
-export const STICKER_PACK_SCOPES = ['PLATFORM', 'ACADEMY', 'PLACE'] as const;
+/** USER = "Mis stickers": los que crea cada persona (los usa solo ella; los demás los ven en el chat). */
+export const STICKER_PACK_SCOPES = ['PLATFORM', 'ACADEMY', 'PLACE', 'USER'] as const;
 export type StickerPackScope = (typeof STICKER_PACK_SCOPES)[number];
 /** Máximo de stickers por pack y peso máximo de cada uno. */
 export const STICKERS_PER_PACK = 60;

@@ -58,6 +58,15 @@ export class StickersController {
     await this.stickers.removePack(user, id);
   }
 
+  /** Agrega un sticker a "Mis stickers" (los crea cualquiera). multipart: `file` (máx. 512 KB). */
+  @Post('mine')
+  @UseGuards(JwtAuthGuard)
+  async addMine(@CurrentUser() user: AuthUser, @Req() req: FastifyRequest) {
+    const { file } = await readMultipart(req);
+    if (!file) throw new BadRequestException('Sube la imagen del sticker.');
+    return this.stickers.addMine(user, file);
+  }
+
   /** Agrega un sticker al pack. multipart: `file` (PNG, WebP, GIF o JPG; máx. 512 KB). */
   @Post('packs/:id/stickers')
   @UseGuards(JwtAuthGuard)

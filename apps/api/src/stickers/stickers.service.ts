@@ -24,8 +24,12 @@ const PACK_SELECT = {
   scope: true,
   academyId: true,
   placeId: true,
+  createdById: true,
   stickers: { select: { id: true }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
 } satisfies Prisma.StickerPackSelect;
+
+/** Nombre del pack personal de cada uno. */
+const MY_PACK_NAME = 'Mis stickers';
 
 type PackRow = {
   id: string;
@@ -33,6 +37,7 @@ type PackRow = {
   scope: string;
   academyId: string | null;
   placeId: string | null;
+  createdById: string | null;
   stickers: { id: string }[];
 };
 
@@ -52,8 +57,10 @@ export class StickersService {
   /** ¿Puede administrar el pack (o crear uno para ese dueño)? */
   private async canManage(
     user: AuthUser,
-    p: { scope: string; academyId: string | null; placeId: string | null },
+    p: { scope: string; academyId: string | null; placeId: string | null; createdById?: string | null },
   ): Promise<boolean> {
+    // "Mis stickers": solo su dueño (ni el SUPER_ADMIN los toca desde acá).
+    if (p.scope === 'USER') return p.createdById === user.id;
     if (user.role === 'SUPER_ADMIN') return true;
     if (p.scope === 'ACADEMY' && p.academyId) return Boolean(await this.academies.roleIn(user, p.academyId));
     if (p.scope === 'PLACE' && p.placeId) return this.community.canManagePlace(user, p.placeId);
@@ -83,7 +90,7 @@ export class StickersService {
     );
   }
 
-  /** Los packs que puedo usar: Nectason + mis academias + mis sociales (los vacíos no). */
+  /** Los packs que puedo usar: los míos + Nectason + mis academias + mis sociales (los vacíos no). */
   async available(user: AuthUser): Promise<StickerPackDto[]> {
     const [academyIds, placeIds] = await Promise.all([
       this.academies.academyIdsFor(user.id),
@@ -92,11 +99,19 @@ export class StickersService {
     const rows = await this.prisma.stickerPack.findMany({
       where: {
         stickers: { some: {} },
-        OR: [{ scope: 'PLATFORM' }, { academyId: { in: academyIds } }, { placeId: { in: placeIds } }],
+        OR: [
+          { scope: 'USER', createdById: user.id },
+          { scope: 'PLATFORM' },
+          { academyId: { in: academyIds } },
+          { placeId: { in: placeIds } },
+        ],
       },
       select: PACK_SELECT,
-      orderBy: [{ scope: 'desc' }, { createdAt: 'asc' }],
+      orderBy: { createdAt: 'asc' },
     });
+    // Los míos primero, después Nectason, academias y sociales.
+    const rank = { USER: 0, PLATFORM: 1, ACADEMY: 2, PLACE: 3 } as Record<string, number>;
+    rows.sort((x, y) => (rank[x.scope] ?? 9) - (rank[y.scope] ?? 9));
     return this.toDtos(user, rows);
   }
 
@@ -115,6 +130,30 @@ export class StickersService {
     return this.toDtos(user, rows);
   }
 
+  /**
+   * Agrega un sticker a "Mis stickers" (crea el pack la primera vez). Si se llenó,
+   * abre otro ("Mis stickers 2"…).
+   */
+  async addMine(user: AuthUser, file: UploadedImage): Promise<StickerPackDto> {
+    const mine = await this.prisma.stickerPack.findMany({
+      where: { scope: 'USER', createdById: user.id },
+      select: PACK_SELECT,
+      orderBy: { createdAt: 'asc' },
+    });
+    let pack = mine.find((p) => p.stickers.length < STICKERS_PER_PACK);
+    if (!pack) {
+      pack = await this.prisma.stickerPack.create({
+        data: {
+          name: mine.length ? `${MY_PACK_NAME} ${mine.length + 1}` : MY_PACK_NAME,
+          scope: 'USER',
+          createdById: user.id,
+        },
+        select: PACK_SELECT,
+      });
+    }
+    return this.addSticker(user, pack.id, file);
+  }
+
   private owner(q: { scope: StickerPackScope; academyId?: string | null; placeId?: string | null }) {
     if (q.scope === 'ACADEMY') {
       if (!q.academyId) throw new BadRequestException('Falta la academia.');
@@ -123,6 +162,10 @@ export class StickersService {
     if (q.scope === 'PLACE') {
       if (!q.placeId) throw new BadRequestException('Falta el social.');
       return { scope: q.scope, academyId: null, placeId: q.placeId };
+    }
+    if (q.scope === 'USER') {
+      // Los personales se crean solos con POST /stickers/mine.
+      throw new BadRequestException('Tus stickers se crean desde "Crear sticker".');
     }
     return { scope: 'PLATFORM' as const, academyId: null, placeId: null };
   }

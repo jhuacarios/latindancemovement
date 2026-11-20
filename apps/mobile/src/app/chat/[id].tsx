@@ -16,7 +16,7 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { UserAvatar } from '@/components/avatar-editor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -469,7 +469,15 @@ export default function ChatThreadScreen() {
             {sending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.sendText}>➤</Text>}
           </Pressable>
         </View>
-        <StickerSheet visible={stickers} onPick={(sid) => void sendExtra('sticker', sid)} onClose={() => setStickers(false)} />
+        <StickerSheet
+          visible={stickers}
+          onPick={(sid) => void sendExtra('sticker', sid)}
+          onClose={() => setStickers(false)}
+          onCreate={() => {
+            setStickers(false);
+            router.push({ pathname: '/sticker/new', params: { chatId: id } });
+          }}
+        />
         <GifSheet visible={gifsOpen} onPick={(gid) => void sendExtra('gif', gid)} onClose={() => setGifsOpen(false)} />
         <ReactionSheet
           message={reacting}

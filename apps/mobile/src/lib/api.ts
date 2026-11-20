@@ -140,13 +140,19 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
  * subida nativa de expo-file-system (lee el archivo desde el disco). Más confiable
  * que FormData + fetch para PUT con archivos. Devuelve el JSON de la respuesta.
  */
-export async function uploadImage<T>(path: string, uri: string, method: 'PUT' | 'POST' = 'PUT', retried = false): Promise<T> {
+export async function uploadImage<T>(
+  path: string,
+  uri: string,
+  method: 'PUT' | 'POST' = 'PUT',
+  mimeType = 'image/jpeg',
+  retried = false,
+): Promise<T> {
   await loadTokens();
   const task = new UploadTask(new File(uri), `${API_BASE}${path}`, {
     httpMethod: method,
     uploadType: UploadType.MULTIPART,
     fieldName: 'file',
-    mimeType: 'image/jpeg',
+    mimeType,
     headers: authHeaders(),
   });
   let res: { status: number; body: string };
@@ -158,7 +164,7 @@ export async function uploadImage<T>(path: string, uri: string, method: 'PUT' | 
     task.release();
   }
   if (res.status === 401 && !retried) {
-    if (await tryRefresh()) return uploadImage<T>(path, uri, method, true);
+    if (await tryRefresh()) return uploadImage<T>(path, uri, method, mimeType, true);
     await clearTokens();
   }
   let data: unknown = null;

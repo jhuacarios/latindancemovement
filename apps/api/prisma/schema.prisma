@@ -490,12 +490,13 @@ model ChatMessage {
  * Pack de stickers. PLATFORM = de Nectason (todos lo usan; lo administra el
  * SUPER_ADMIN). ACADEMY = de una academia (lo usan su equipo y sus alumnos
  * inscritos; lo administran director y profesores). PLACE = de un social (lo usan
- * los miembros de su comunidad; lo administra su administrador).
+ * los miembros de su comunidad; lo administra su administrador). USER = "Mis
+ * stickers" de una persona (su dueño es createdById; solo ella los usa).
  */
 model StickerPack {
   id          String          @id @default(cuid())
   name        String
-  scope       String // StickerPackScope: PLATFORM | ACADEMY | PLACE
+  scope       String // StickerPackScope: PLATFORM | ACADEMY | PLACE | USER
   academyId   String?
   academy     Academy?        @relation(fields: [academyId], references: [id], onDelete: Cascade)
   placeId     String?
@@ -507,6 +508,7 @@ model StickerPack {
   @@index([scope])
   @@index([academyId])
   @@index([placeId])
+  @@index([scope, createdById])
 }
 
 /**
