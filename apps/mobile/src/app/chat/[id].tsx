@@ -475,7 +475,8 @@ export default function ChatThreadScreen() {
           onClose={() => setStickers(false)}
           onCreate={() => {
             setStickers(false);
-            router.push({ pathname: '/sticker/new', params: { chatId: id } });
+            // En iOS no se puede abrir otra pantalla mientras el panel (Modal) se está cerrando.
+            setTimeout(() => router.push({ pathname: '/sticker/new', params: { chatId: id } }), 400);
           }}
         />
         <GifSheet visible={gifsOpen} onPick={(gid) => void sendExtra('gif', gid)} onClose={() => setGifsOpen(false)} />

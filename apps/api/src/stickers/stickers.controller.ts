@@ -19,11 +19,15 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/auth.types';
 import { readMultipart } from '../common/multipart';
 import { StickersService } from './stickers.service';
+import { StickerCutoutService } from './sticker-cutout.service';
 import { CreateStickerPackDto, RenameStickerPackDto, StickerOwnerQueryDto } from './stickers.dto';
 
 @Controller('stickers')
 export class StickersController {
-  constructor(private readonly stickers: StickersService) {}
+  constructor(
+    private readonly stickers: StickersService,
+    private readonly cutouts: StickerCutoutService,
+  ) {}
 
   /** Los packs que puedo usar en el chat. */
   @Get('packs')
@@ -56,6 +60,18 @@ export class StickersController {
   @HttpCode(204)
   async removePack(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     await this.stickers.removePack(user, id);
+  }
+
+  /**
+   * Recorta una foto según el contorno dibujado a mano (no guarda nada).
+   * multipart: `file` (la foto), `polygon` (JSON [[x,y],...] en 0..1) y `mode` (smart | manual).
+   */
+  @Post('cutout')
+  @UseGuards(JwtAuthGuard)
+  async cutout(@Req() req: FastifyRequest) {
+    const { file, fields } = await readMultipart(req);
+    if (!file) throw new BadRequestException('Sube la foto.');
+    return this.cutouts.cutout(file, fields.polygon, fields.mode);
   }
 
   /** Agrega un sticker a "Mis stickers" (los crea cualquiera). multipart: `file` (máx. 512 KB). */

@@ -74,7 +74,16 @@ export default function RootLayout() {
                 headerTitleStyle: { color: colors.text },
               }}
             />
-            <Stack.Screen name="sticker/new" options={{ presentation: 'modal' }} />
+            <Stack.Screen
+              name="sticker/new"
+              options={{
+                headerShown: true,
+                headerBackTitle: 'Chat',
+                headerStyle: { backgroundColor: colors.selva },
+                headerTintColor: colors.clave,
+                headerTitleStyle: { color: colors.text },
+              }}
+            />
             <Stack.Screen
               name="class/[id]"
               options={{

@@ -21,6 +21,15 @@ ARG KARAOKE_MODEL_URL=https://github.com/TRvlvr/model_repo/releases/download/all
 ARG KARAOKE_MODEL_SHA256=bf32e15105a09c0f7dddd2b67346146334d6f3ecb399ed7638eba2ab07cbf5f4
 RUN mkdir -p /models   && python -c "import urllib.request,sys; urllib.request.urlretrieve(sys.argv[1], '/models/UVR_MDXNET_KARA_2.onnx')" "$KARAOKE_MODEL_URL"   && echo "$KARAOKE_MODEL_SHA256  /models/UVR_MDXNET_KARA_2.onnx" | sha256sum -c -
 ENV KARAOKE_MODEL_PATH=/models/UVR_MDXNET_KARA_2.onnx
+
+# Recorte de stickers: Pillow + modelo ISNet "general use" de rembg (~180 MB), verificado por hash.
+# Capa aparte para no reinstalar torch/Demucs al agregarla.
+COPY requirements-images.txt ./
+RUN pip install --no-cache-dir -r requirements-images.txt
+ARG CUTOUT_MODEL_URL=https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx
+ARG CUTOUT_MODEL_SHA256=60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a
+RUN python -c "import urllib.request,sys; urllib.request.urlretrieve(sys.argv[1], '/models/isnet-general-use.onnx')" "$CUTOUT_MODEL_URL"   && echo "$CUTOUT_MODEL_SHA256  /models/isnet-general-use.onnx" | sha256sum -c -
+ENV CUTOUT_MODEL_PATH=/models/isnet-general-use.onnx
 # Menos arenas de malloc: la memoria liberada entre pasos (Demucs → karaoke → divisiones)
 # vuelve al sistema en vez de acumularse (pico medido ~2,8 GB por canción).
 ENV MALLOC_ARENA_MAX=2

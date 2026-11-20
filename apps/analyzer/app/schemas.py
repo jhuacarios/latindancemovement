@@ -116,3 +116,21 @@ class CompatResponse(BaseModel):
     result: Literal["converted", "not_needed", "too_long"]
     durationMs: int = Field(ge=0)
     sizeBytes: int | None = None
+
+
+class CutoutRequest(BaseModel):
+    """Sticker recortado a mano: imagen (base64) + contorno dibujado, en 0..1 de la imagen."""
+
+    image: str = Field(min_length=1, max_length=12_000_000)
+    polygon: list[tuple[float, float]] = Field(min_length=3, max_length=4000)
+    mode: Literal["smart", "manual"] = "smart"
+
+
+class CutoutResponse(BaseModel):
+    # PNG en base64, 512x512 con fondo transparente: sin borde y con borde blanco.
+    image: str
+    bordered: str
+    # False = se usó el trazo tal cual (modo manual, o el modelo no encontró nada adentro).
+    smart: bool
+    # True = el servidor estaba ocupado separando una canción: se usó el trazo tal cual.
+    busy: bool = False

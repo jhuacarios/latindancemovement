@@ -923,6 +923,21 @@ export type StickerPackScope = (typeof STICKER_PACK_SCOPES)[number];
 /** Máximo de stickers por pack y peso máximo de cada uno. */
 export const STICKERS_PER_PACK = 60;
 export const STICKER_MAX_BYTES = 512 * 1024;
+/**
+ * Recorte a mano de un sticker: `smart` ajusta el borde al objeto que encerraste
+ * (modelo de segmentación en el servidor); `manual` corta tal cual el trazo.
+ */
+export const STICKER_CUTOUT_MODES = ['smart', 'manual'] as const;
+export type StickerCutoutMode = (typeof STICKER_CUTOUT_MODES)[number];
+/** Resultado del recorte: PNG 512x512 transparente (data URL), sin y con borde blanco. */
+export interface StickerCutoutResponse {
+  image: string;
+  bordered: string;
+  /** false = se usó el trazo tal cual (modo manual, o no se encontró un objeto claro adentro). */
+  smart: boolean;
+  /** true = el servidor estaba ocupado (procesando música) y se usó el trazo tal cual. */
+  busy?: boolean;
+}
 /** `stickerId` de un mensaje cuyo sticker se borró. */
 export const STICKER_DELETED = 'deleted';
 

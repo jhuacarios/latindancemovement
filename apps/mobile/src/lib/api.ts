@@ -145,6 +145,8 @@ export async function uploadImage<T>(
   uri: string,
   method: 'PUT' | 'POST' = 'PUT',
   mimeType = 'image/jpeg',
+  /** Campos de texto que viajan junto a la imagen en el multipart. */
+  parameters?: Record<string, string>,
   retried = false,
 ): Promise<T> {
   await loadTokens();
@@ -153,6 +155,7 @@ export async function uploadImage<T>(
     uploadType: UploadType.MULTIPART,
     fieldName: 'file',
     mimeType,
+    parameters,
     headers: authHeaders(),
   });
   let res: { status: number; body: string };
@@ -164,7 +167,7 @@ export async function uploadImage<T>(
     task.release();
   }
   if (res.status === 401 && !retried) {
-    if (await tryRefresh()) return uploadImage<T>(path, uri, method, mimeType, true);
+    if (await tryRefresh()) return uploadImage<T>(path, uri, method, mimeType, parameters, true);
     await clearTokens();
   }
   let data: unknown = null;

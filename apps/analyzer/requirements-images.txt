@@ -1,0 +1,2 @@
+# Recorte de stickers (cutout.py): leer/escribir imágenes.
+pillow==12.0.0

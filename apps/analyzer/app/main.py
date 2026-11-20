@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from . import ANALYZER_VERSION
 from .analysis import analyze_file
 from .audio import AudioError, download, to_wav
+from .cutout import CutoutError, make_cutout, release_model
 from .fingerprint import fingerprint
 from .instruments import analyze_instruments
 from .stems import StemUploadError, make_stems
@@ -22,6 +23,8 @@ from .schemas import (
     AnalyzeResponse,
     CompatRequest,
     CompatResponse,
+    CutoutRequest,
+    CutoutResponse,
     FingerprintRequest,
     FingerprintResponse,
     InstrumentsRequest,
@@ -37,6 +40,10 @@ app = FastAPI(title="Nectason analyzer", version=ANALYZER_VERSION)
 # servidor. Las demás peticiones esperan su turno (la API ya las encola de a una, pero
 # un reintento puede llegar mientras la anterior sigue corriendo).
 HEAVY = threading.Lock()
+# Recorte de stickers: de a uno. El inteligente (~1 GB de RAM unos segundos) además toma
+# el turno de HEAVY: junto a Demucs (~2,8 GB) el servidor se queda sin memoria.
+CUTOUT = threading.Lock()
+CUTOUT_WAIT_SEC = 10
 
 
 def require_token(authorization: str | None = Header(default=None)) -> None:
@@ -119,3 +126,22 @@ def compat_endpoint(body: CompatRequest) -> CompatResponse:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except VideoUploadError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/cutout", response_model=CutoutResponse, dependencies=[Depends(require_token)])
+def cutout_endpoint(body: CutoutRequest) -> CutoutResponse:
+    """Sticker recortado según el contorno dibujado a mano (inteligente o tal cual)."""
+    try:
+        with CUTOUT:
+            if body.mode != "smart":
+                return CutoutResponse(**make_cutout(body.image, body.polygon, "manual"))
+            # Si hay una canción separándose, no se espera minutos: se corta por la línea.
+            if not HEAVY.acquire(timeout=CUTOUT_WAIT_SEC):
+                return CutoutResponse(**make_cutout(body.image, body.polygon, "manual"), busy=True)
+            try:
+                return CutoutResponse(**make_cutout(body.image, body.polygon, "smart"))
+            finally:
+                release_model()
+                HEAVY.release()
+    except CutoutError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
