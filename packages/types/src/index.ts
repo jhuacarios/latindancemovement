@@ -896,6 +896,26 @@ export interface ChatUser {
   avatarAt: string | null;
 }
 
+// --- GIFs (buscador del chat) --------------------------------------------------
+export interface GifDto {
+  id: string;
+  title: string;
+  /** Animado, ~200 px de ancho. */
+  url: string;
+  /** Versión más liviana para la grilla del buscador. */
+  previewUrl: string;
+  width: number;
+  height: number;
+}
+
+export interface GifSearchResponse {
+  /** false = la API no tiene clave de GIPHY configurada (se oculta el botón). */
+  enabled: boolean;
+  gifs: GifDto[];
+  /** Para pedir más (`offset`); null = no hay más. */
+  nextOffset: number | null;
+}
+
 // --- Stickers ------------------------------------------------------------------
 export const STICKER_PACK_SCOPES = ['PLATFORM', 'ACADEMY', 'PLACE'] as const;
 export type StickerPackScope = (typeof STICKER_PACK_SCOPES)[number];
@@ -966,6 +986,8 @@ export interface ChatMessageDto {
    * `STICKER_DELETED` si el sticker se borró después.
    */
   stickerId: string | null;
+  /** Mensaje con GIF (URL de GIPHY y su tamaño). */
+  gif: { url: string; width: number; height: number } | null;
   createdAt: string;
 }
 

@@ -19,6 +19,7 @@ import {
   reactToMessage,
   sendImageMessage,
   sendMessage,
+  sendGif,
   sendSticker,
 } from '@/lib/chat';
 import { compressImage, type CompressedImage } from '@/lib/image-compress';
@@ -33,6 +34,7 @@ import { ChatImage } from '@/components/chat-image';
 import { UserAvatar } from '@/components/user-avatar';
 import { ReactionChips, ReactionPicker } from '@/components/chat-reactions';
 import { StickerButton } from '@/components/sticker-panel';
+import { GifButton } from '@/components/gif-panel';
 import { stickerUrl } from '@/lib/stickers';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
@@ -300,15 +302,15 @@ export function ChatThread({
     }
   };
 
-  const sendStickerMsg = async (stickerId: string) => {
+  const sendExtra = async (kind: 'sticker' | 'gif', id: string) => {
     setError(null);
     try {
-      const msg = await sendSticker(convId, stickerId);
+      const msg = kind === 'gif' ? await sendGif(convId, id) : await sendSticker(convId, id);
       stickToBottom.current = true;
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       refreshLists();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No se pudo enviar el sticker.');
+      setError(e instanceof ApiError ? e.message : `No se pudo enviar el ${kind === 'gif' ? 'GIF' : 'sticker'}.`);
     }
   };
 
@@ -436,7 +438,8 @@ export function ChatThread({
         )}
         {messages.map((m, i) => {
           const mine = m.senderId === user?.id;
-          const isSticker = Boolean(m.stickerId && m.stickerId !== STICKER_DELETED);
+          // Sticker y GIF van sin globo.
+          const isSticker = Boolean((m.stickerId && m.stickerId !== STICKER_DELETED) || m.gif);
           const prev = messages[i - 1];
           const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
           // En canales, el nombre arriba del globo cuando cambia quien escribe.
@@ -474,9 +477,20 @@ export function ChatThread({
                   {showSender && (
                     <div className="mb-0.5 text-xs font-semibold text-amber-300">{m.senderName}</div>
                   )}
-                  {isSticker && (
+                  {m.gif ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={stickerUrl(m.stickerId!)} alt="Sticker" className="h-32 w-32 object-contain" />
+                    <img
+                      src={m.gif.url}
+                      alt="GIF"
+                      width={m.gif.width}
+                      height={m.gif.height}
+                      className="h-auto w-56 max-w-full rounded-xl"
+                    />
+                  ) : (
+                    isSticker && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={stickerUrl(m.stickerId!)} alt="Sticker" className="h-32 w-32 object-contain" />
+                    )
                   )}
                   {m.stickerId === STICKER_DELETED && (
                     <div className="italic opacity-70">Sticker eliminado</div>
@@ -558,7 +572,8 @@ export function ChatThread({
           >
             📎
           </button>
-          <StickerButton onSend={(id) => void sendStickerMsg(id)} disabled={sending} />
+          <StickerButton onSend={(id) => void sendExtra('sticker', id)} disabled={sending} />
+          <GifButton onSend={(id) => void sendExtra('gif', id)} disabled={sending} />
           <input
             ref={fileInput}
             type="file"

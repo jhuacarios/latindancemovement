@@ -40,6 +40,8 @@ export const chatApi = {
     api<ChatMessagesPage>(`/chat/conversations/${id}/messages?limit=50${before ? `&before=${before}` : ''}`),
   since: (id: string, sinceId: string) =>
     api<ChatMessageDto[]>(`/chat/conversations/${id}/messages/since/${sinceId}`),
+  sendGif: (id: string, gifId: string) =>
+    api<ChatMessageDto>(`/chat/conversations/${id}/messages/gif`, { method: 'POST', body: { gifId } }),
   sendSticker: (id: string, stickerId: string) =>
     api<ChatMessageDto>(`/chat/conversations/${id}/messages/sticker`, { method: 'POST', body: { stickerId } }),
   send: (id: string, body: string) =>
@@ -122,6 +124,6 @@ export function conversationTitle(c: ChatConversationDto): { title: string; subt
 /** Vista previa del último mensaje (en grupos, con quién lo escribió). */
 export function preview(c: ChatConversationDto): string {
   if (!c.lastMessage) return 'Sin mensajes todavía';
-  const text = c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : c.lastMessage.stickerId ? '🩰 Sticker' : '');
+  const text = c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : c.lastMessage.gif ? '🎞️ GIF' : c.lastMessage.stickerId ? '🩰 Sticker' : '');
   return c.kind === 'DIRECT' ? text : `${c.lastMessage.senderName}: ${text}`;
 }

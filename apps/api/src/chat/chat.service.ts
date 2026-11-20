@@ -17,6 +17,7 @@ import type {
   UserRole,
 } from '@baile-latino/types';
 import { PrismaService } from '../prisma/prisma.service';
+import { GifsService } from '../gifs/gifs.service';
 import type { AuthUser } from '../auth/auth.types';
 import type { UploadedImage } from '../common/multipart';
 
@@ -41,6 +42,9 @@ const MESSAGE_SELECT = {
   body: true,
   imageMime: true,
   stickerId: true,
+  gifUrl: true,
+  gifWidth: true,
+  gifHeight: true,
   imageWidth: true,
   imageHeight: true,
   createdAt: true,
@@ -62,7 +66,10 @@ function pairKey(a: string, b: string): string {
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gifs: GifsService,
+  ) {}
 
   private toUser(u: UserRow): ChatUser {
     return {
@@ -103,8 +110,9 @@ export class ChatService {
       imageWidth: m.imageWidth,
       imageHeight: m.imageHeight,
       reactions: this.summarize(m.reactions, meId),
-      // Sin texto, sin imagen y sin sticker = era un sticker que se borró.
-      stickerId: m.stickerId ?? (!m.body && !m.imageMime ? STICKER_DELETED : null),
+      // Sin texto, imagen, GIF ni sticker = era un sticker que se borró.
+      stickerId: m.stickerId ?? (!m.body && !m.imageMime && !m.gifUrl ? STICKER_DELETED : null),
+      gif: m.gifUrl ? { url: m.gifUrl, width: m.gifWidth ?? 200, height: m.gifHeight ?? 200 } : null,
       createdAt: m.createdAt.toISOString(),
     };
   }
@@ -397,10 +405,13 @@ export class ChatService {
     body: string,
     image?: (UploadedImage & { width: number | null; height: number | null }) | null,
     stickerId?: string | null,
+    gifId?: string | null,
   ): Promise<ChatMessageDto> {
     await this.assertMember(me, conversationId);
     const text = body.trim();
-    if (!text && !image && !stickerId) throw new BadRequestException('El mensaje está vacío.');
+    if (!text && !image && !stickerId && !gifId) throw new BadRequestException('El mensaje está vacío.');
+    // El GIF se busca por id en GIPHY: así la URL guardada siempre es de GIPHY.
+    const gif = gifId ? await this.gifs.byId(gifId) : null;
     if (stickerId) {
       // Los stickers son públicos: basta con que exista.
       const s = await this.prisma.sticker.findUnique({ where: { id: stickerId }, select: { id: true } });
@@ -412,9 +423,10 @@ export class ChatService {
         data: {
           conversationId,
           senderId: me.id,
-          body: stickerId ? '' : text,
+          body: stickerId || gif ? '' : text,
           createdAt: now,
           ...(stickerId ? { stickerId } : {}),
+          ...(gif ? { gifUrl: gif.url, gifWidth: gif.width, gifHeight: gif.height } : {}),
           ...(image
             ? {
                 imageData: image.buffer.toString('base64'),

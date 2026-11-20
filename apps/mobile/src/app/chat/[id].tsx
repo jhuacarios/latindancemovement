@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CHAT_REACTIONS, STICKER_DELETED, type ChatMessageDto } from '@baile-latino/types';
 import { StickerSheet } from '@/components/sticker-sheet';
+import { GifSheet, useGifsEnabled } from '@/components/gif-sheet';
 import { stickerUrl } from '@/lib/stickers';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -70,7 +71,8 @@ function Bubble({
   onLongPress: () => void;
   onToggleReaction: (emoji: string) => void;
 }) {
-  const isSticker = Boolean(m.stickerId && m.stickerId !== STICKER_DELETED);
+  // Sticker y GIF van sin globo.
+  const isSticker = Boolean((m.stickerId && m.stickerId !== STICKER_DELETED) || m.gif);
   const imgW = Math.min(maxWidth - 16, 260);
   const imgH = m.imageWidth && m.imageHeight ? Math.round((imgW * m.imageHeight) / m.imageWidth) : imgW;
   return (
@@ -89,8 +91,14 @@ function Bubble({
         style={[isSticker ? styles.stickerBox : [styles.bubble, mine ? styles.mine : styles.theirs], { maxWidth }]}
       >
         {showSender && <Text style={styles.sender}>{m.senderName}</Text>}
-        {isSticker && (
-          <Image source={stickerUrl(m.stickerId!)} style={{ width: 128, height: 128 }} contentFit="contain" />
+        {m.gif ? (
+          <Image
+            source={m.gif.url}
+            style={{ width: 220, height: Math.round((220 * m.gif.height) / Math.max(1, m.gif.width)), borderRadius: radius.md }}
+            contentFit="cover"
+          />
+        ) : (
+          isSticker && <Image source={stickerUrl(m.stickerId!)} style={{ width: 128, height: 128 }} contentFit="contain" />
         )}
         {m.stickerId === STICKER_DELETED && (
           <Text style={[styles.text, { fontStyle: 'italic', opacity: 0.7 }, mine && { color: colors.white }]}>
@@ -310,10 +318,13 @@ export default function ChatThreadScreen() {
   };
 
   const [stickers, setStickers] = useState(false);
-  const sendSticker = async (stickerId: string) => {
+  const [gifsOpen, setGifsOpen] = useState(false);
+  const gifsEnabled = useGifsEnabled();
+  const sendExtra = async (kind: 'sticker' | 'gif', extraId: string) => {
     setStickers(false);
+    setGifsOpen(false);
     try {
-      const m = await chatApi.sendSticker(id, stickerId);
+      const m = kind === 'gif' ? await chatApi.sendGif(id, extraId) : await chatApi.sendSticker(id, extraId);
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
       refreshLists();
     } catch (e) {
@@ -435,6 +446,11 @@ export default function ChatThreadScreen() {
           <Pressable onPress={() => setStickers(true)} style={styles.iconBtn} accessibilityLabel="Stickers">
             <Text style={{ fontSize: 20 }}>🩰</Text>
           </Pressable>
+          {gifsEnabled && (
+            <Pressable onPress={() => setGifsOpen(true)} style={styles.iconBtn} accessibilityLabel="GIFs">
+              <Text style={styles.gifLabel}>GIF</Text>
+            </Pressable>
+          )}
           <TextInput
             value={text}
             onChangeText={setText}
@@ -453,7 +469,8 @@ export default function ChatThreadScreen() {
             {sending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.sendText}>➤</Text>}
           </Pressable>
         </View>
-        <StickerSheet visible={stickers} onPick={(sid) => void sendSticker(sid)} onClose={() => setStickers(false)} />
+        <StickerSheet visible={stickers} onPick={(sid) => void sendExtra('sticker', sid)} onClose={() => setStickers(false)} />
+        <GifSheet visible={gifsOpen} onPick={(gid) => void sendExtra('gif', gid)} onClose={() => setGifsOpen(false)} />
         <ReactionSheet
           message={reacting}
           onPick={(e) => reacting && void react(reacting.id, e)}
@@ -466,6 +483,7 @@ export default function ChatThreadScreen() {
 
 const styles = StyleSheet.create({
   stickerBox: { paddingHorizontal: 2, alignItems: 'flex-start' },
+  gifLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '800', borderWidth: 1, borderColor: colors.line, borderRadius: 6, paddingHorizontal: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: -6, paddingHorizontal: 6 },
   chip: {
     backgroundColor: colors.surface,

@@ -65,3 +65,10 @@ export class SendStickerDto {
   @MinLength(1)
   stickerId!: string;
 }
+
+export class SendGifDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(40)
+  gifId!: string;
+}

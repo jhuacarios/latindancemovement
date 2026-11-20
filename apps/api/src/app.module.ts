@@ -10,6 +10,7 @@ import { ChatModule } from './chat/chat.module';
 import { StudioModule } from './studio/studio.module';
 import { AcademiesModule } from './academies/academies.module';
 import { StickersModule } from './stickers/stickers.module';
+import { GifsModule } from './gifs/gifs.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -25,6 +26,7 @@ import { HealthController } from './health.controller';
     StudioModule,
     AcademiesModule,
     StickersModule,
+    GifsModule,
   ],
   controllers: [HealthController],
 })

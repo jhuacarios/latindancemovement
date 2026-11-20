@@ -470,6 +470,10 @@ model ChatMessage {
   createdAt      DateTime  @default(now())
   // Última vez que cambiaron sus reacciones (para que el polling las refresque).
   reactionsAt    DateTime?
+  // GIF (de GIPHY; solo se guarda su URL y tamaño, no se copia el archivo).
+  gifUrl         String?
+  gifWidth       Int?
+  gifHeight      Int?
   // Mensaje de sticker (sin texto). Si se borra el sticker, queda "Sticker eliminado".
   stickerId      String?
   sticker        Sticker?  @relation(fields: [stickerId], references: [id], onDelete: SetNull)

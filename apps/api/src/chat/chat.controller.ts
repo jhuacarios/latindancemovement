@@ -21,6 +21,7 @@ import { ChatService } from './chat.service';
 import {
   ListMessagesDto,
   ReactDto,
+  SendGifDto,
   SendStickerDto,
   ReactionChangesDto,
   SearchUsersDto,
@@ -91,6 +92,12 @@ export class ChatController {
   @Get('conversations/:id/reactions')
   reactionChanges(@CurrentUser() me: AuthUser, @Param('id') id: string, @Query() q: ReactionChangesDto) {
     return this.chat.reactionChanges(me, id, q.since);
+  }
+
+  /** Envía un GIF (por su id de GIPHY). */
+  @Post('conversations/:id/messages/gif')
+  sendGif(@CurrentUser() me: AuthUser, @Param('id') id: string, @Body() dto: SendGifDto) {
+    return this.chat.sendMessage(me, id, '', null, null, dto.gifId);
   }
 
   /** Envía un sticker. */
