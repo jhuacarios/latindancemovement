@@ -1,4 +1,4 @@
-import { stickerPath, type StickerPackDto, type StickerPackScope } from '@baile-latino/types';
+import { STICKER_MAX_BYTES, stickerPath, type StickerPackDto, type StickerPackScope } from '@baile-latino/types';
 import { api, API_BASE, uploadForm } from './api';
 
 export type StickerOwner = { scope: StickerPackScope; academyId?: string; placeId?: string };
@@ -39,10 +39,13 @@ export const stickersApi = {
 
 /**
  * Prepara la imagen de un sticker: máx. 320 px, PNG (conserva la transparencia).
- * Los GIF se suben tal cual (para no perder la animación).
+ * Los GIF y los WebP que ya pesan poco (como los stickers de WhatsApp, 512×512 de
+ * hasta 500 KB) se suben tal cual: redibujarlos en un canvas les quita la animación.
  */
 export function prepareSticker(file: File, size = 320): Promise<{ blob: Blob; name: string }> {
-  if (file.type === 'image/gif') return Promise.resolve({ blob: file, name: file.name });
+  if (file.type === 'image/gif' || (file.type === 'image/webp' && file.size <= STICKER_MAX_BYTES)) {
+    return Promise.resolve({ blob: file, name: file.name });
+  }
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();

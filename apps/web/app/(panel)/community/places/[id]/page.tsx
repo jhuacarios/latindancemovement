@@ -322,7 +322,7 @@ export default function CommunityPlaceDetailPage() {
             <StickerPackManager
               owner={{ scope: 'PLACE', placeId: p.id }}
               title="Stickers del social"
-              hint="Los usan los miembros de la comunidad en cualquier chat. PNG o WebP con fondo transparente se ven mejor (también GIF animados de hasta 512 KB)."
+              hint="Los usan los miembros de la comunidad en cualquier chat. PNG o WebP con fondo transparente se ven mejor; los WebP y GIF animados (como los de WhatsApp) de hasta 512 KB se suben tal cual."
             />
           )}
 

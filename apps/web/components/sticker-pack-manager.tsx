@@ -134,7 +134,7 @@ export function StickerPackManager({ owner, title, hint }: { owner: StickerOwner
         <h2 className="font-semibold">{title ?? 'Stickers'}</h2>
         <p className="text-xs text-neutral-500">
           {hint ??
-            'Los usan sus miembros en cualquier chat. PNG o WebP con fondo transparente se ven mejor (también GIF animados de hasta 512 KB).'}
+            'Los usan sus miembros en cualquier chat. PNG o WebP con fondo transparente se ven mejor; los WebP y GIF animados (como los de WhatsApp) de hasta 512 KB se suben tal cual.'}
         </p>
       </div>
       {q.isLoading && <p className="text-sm text-neutral-500">Cargando…</p>}

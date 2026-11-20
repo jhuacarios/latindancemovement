@@ -767,7 +767,7 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
     <StickerPackManager
       owner={{ scope: 'ACADEMY', academyId: a.id }}
       title="Stickers de la academia"
-      hint="Los usan el equipo y los alumnos inscritos en cualquier chat. PNG o WebP con fondo transparente se ven mejor (también GIF animados de hasta 512 KB)."
+      hint="Los usan el equipo y los alumnos inscritos en cualquier chat. PNG o WebP con fondo transparente se ven mejor; los WebP y GIF animados (como los de WhatsApp) de hasta 512 KB se suben tal cual."
     />
     </div>
   );

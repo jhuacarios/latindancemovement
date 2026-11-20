@@ -16,7 +16,7 @@ export default function AdminStickersPage() {
       <StickerPackManager
         owner={{ scope: 'PLATFORM' }}
         title="Packs de Nectason"
-        hint="PNG o WebP con fondo transparente se ven mejor (también GIF animados de hasta 512 KB). Se achican a 320 px."
+        hint="PNG o WebP con fondo transparente se ven mejor (las imágenes se achican a 320 px); los WebP y GIF animados (como los de WhatsApp) de hasta 512 KB se suben tal cual."
       />
     </div>
   );
