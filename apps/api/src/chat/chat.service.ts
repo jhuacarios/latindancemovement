@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { publicName, STICKER_DELETED } from '@baile-latino/types';
+import { CHAT_REACTIONS, publicName, STICKER_DELETED } from '@baile-latino/types';
 import type {
   ChatChannelInfo,
   ChatConversationDto,
@@ -86,7 +86,9 @@ export class ChatService {
       if (s.names.length < 10) s.names.push(publicName(r.user));
       by.set(r.emoji, s);
     }
-    return [...by.values()].sort((x, y) => y.count - x.count);
+    // Más usada primero; si empatan, en el orden de la fila de emojis (❤️ 😂 🔥 👏 💃 😮).
+    const rank = (e: string) => (CHAT_REACTIONS as readonly string[]).indexOf(e);
+    return [...by.values()].sort((x, y) => y.count - x.count || rank(x.emoji) - rank(y.emoji));
   }
 
   private toMessage(m: MessageRow, meId: string): ChatMessageDto {
