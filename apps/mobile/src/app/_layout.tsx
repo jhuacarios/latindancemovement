@@ -75,6 +75,16 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="event/[id]"
+              options={{
+                headerShown: true,
+                headerBackTitle: 'Eventos',
+                headerStyle: { backgroundColor: colors.selva },
+                headerTintColor: colors.clave,
+                headerTitleStyle: { color: colors.text },
+              }}
+            />
+            <Stack.Screen
               name="academy/[id]"
               options={{
                 headerShown: true,
