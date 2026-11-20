@@ -4,7 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AcademyClassDto, AcademyDto, AcademyVideoDto } from '@baile-latino/types';
+import {
+  ACADEMY_MAX_SUBDIRECTORS,
+  isAcademyDirector,
+  type AcademyClassDto,
+  type AcademyDto,
+  type AcademyVideoDto,
+} from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -57,7 +63,7 @@ export default function AcademyPage() {
   const a = q.data;
   const manages = Boolean(a && (a.myRole || user?.role === 'SUPER_ADMIN'));
   // Las solicitudes de inscripción las decide solo el director (y el SUPER_ADMIN).
-  const isDirector = Boolean(a && (a.myRole === 'OWNER' || user?.role === 'SUPER_ADMIN'));
+  const isDirector = Boolean(a && (isAcademyDirector(a.myRole) || user?.role === 'SUPER_ADMIN'));
   const refresh = () => qc.invalidateQueries({ queryKey: ['academies'] });
 
   if (q.isLoading) return <Spinner label="Cargando academia…" />;
@@ -538,7 +544,10 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
 function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
   const router = useRouter();
   // Acá solo llegan quienes administran: sin rol en la academia = SUPER_ADMIN, que cuenta como director.
-  const isOwner = a.myRole !== 'TEACHER';
+  // Director: todo. Subdirector: igual, salvo eliminar la academia y nombrar/quitar subdirectores.
+  const isOwner = a.myRole === 'OWNER' || a.myRole === null;
+  const manageTeam = isOwner || a.myRole === 'SUBDIRECTOR';
+  const subdirectors = a.members.filter((m) => m.role === 'SUBDIRECTOR').length;
   const [values, setValues] = useState<AcademyFormValues>(academyFormFrom(a));
   const [logo, setLogo] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -618,9 +627,11 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
 
       <div className="space-y-4">
         <Card className="space-y-3">
-          <h2 className="font-semibold">Profesores</h2>
+          <h2 className="font-semibold">Equipo</h2>
           <p className="text-xs text-neutral-400">
-            Pueden editar el perfil, el horario y subir videos, y eliminar lo que subieron ellos. Solo el director agrega o quita profesores y elimina lo de otros.
+            <b>Profesores:</b> editan el perfil y el horario, suben fotos y videos y eliminan lo que subieron ellos.{' '}
+            <b>Subdirectores</b> (hasta {ACADEMY_MAX_SUBDIRECTORS}): además deciden las solicitudes, agregan o quitan
+            profesores y eliminan cualquier archivo. Solo el director elimina la academia y nombra subdirectores.
           </p>
           <ul className="space-y-2">
             {a.members.map((m) => (
@@ -632,31 +643,70 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
                 {m.role === 'OWNER' ? (
                   <span className="text-xs text-brand">{MEMBER_ROLE_LABEL.OWNER}</span>
                 ) : (
-                  isOwner && (
-                    <button
-                      type="button"
-                      className="text-xs text-red-400/80 hover:text-red-300"
-                      onClick={() =>
-                        setConfirm({
-                          title: 'Quitar profesor',
-                          message: `¿Quitar a ${m.name}? Ya no podrá administrar la academia.`,
-                          confirmLabel: 'Quitar',
-                          danger: true,
-                          onConfirm: async () => {
-                            await academiesApi.removeMember(a.id, m.userId);
-                            onChanged();
-                          },
-                        })
-                      }
-                    >
-                      Quitar
-                    </button>
-                  )
+                  <div className="flex shrink-0 items-center gap-3 text-xs">
+                    <span className={m.role === 'SUBDIRECTOR' ? 'text-amber-300' : 'text-neutral-500'}>
+                      {MEMBER_ROLE_LABEL[m.role]}
+                    </span>
+                    {isOwner && m.role === 'TEACHER' && (
+                      <button
+                        type="button"
+                        disabled={subdirectors >= ACADEMY_MAX_SUBDIRECTORS}
+                        title={
+                          subdirectors >= ACADEMY_MAX_SUBDIRECTORS
+                            ? `Ya hay ${ACADEMY_MAX_SUBDIRECTORS} subdirectores`
+                            : 'Podrá administrar casi todo, salvo eliminar la academia'
+                        }
+                        className="text-brand hover:underline disabled:cursor-not-allowed disabled:text-neutral-600 disabled:no-underline"
+                        onClick={() =>
+                          void academiesApi
+                            .setMemberRole(a.id, m.userId, 'SUBDIRECTOR')
+                            .then(onChanged)
+                            .catch((e) => setMemberError(e instanceof ApiError ? e.message : 'No se pudo cambiar.'))
+                        }
+                      >
+                        Hacer subdirector
+                      </button>
+                    )}
+                    {isOwner && m.role === 'SUBDIRECTOR' && (
+                      <button
+                        type="button"
+                        className="text-neutral-400 hover:text-neutral-200"
+                        onClick={() =>
+                          void academiesApi
+                            .setMemberRole(a.id, m.userId, 'TEACHER')
+                            .then(onChanged)
+                            .catch((e) => setMemberError(e instanceof ApiError ? e.message : 'No se pudo cambiar.'))
+                        }
+                      >
+                        Volver profesor
+                      </button>
+                    )}
+                    {(m.role === 'TEACHER' ? manageTeam : isOwner) && (
+                      <button
+                        type="button"
+                        className="text-red-400/80 hover:text-red-300"
+                        onClick={() =>
+                          setConfirm({
+                            title: `Quitar ${MEMBER_ROLE_LABEL[m.role].toLowerCase()}`,
+                            message: `¿Quitar a ${m.name}? Ya no podrá administrar la academia.`,
+                            confirmLabel: 'Quitar',
+                            danger: true,
+                            onConfirm: async () => {
+                              await academiesApi.removeMember(a.id, m.userId);
+                              onChanged();
+                            },
+                          })
+                        }
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
                 )}
               </li>
             ))}
           </ul>
-          {isOwner && (
+          {manageTeam && (
             <form
               className="flex gap-2"
               onSubmit={(e) => {

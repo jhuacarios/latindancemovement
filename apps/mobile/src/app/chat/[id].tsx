@@ -169,7 +169,7 @@ function ReactionSheet({
 }
 
 export default function ChatThreadScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, draft } = useLocalSearchParams<{ id: string; draft?: string }>();
   const { user } = useAuth();
   const qc = useQueryClient();
   const insets = useSafeAreaInsets();
@@ -185,7 +185,8 @@ export default function ChatThreadScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [text, setText] = useState('');
+  // Texto sugerido al abrir desde otra pantalla (p. ej. "Enviar mensaje" de una academia).
+  const [text, setText] = useState(draft ?? '');
   const [pending, setPending] = useState<Picked | null>(null);
   const [sending, setSending] = useState(false);
   const messagesRef = useRef(messages);

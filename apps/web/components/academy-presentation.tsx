@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { placeLabel, regionName, type AcademyDto, type AcademyVideoDto } from '@baile-latino/types';
 import {
@@ -201,6 +202,7 @@ export function AcademyHero({
             {a.styles.map((s) => (
               <StyleBadge key={s} style={s} />
             ))}
+            {!a.myRole && <ContactButton academyId={a.id} />}
             {a.instagramHandle && (
               <a
                 href={`https://instagram.com/${a.instagramHandle}`}
@@ -215,6 +217,37 @@ export function AcademyHero({
         </div>
       </div>
     </div>
+  );
+}
+
+/** "Enviar mensaje": abre el chat con el director (para consultar antes de inscribirse). */
+function ContactButton({ academyId }: { academyId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const open = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await academiesApi.contact(academyId);
+      router.push(`/chat/${r.conversationId}?draft=${encodeURIComponent(r.draft)}`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo abrir el chat.');
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void open()}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3 py-1 text-xs font-semibold text-white hover:bg-brand-dark disabled:opacity-60"
+      >
+        💬 {busy ? 'Abriendo…' : 'Enviar mensaje'}
+      </button>
+      {error && <span className="text-xs text-red-300">{error}</span>}
+    </>
   );
 }
 

@@ -67,6 +67,9 @@ export const academiesApi = {
   /** URL firmada (1 h) para ver una foto o reproducir un video. */
   mediaUrl: (id: string, videoId: string) =>
     api<{ url: string }>(`/academies/${id}/videos/${videoId}/url`),
+  /** Abre (o retoma) el chat privado con el director, con un primer mensaje sugerido. */
+  contact: (id: string) =>
+    api<{ conversationId: string; draft: string }>(`/academies/${id}/contact`, { method: 'POST' }),
   /** Mostrar (o no) un archivo de una clase en la galería abierta de la academia. */
   setFeatured: (id: string, videoId: string, featured: boolean) =>
     api<AcademyVideoDto>(`/academies/${id}/videos/${videoId}`, { method: 'PATCH', body: { featured } }),
@@ -82,7 +85,7 @@ export function uploadMode(a: AcademyDto, superAdmin: boolean): 'none' | 'yes' |
   return a.plan?.active ? 'yes' : 'no-plan';
 }
 
-export const MEMBER_ROLE_LABEL = { OWNER: 'Director', TEACHER: 'Profesor' } as const;
+export const MEMBER_ROLE_LABEL = { OWNER: 'Director', SUBDIRECTOR: 'Subdirector', TEACHER: 'Profesor' } as const;
 
 /** Google Maps con la dirección de la academia (o su nombre); null si no hay dónde. */
 export function academyMapsLink(a: Pick<AcademyDto, 'name' | 'address' | 'city' | 'commune' | 'region'>): string | null {

@@ -173,6 +173,19 @@ function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
           {a.styles.map((s) => (
             <StyleTag key={s} style={s} />
           ))}
+          {!a.myRole && (
+            <Pressable
+              onPress={() =>
+                void academiesApi
+                  .contact(a.id)
+                  .then((r) => router.push({ pathname: '/chat/[id]', params: { id: r.conversationId, draft: r.draft } }))
+                  .catch((e) => Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'Revisa tu conexión.'))
+              }
+              style={styles.msgBtn}
+            >
+              <Text style={styles.igText}>💬 Enviar mensaje</Text>
+            </Pressable>
+          )}
           {a.instagramHandle && (
             <Pressable
               onPress={() => void Linking.openURL(`https://instagram.com/${a.instagramHandle}`)}
@@ -365,6 +378,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   editCoverText: { color: colors.white, fontSize: 12, fontWeight: '600' },
+  msgBtn: { backgroundColor: colors.brand, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   igBtn: { backgroundColor: '#d6297a', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   igText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   member: { flexDirection: 'row', alignItems: 'center', gap: space.md },

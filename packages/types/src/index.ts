@@ -1217,8 +1217,18 @@ export interface StudioUploadTicket {
 
 // --- Academias ---------------------------------------------------------------
 
-export const ACADEMY_MEMBER_ROLES = ['OWNER', 'TEACHER'] as const;
+/**
+ * OWNER = director (uno). SUBDIRECTOR = administra casi todo como el director, salvo
+ * eliminar la academia y nombrar/quitar subdirectores (hasta `ACADEMY_MAX_SUBDIRECTORS`).
+ * TEACHER = profesor (perfil, horario, subir; borra solo lo suyo).
+ */
+export const ACADEMY_MEMBER_ROLES = ['OWNER', 'SUBDIRECTOR', 'TEACHER'] as const;
 export type AcademyMemberRole = (typeof ACADEMY_MEMBER_ROLES)[number];
+export const ACADEMY_MAX_SUBDIRECTORS = 2;
+/** Director o subdirector: deciden solicitudes, profesores y borran cualquier archivo. */
+export function isAcademyDirector(role: AcademyMemberRole | null | undefined): boolean {
+  return role === 'OWNER' || role === 'SUBDIRECTOR';
+}
 
 export const CLASS_LEVELS = ['BASICO', 'INTERMEDIO', 'AVANZADO', 'TODOS'] as const;
 export type ClassLevel = (typeof CLASS_LEVELS)[number];

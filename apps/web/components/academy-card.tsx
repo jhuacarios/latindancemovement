@@ -32,7 +32,7 @@ export function AcademyCard({ a }: { a: AcademySummaryDto }) {
         <div className="mt-1 text-xs text-neutral-500">
           {a.classCount} {a.classCount === 1 ? 'clase' : 'clases'} · {a.videoCount}{' '}
           {a.videoCount === 1 ? 'foto o video' : 'fotos y videos'}
-          {a.myRole && <span className="ml-2 text-brand">{a.myRole === 'OWNER' ? 'Eres el director' : 'Eres profesor'}</span>}
+          {a.myRole && <span className="ml-2 text-brand">{a.myRole === 'OWNER' ? 'Eres el director' : a.myRole === 'SUBDIRECTOR' ? 'Eres subdirector' : 'Eres profesor'}</span>}
         </div>
         <div className="relative mt-1.5 flex flex-wrap items-center gap-1.5">
           {a.styles.map((s) => (

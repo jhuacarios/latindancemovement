@@ -89,6 +89,15 @@ export function ChatThread({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [text, setText] = useState('');
+  // Texto sugerido al abrir el chat desde otra página (?draft=…), p. ej. "Enviar mensaje" de una academia.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const draft = url.searchParams.get('draft');
+    if (!draft) return;
+    setText((t) => t || draft);
+    url.searchParams.delete('draft');
+    window.history.replaceState(null, '', url.pathname + url.search);
+  }, [convId]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Imagen pendiente de enviar (ya comprimida) y su preview. */

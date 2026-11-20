@@ -142,7 +142,7 @@ export class AcademyEnrollmentsService {
   // --- director ---------------------------------------------------------------
 
   async list(user: AuthUser, academyId: string, status?: AcademyEnrollmentStatus): Promise<AcademyEnrollmentDto[]> {
-    await this.academies.assertOwner(user, academyId);
+    await this.academies.assertDirector(user, academyId);
     const rows = await this.prisma.academyEnrollment.findMany({
       where: { class: { academyId }, ...(status ? { status } : {}) },
       select: {
@@ -183,7 +183,7 @@ export class AcademyEnrollmentsService {
   }
 
   async accept(user: AuthUser, academyId: string, enrollmentId: string): Promise<AcademyEnrollmentDto[]> {
-    await this.academies.assertOwner(user, academyId);
+    await this.academies.assertDirector(user, academyId);
     const e = await this.enrollment(academyId, enrollmentId);
     const c = await this.klass(academyId, e.classId);
     if (e.status !== 'ACCEPTED') {
@@ -211,7 +211,7 @@ export class AcademyEnrollmentsService {
   }
 
   async reject(user: AuthUser, academyId: string, enrollmentId: string): Promise<AcademyEnrollmentDto[]> {
-    await this.academies.assertOwner(user, academyId);
+    await this.academies.assertDirector(user, academyId);
     const e = await this.enrollment(academyId, enrollmentId);
     if (e.status === 'ACCEPTED') {
       throw new BadRequestException('Este alumno ya está inscrito: para sacarlo de la clase usa "Quitar".');
@@ -227,7 +227,7 @@ export class AcademyEnrollmentsService {
 
   /** Saca a un alumno inscrito (sale del chat de la clase y deja de ver sus videos). */
   async remove(user: AuthUser, academyId: string, enrollmentId: string): Promise<AcademyEnrollmentDto[]> {
-    await this.academies.assertOwner(user, academyId);
+    await this.academies.assertDirector(user, academyId);
     const e = await this.enrollment(academyId, enrollmentId);
     const c = await this.klass(academyId, e.classId);
     await this.prisma.academyEnrollment.delete({ where: { id: e.id } });

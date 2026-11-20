@@ -533,6 +533,9 @@ export const academiesApi = {
   remove: (id: string) => api<void>(`/academies/${id}`, { method: 'DELETE' }),
   addMember: (id: string, email: string) =>
     api<AcademyDto>(`/academies/${id}/members`, { method: 'POST', body: { email } }),
+  /** Nombra subdirector o vuelve profesor (solo el director). */
+  setMemberRole: (id: string, userId: string, role: 'SUBDIRECTOR' | 'TEACHER') =>
+    api<AcademyDto>(`/academies/${id}/members/${userId}`, { method: 'PATCH', body: { role } }),
   removeMember: (id: string, userId: string) =>
     api<AcademyDto>(`/academies/${id}/members/${userId}`, { method: 'DELETE' }),
   createClass: (id: string, v: ClassFormValues) =>
@@ -558,6 +561,9 @@ export const academiesApi = {
   videos: (id: string, classId?: string) =>
     api<AcademyVideoDto[]>(`/academies/${id}/videos${classId ? `?classId=${classId}` : ''}`),
   videoUrl: (id: string, videoId: string) => api<{ url: string }>(`/academies/${id}/videos/${videoId}/url`),
+  /** Abre (o retoma) el chat privado con el director, con un primer mensaje sugerido. */
+  contact: (id: string) =>
+    api<{ conversationId: string; draft: string }>(`/academies/${id}/contact`, { method: 'POST' }),
   updateVideo: (
     id: string,
     videoId: string,
@@ -682,7 +688,11 @@ export function saveGallerySort(sort: GallerySort): void {
 // --- Plan Director y permisos -----------------------------------------------------------
 
 /** El dueño de la academia se muestra como "Director". */
-export const MEMBER_ROLE_LABEL: Record<AcademyMemberRole, string> = { OWNER: 'Director', TEACHER: 'Profesor' };
+export const MEMBER_ROLE_LABEL: Record<AcademyMemberRole, string> = {
+  OWNER: 'Director',
+  SUBDIRECTOR: 'Subdirector',
+  TEACHER: 'Profesor',
+};
 
 /** Fecha del plan para mostrar (dd-mm-aaaa, hora de Chile). */
 export function planDate(iso: string): string {
@@ -711,6 +721,6 @@ export function canWrite(a: AcademyDto, superAdmin = false): boolean {
  */
 export function canDeleteMedia(a: AcademyDto, v: AcademyVideoDto, user: { id: string; role: string } | null): boolean {
   if (!user) return false;
-  if (user.role === 'SUPER_ADMIN' || a.myRole === 'OWNER') return true;
+  if (user.role === 'SUPER_ADMIN' || a.myRole === 'OWNER' || a.myRole === 'SUBDIRECTOR') return true;
   return a.myRole === 'TEACHER' && v.uploadedById === user.id;
 }

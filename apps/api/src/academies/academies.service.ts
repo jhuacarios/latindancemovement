@@ -10,7 +10,7 @@ import {
   type OnApplicationBootstrap,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { publicName } from '@baile-latino/types';
+import { ACADEMY_MAX_SUBDIRECTORS, isAcademyDirector, publicName } from '@baile-latino/types';
 import type {
   AcademyAdminRowDto,
   AcademyClassDto,
@@ -80,6 +80,8 @@ export function planOf(expiresAt: Date | null, now = new Date()): AcademyPlanDto
 export const NO_PLAN_MESSAGE =
   'La academia no tiene el Plan Director vigente: se puede ver y descargar todo, pero no subir ni mover archivos. Pide al director que lo renueve.';
 
+/** Orden del equipo en la presentación: director, subdirectores, profesores. */
+const ROLE_ORDER = ['OWNER', 'SUBDIRECTOR', 'TEACHER'];
 const CLASS_ORDER: Prisma.AcademyClassOrderByWithRelationInput[] = [{ weekday: 'asc' }, { startTime: 'asc' }];
 
 /**
@@ -169,6 +171,17 @@ export class AcademiesService implements OnApplicationBootstrap {
     return new Map(rows.map((r) => [r.id, r.name]));
   }
 
+  /** Abre (o retoma) el chat privado del usuario con el director de la academia. */
+  async contact(user: AuthUser, academyId: string): Promise<{ conversationId: string; draft: string }> {
+    const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { name: true } });
+    if (!a) throw new NotFoundException('Academia no encontrada.');
+    const owner = await this.ownerId(academyId);
+    if (!owner) throw new ConflictException('Esta academia todavía no tiene director para recibir mensajes.');
+    if (owner === user.id) throw new BadRequestException('Eres el director de esta academia.');
+    const conv = await this.chat.startConversation(user, owner);
+    return { conversationId: conv.id, draft: `Hola ${a.name}, quería hacer una consulta: ` };
+  }
+
   /** Director y profesores (entran a los chats de clase). */
   async staffIds(academyId: string): Promise<string[]> {
     const rows = await this.prisma.academyMember.findMany({ where: { academyId }, select: { userId: true } });
@@ -239,9 +252,19 @@ export class AcademiesService implements OnApplicationBootstrap {
     return role;
   }
 
+  /** Solo el director (o SUPER_ADMIN): eliminar la academia y nombrar o quitar subdirectores. */
   async assertOwner(user: AuthUser, academyId: string): Promise<void> {
     const role = await this.roleIn(user, academyId);
     if (role !== 'OWNER') throw new ForbiddenException('Solo el director de la academia puede hacer esto.');
+  }
+
+  /** Director o subdirector (o SUPER_ADMIN): solicitudes, profesores, borrar lo de otros. */
+  async assertDirector(user: AuthUser, academyId: string): Promise<AcademyMemberRole> {
+    const role = await this.roleIn(user, academyId);
+    if (!isAcademyDirector(role)) {
+      throw new ForbiddenException('Solo el director o un subdirector de la academia puede hacer esto.');
+    }
+    return role!;
   }
 
   /** Subir y mover archivos requiere el Plan Director vigente (sin él: solo lectura). El SUPER_ADMIN no. */
@@ -354,7 +377,7 @@ export class AcademiesService implements OnApplicationBootstrap {
     if (!a) throw new NotFoundException('Academia no encontrada.');
     const summary = this.toSummary(a, user);
     const manages = summary.myRole !== null || user.role === 'SUPER_ADMIN';
-    const isDirector = summary.myRole === 'OWNER' || user.role === 'SUPER_ADMIN';
+    const isDirector = isAcademyDirector(summary.myRole) || user.role === 'SUPER_ADMIN';
     const visibleClasses = a.classes.filter((c) => manages || c.active);
     const extras = await this.classExtras(user, visibleClasses.map((c) => c.id), isDirector);
     return {
@@ -374,7 +397,7 @@ export class AcademiesService implements OnApplicationBootstrap {
         : [],
       // El equipo lo ve cualquiera (sin correo): director primero, con su foto.
       team: [...a.members]
-        .sort((x, y) => Number(y.role === 'OWNER') - Number(x.role === 'OWNER'))
+        .sort((x, y) => ROLE_ORDER.indexOf(x.role) - ROLE_ORDER.indexOf(y.role))
         .map((m) => ({
           userId: m.userId,
           name: publicName(m.user),
@@ -592,7 +615,7 @@ export class AcademiesService implements OnApplicationBootstrap {
   // --- profesores ---------------------------------------------------------------
 
   async addMember(user: AuthUser, id: string, dto: AddMemberDto): Promise<AcademyDto> {
-    await this.assertOwner(user, id);
+    await this.assertDirector(user, id);
     const target = await this.prisma.user.findUnique({
       where: { email: dto.email.trim().toLowerCase() },
       select: { id: true },
@@ -615,16 +638,44 @@ export class AcademiesService implements OnApplicationBootstrap {
   }
 
   async removeMember(user: AuthUser, id: string, userId: string): Promise<AcademyDto> {
-    await this.assertOwner(user, id);
+    const myRole = await this.assertDirector(user, id);
     const m = await this.prisma.academyMember.findUnique({
       where: { academyId_userId: { academyId: id, userId } },
     });
-    if (!m) throw new NotFoundException('Esa persona no es profesor de la academia.');
-    if (m.role === 'OWNER') throw new BadRequestException('No se puede quitar al dueño de la academia.');
+    if (!m) throw new NotFoundException('Esa persona no es parte del equipo de la academia.');
+    if (m.role === 'OWNER') throw new BadRequestException('No se puede quitar al director de la academia.');
+    if (m.role === 'SUBDIRECTOR' && myRole !== 'OWNER') {
+      throw new ForbiddenException('Solo el director puede quitar a un subdirector.');
+    }
     await this.prisma.academyMember.delete({ where: { id: m.id } });
     for (const c of await this.prisma.academyClass.findMany({ where: { academyId: id, chatId: { not: null } }, select: { chatId: true } })) {
       await this.chat.removeParticipant(c.chatId!, userId);
     }
+    return this.findOne(user, id);
+  }
+
+  /** Nombra subdirector a un profesor, o lo vuelve profesor (solo el director o SUPER_ADMIN). */
+  async setMemberRole(
+    user: AuthUser,
+    id: string,
+    userId: string,
+    role: 'SUBDIRECTOR' | 'TEACHER',
+  ): Promise<AcademyDto> {
+    await this.assertOwner(user, id);
+    const m = await this.prisma.academyMember.findUnique({
+      where: { academyId_userId: { academyId: id, userId } },
+    });
+    if (!m) throw new NotFoundException('Esa persona no es parte del equipo de la academia.');
+    if (m.role === 'OWNER') throw new BadRequestException('El director no cambia de rol acá.');
+    if (role === 'SUBDIRECTOR' && m.role !== 'SUBDIRECTOR') {
+      const count = await this.prisma.academyMember.count({ where: { academyId: id, role: 'SUBDIRECTOR' } });
+      if (count >= ACADEMY_MAX_SUBDIRECTORS) {
+        throw new ConflictException(
+          `La academia ya tiene ${ACADEMY_MAX_SUBDIRECTORS} subdirectores. Vuelve profesor a uno para nombrar a otro.`,
+        );
+      }
+    }
+    await this.prisma.academyMember.update({ where: { id: m.id }, data: { role } });
     return this.findOne(user, id);
   }
 

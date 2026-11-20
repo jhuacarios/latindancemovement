@@ -27,6 +27,7 @@ import { AcademyShareService } from './academy-share.service';
 import { AcademyEnrollmentsService } from './academy-enrollments.service';
 import {
   AddMemberDto,
+  SetMemberRoleDto,
   CheckDuplicatesDto,
   CompleteVideoUploadDto,
   CreateAcademyDto,
@@ -130,6 +131,16 @@ export class AcademiesController {
     return this.academies.create(user, dto, file);
   }
 
+  /**
+   * "Enviar mensaje a la academia": abre (o retoma) el chat privado con el director,
+   * para que un potencial alumno converse antes de inscribirse.
+   */
+  @Post(':id/contact')
+  @UseGuards(JwtAuthGuard)
+  contact(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.academies.contact(user, id);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
@@ -206,6 +217,18 @@ export class AcademiesController {
   @UseGuards(JwtAuthGuard)
   addMember(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AddMemberDto) {
     return this.academies.addMember(user, id, dto);
+  }
+
+  /** Nombra subdirector o vuelve profesor (solo el director o SUPER_ADMIN). */
+  @Patch(':id/members/:userId')
+  @UseGuards(JwtAuthGuard)
+  setMemberRole(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() dto: SetMemberRoleDto,
+  ) {
+    return this.academies.setMemberRole(user, id, userId, dto.role);
   }
 
   @Delete(':id/members/:userId')

@@ -96,6 +96,11 @@ export class AddMemberDto {
   email!: string;
 }
 
+export class SetMemberRoleDto {
+  @IsIn(['SUBDIRECTOR', 'TEACHER'])
+  role!: 'SUBDIRECTOR' | 'TEACHER';
+}
+
 export class CreateClassDto {
   @IsString()
   @MinLength(2)
