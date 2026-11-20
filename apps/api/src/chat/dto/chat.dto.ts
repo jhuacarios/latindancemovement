@@ -59,3 +59,9 @@ export class ReactionChangesDto {
   @IsString()
   since?: string;
 }
+
+export class SendStickerDto {
+  @IsString()
+  @MinLength(1)
+  stickerId!: string;
+}

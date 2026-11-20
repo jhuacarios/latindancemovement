@@ -64,6 +64,21 @@ export function reactionChanges(conversationId: string, since?: string) {
   );
 }
 
+export function sendSticker(conversationId: string, stickerId: string) {
+  return api<ChatMessageDto>(`/chat/conversations/${conversationId}/messages/sticker`, {
+    method: 'POST',
+    body: { stickerId },
+  });
+}
+
+/** Texto corto de un mensaje para la bandeja (foto, sticker o el texto). */
+export function messagePreview(m: Pick<ChatMessageDto, 'body' | 'hasImage' | 'stickerId'>): string {
+  if (m.body) return m.body;
+  if (m.hasImage) return '📷 Foto';
+  if (m.stickerId) return '🩰 Sticker';
+  return '';
+}
+
 export function sendMessage(conversationId: string, body: string) {
   return api<ChatMessageDto>(`/chat/conversations/${conversationId}/messages`, {
     method: 'POST',

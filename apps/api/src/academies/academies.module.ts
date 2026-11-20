@@ -21,5 +21,7 @@ import { AcademyEnrollmentsService } from './academy-enrollments.service';
     AcademyCompatService,
     AcademyCompatQueue,
   ],
+  // StickersModule: quién administra una academia y a cuáles pertenece un usuario.
+  exports: [AcademiesService],
 })
 export class AcademiesModule {}

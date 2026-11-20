@@ -20,7 +20,9 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { UserAvatar } from '@/components/avatar-editor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CHAT_REACTIONS, type ChatMessageDto } from '@baile-latino/types';
+import { CHAT_REACTIONS, STICKER_DELETED, type ChatMessageDto } from '@baile-latino/types';
+import { StickerSheet } from '@/components/sticker-sheet';
+import { stickerUrl } from '@/lib/stickers';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -68,6 +70,7 @@ function Bubble({
   onLongPress: () => void;
   onToggleReaction: (emoji: string) => void;
 }) {
+  const isSticker = Boolean(m.stickerId && m.stickerId !== STICKER_DELETED);
   const imgW = Math.min(maxWidth - 16, 260);
   const imgH = m.imageWidth && m.imageHeight ? Math.round((imgW * m.imageHeight) / m.imageWidth) : imgW;
   return (
@@ -83,9 +86,17 @@ function Bubble({
       <Pressable
         onLongPress={onLongPress}
         delayLongPress={300}
-        style={[styles.bubble, mine ? styles.mine : styles.theirs, { maxWidth }]}
+        style={[isSticker ? styles.stickerBox : [styles.bubble, mine ? styles.mine : styles.theirs], { maxWidth }]}
       >
         {showSender && <Text style={styles.sender}>{m.senderName}</Text>}
+        {isSticker && (
+          <Image source={stickerUrl(m.stickerId!)} style={{ width: 128, height: 128 }} contentFit="contain" />
+        )}
+        {m.stickerId === STICKER_DELETED && (
+          <Text style={[styles.text, { fontStyle: 'italic', opacity: 0.7 }, mine && { color: colors.white }]}>
+            Sticker eliminado
+          </Text>
+        )}
         {m.hasImage && (
           <Image
             source={messageImageSource(convId, m.id)}
@@ -94,7 +105,7 @@ function Bubble({
           />
         )}
         {m.body ? <Text style={[styles.text, mine && { color: colors.white }]}>{m.body}</Text> : null}
-        <Text style={[styles.meta, mine && { color: '#ffffffb3' }]}>{formatMsgTime(m.createdAt)}</Text>
+        <Text style={[styles.meta, mine && !isSticker && { color: '#ffffffb3' }]}>{formatMsgTime(m.createdAt)}</Text>
       </Pressable>
     </View>
     {m.reactions.length > 0 && (
@@ -297,6 +308,18 @@ export default function ChatThreadScreen() {
     }
   };
 
+  const [stickers, setStickers] = useState(false);
+  const sendSticker = async (stickerId: string) => {
+    setStickers(false);
+    try {
+      const m = await chatApi.sendSticker(id, stickerId);
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      refreshLists();
+    } catch (e) {
+      Alert.alert('No se envió', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+    }
+  };
+
   const send = async () => {
     const body = text.trim();
     if ((!body && !pending) || sending) return;
@@ -408,6 +431,9 @@ export default function ChatThreadScreen() {
           >
             <Text style={{ fontSize: 20 }}>📷</Text>
           </Pressable>
+          <Pressable onPress={() => setStickers(true)} style={styles.iconBtn} accessibilityLabel="Stickers">
+            <Text style={{ fontSize: 20 }}>🩰</Text>
+          </Pressable>
           <TextInput
             value={text}
             onChangeText={setText}
@@ -426,6 +452,7 @@ export default function ChatThreadScreen() {
             {sending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.sendText}>➤</Text>}
           </Pressable>
         </View>
+        <StickerSheet visible={stickers} onPick={(sid) => void sendSticker(sid)} onClose={() => setStickers(false)} />
         <ReactionSheet
           message={reacting}
           onPick={(e) => reacting && void react(reacting.id, e)}
@@ -437,6 +464,7 @@ export default function ChatThreadScreen() {
 }
 
 const styles = StyleSheet.create({
+  stickerBox: { paddingHorizontal: 2, alignItems: 'flex-start' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: -6, paddingHorizontal: 6 },
   chip: {
     backgroundColor: colors.surface,

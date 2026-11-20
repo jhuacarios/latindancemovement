@@ -896,6 +896,34 @@ export interface ChatUser {
   avatarAt: string | null;
 }
 
+// --- Stickers ------------------------------------------------------------------
+export const STICKER_PACK_SCOPES = ['PLATFORM', 'ACADEMY', 'PLACE'] as const;
+export type StickerPackScope = (typeof STICKER_PACK_SCOPES)[number];
+/** Máximo de stickers por pack y peso máximo de cada uno. */
+export const STICKERS_PER_PACK = 60;
+export const STICKER_MAX_BYTES = 512 * 1024;
+/** `stickerId` de un mensaje cuyo sticker se borró. */
+export const STICKER_DELETED = 'deleted';
+
+/** Ruta (relativa a la API) de la imagen de un sticker. Es pública y no cambia. */
+export function stickerPath(stickerId: string): string {
+  return `/stickers/${stickerId}/image`;
+}
+
+export interface StickerPackDto {
+  id: string;
+  name: string;
+  scope: StickerPackScope;
+  academyId: string | null;
+  placeId: string | null;
+  /** Nombre de la academia o del social dueño (null en los de Nectason). */
+  ownerName: string | null;
+  /** Ids de los stickers, en orden. */
+  stickers: string[];
+  /** ¿Puedo agregar, quitar stickers o borrar el pack? */
+  canManage: boolean;
+}
+
 /** Emojis para reaccionar a un mensaje (los mismos en la web y en la app). */
 export const CHAT_REACTIONS = ['❤️', '😂', '🔥', '👏', '💃', '😮'] as const;
 export type ChatReactionEmoji = (typeof CHAT_REACTIONS)[number];
@@ -933,6 +961,11 @@ export interface ChatMessageDto {
   imageHeight: number | null;
   /** Reacciones agrupadas por emoji (orden: la más usada primero). */
   reactions: ChatReactionSummary[];
+  /**
+   * Mensaje de sticker: id del sticker (imagen pública en `stickerPath(id)`).
+   * `STICKER_DELETED` si el sticker se borró después.
+   */
+  stickerId: string | null;
   createdAt: string;
 }
 

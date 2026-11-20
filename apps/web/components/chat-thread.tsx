@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { placeLabel } from '@baile-latino/types';
+import { placeLabel, STICKER_DELETED } from '@baile-latino/types';
 import type { ChatConversationDto, ChatMessageDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -19,6 +19,7 @@ import {
   reactToMessage,
   sendImageMessage,
   sendMessage,
+  sendSticker,
 } from '@/lib/chat';
 import { compressImage, type CompressedImage } from '@/lib/image-compress';
 import { clsx } from '@/components/clsx';
@@ -31,6 +32,8 @@ import { placeDetailPath } from '@/lib/community-places';
 import { ChatImage } from '@/components/chat-image';
 import { UserAvatar } from '@/components/user-avatar';
 import { ReactionChips, ReactionPicker } from '@/components/chat-reactions';
+import { StickerButton } from '@/components/sticker-panel';
+import { stickerUrl } from '@/lib/stickers';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 /** Tope duro tras comprimir (el servidor también lo exige). */
@@ -288,6 +291,18 @@ export function ChatThread({
     }
   };
 
+  const sendStickerMsg = async (stickerId: string) => {
+    setError(null);
+    try {
+      const msg = await sendSticker(convId, stickerId);
+      stickToBottom.current = true;
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      refreshLists();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo enviar el sticker.');
+    }
+  };
+
   const onScroll = () => {
     const el = listRef.current;
     if (!el) return;
@@ -412,6 +427,7 @@ export function ChatThread({
         )}
         {messages.map((m, i) => {
           const mine = m.senderId === user?.id;
+          const isSticker = Boolean(m.stickerId && m.stickerId !== STICKER_DELETED);
           const prev = messages[i - 1];
           const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
           // En canales, el nombre arriba del globo cuando cambia quien escribe.
@@ -438,14 +454,23 @@ export function ChatThread({
                   ))}
                 <div
                   className={clsx(
-                    'max-w-[80%] rounded-2xl px-3 py-2 text-sm lg:max-w-[65%]',
-                    mine
-                      ? 'rounded-br-md bg-brand text-white'
-                      : 'rounded-bl-md bg-neutral-800 text-neutral-100',
+                    'max-w-[80%] text-sm lg:max-w-[65%]',
+                    isSticker
+                      ? 'px-1'
+                      : mine
+                        ? 'rounded-2xl rounded-br-md bg-brand px-3 py-2 text-white'
+                        : 'rounded-2xl rounded-bl-md bg-neutral-800 px-3 py-2 text-neutral-100',
                   )}
                 >
                   {showSender && (
                     <div className="mb-0.5 text-xs font-semibold text-amber-300">{m.senderName}</div>
+                  )}
+                  {isSticker && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={stickerUrl(m.stickerId!)} alt="Sticker" className="h-32 w-32 object-contain" />
+                  )}
+                  {m.stickerId === STICKER_DELETED && (
+                    <div className="italic opacity-70">Sticker eliminado</div>
                   )}
                   {m.hasImage && (
                     <div className={clsx(m.body && 'mb-1.5')}>
@@ -458,7 +483,7 @@ export function ChatThread({
                   <div
                     className={clsx(
                       'mt-0.5 flex items-center justify-end gap-1 text-[10px]',
-                      mine ? 'text-white/70' : 'text-neutral-500',
+                      mine && !isSticker ? 'text-white/70' : 'text-neutral-500',
                     )}
                   >
                     {formatMsgTime(m.createdAt)}
@@ -524,6 +549,7 @@ export function ChatThread({
           >
             📎
           </button>
+          <StickerButton onSend={(id) => void sendStickerMsg(id)} disabled={sending} />
           <input
             ref={fileInput}
             type="file"

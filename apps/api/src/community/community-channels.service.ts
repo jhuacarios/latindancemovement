@@ -51,6 +51,31 @@ export class CommunityChannelsService {
     return Boolean(m);
   }
 
+  // --- Para otros módulos (stickers) ---------------------------------------------
+
+  /** Sociales de cuya comunidad es miembro el usuario (o que administra). */
+  async placeIdsFor(userId: string): Promise<string[]> {
+    const [member, admin] = await Promise.all([
+      this.prisma.communityMember.findMany({ where: { userId }, select: { placeId: true } }),
+      this.prisma.communityPlace.findMany({ where: { adminId: userId }, select: { id: true } }),
+    ]);
+    return [...new Set([...member.map((m) => m.placeId), ...admin.map((p) => p.id)])];
+  }
+
+  /** ¿Puede administrar el social (sus canales, stickers…)? 404 si no existe. */
+  async canManagePlace(user: AuthUser, placeId: string): Promise<boolean> {
+    const p = await this.prisma.communityPlace.findUnique({ where: { id: placeId }, select: { adminId: true } });
+    if (!p) throw new NotFoundException('Lugar no encontrado.');
+    return this.canManage(user, p);
+  }
+
+  /** Nombres de los sociales (para mostrar). */
+  async placeNames(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.communityPlace.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
   /** El General se crea la primera vez que hace falta. */
   private async ensureGeneral(placeId: string, createdById: string): Promise<string> {
     return (

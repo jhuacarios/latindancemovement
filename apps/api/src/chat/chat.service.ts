@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { publicName } from '@baile-latino/types';
+import { publicName, STICKER_DELETED } from '@baile-latino/types';
 import type {
   ChatChannelInfo,
   ChatConversationDto,
@@ -40,6 +40,7 @@ const MESSAGE_SELECT = {
   senderId: true,
   body: true,
   imageMime: true,
+  stickerId: true,
   imageWidth: true,
   imageHeight: true,
   createdAt: true,
@@ -100,6 +101,8 @@ export class ChatService {
       imageWidth: m.imageWidth,
       imageHeight: m.imageHeight,
       reactions: this.summarize(m.reactions, meId),
+      // Sin texto, sin imagen y sin sticker = era un sticker que se borró.
+      stickerId: m.stickerId ?? (!m.body && !m.imageMime ? STICKER_DELETED : null),
       createdAt: m.createdAt.toISOString(),
     };
   }
@@ -391,18 +394,25 @@ export class ChatService {
     conversationId: string,
     body: string,
     image?: (UploadedImage & { width: number | null; height: number | null }) | null,
+    stickerId?: string | null,
   ): Promise<ChatMessageDto> {
     await this.assertMember(me, conversationId);
     const text = body.trim();
-    if (!text && !image) throw new BadRequestException('El mensaje está vacío.');
+    if (!text && !image && !stickerId) throw new BadRequestException('El mensaje está vacío.');
+    if (stickerId) {
+      // Los stickers son públicos: basta con que exista.
+      const s = await this.prisma.sticker.findUnique({ where: { id: stickerId }, select: { id: true } });
+      if (!s) throw new NotFoundException('Ese sticker ya no existe.');
+    }
     const now = new Date();
     const [msg] = await this.prisma.$transaction([
       this.prisma.chatMessage.create({
         data: {
           conversationId,
           senderId: me.id,
-          body: text,
+          body: stickerId ? '' : text,
           createdAt: now,
+          ...(stickerId ? { stickerId } : {}),
           ...(image
             ? {
                 imageData: image.buffer.toString('base64'),

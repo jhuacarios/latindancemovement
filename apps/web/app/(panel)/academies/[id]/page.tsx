@@ -44,6 +44,7 @@ import { ClassEnrollmentInfo, EnrollBox, RequestsTab } from '@/components/academ
 import { AcademyHero, AcademyPresentation } from '@/components/academy-presentation';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 import { clsx } from '@/components/clsx';
+import { StickerPackManager } from '@/components/sticker-pack-manager';
 
 type Tab = 'inicio' | 'clases' | 'solicitudes' | 'videos' | 'vault' | 'admin';
 
@@ -581,6 +582,7 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
   const quota = a.storage?.quotaBytes ?? 1;
 
   return (
+    <div className="space-y-4">
     <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <Card>
         <h2 className="mb-4 font-semibold">Perfil</h2>
@@ -711,6 +713,12 @@ function AdminTab({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
         )}
       </div>
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+    </div>
+    <StickerPackManager
+      owner={{ scope: 'ACADEMY', academyId: a.id }}
+      title="Stickers de la academia"
+      hint="Los usan el equipo y los alumnos inscritos en cualquier chat. PNG o WebP con fondo transparente se ven mejor (también GIF animados de hasta 512 KB)."
+    />
     </div>
   );
 }

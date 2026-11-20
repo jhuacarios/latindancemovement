@@ -12,5 +12,7 @@ import { CommunityChannelsService } from './community-channels.service';
   imports: [ChatModule, MediaModule],
   controllers: [CommunityPlacesController, CommunityChannelsController, PlaceMediaController],
   providers: [CommunityPlacesService, CommunityChannelsService, PlaceMediaService],
+  // StickersModule: membresía y administración de un social.
+  exports: [CommunityChannelsService],
 })
 export class CommunityModule {}

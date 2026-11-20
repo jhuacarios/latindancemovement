@@ -29,6 +29,7 @@ import { PlaceCommunity } from '@/components/place-community';
 import { PlaceMedia } from '@/components/place-media';
 import { compressImage } from '@/lib/image-compress';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
+import { StickerPackManager } from '@/components/sticker-pack-manager';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -316,6 +317,14 @@ export default function CommunityPlaceDetailPage() {
           {isOutdoor && <PlaceMedia placeId={p.id} isMember={false} />}
 
           {isSuperAdmin && <AdminAssign place={p} onChange={updated} />}
+
+          {isOutdoor && canEditImages && (
+            <StickerPackManager
+              owner={{ scope: 'PLACE', placeId: p.id }}
+              title="Stickers del social"
+              hint="Los usan los miembros de la comunidad en cualquier chat. PNG o WebP con fondo transparente se ven mejor (también GIF animados de hasta 512 KB)."
+            />
+          )}
 
           {p.description && (
             <Card>

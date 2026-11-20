@@ -21,6 +21,7 @@ import { ChatService } from './chat.service';
 import {
   ListMessagesDto,
   ReactDto,
+  SendStickerDto,
   ReactionChangesDto,
   SearchUsersDto,
   SendMessageDto,
@@ -90,6 +91,12 @@ export class ChatController {
   @Get('conversations/:id/reactions')
   reactionChanges(@CurrentUser() me: AuthUser, @Param('id') id: string, @Query() q: ReactionChangesDto) {
     return this.chat.reactionChanges(me, id, q.since);
+  }
+
+  /** Envía un sticker. */
+  @Post('conversations/:id/messages/sticker')
+  sendSticker(@CurrentUser() me: AuthUser, @Param('id') id: string, @Body() dto: SendStickerDto) {
+    return this.chat.sendMessage(me, id, '', null, dto.stickerId);
   }
 
   @Post('conversations/:id/messages')

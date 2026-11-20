@@ -283,6 +283,7 @@ export const MODULES: AppModule[] = [
       { label: 'Roles y permisos', key: 'admin.roles', href: '/admin/roles' },
       { label: 'Academias (Plan Director)', key: 'admin.academies', href: '/admin/academies' },
       { label: 'Reportes de fotos y videos', key: 'admin.video-reports', href: '/admin/video-reports' },
+      { label: 'Stickers de Nectason', key: 'admin.stickers', href: '/admin/stickers' },
       { label: 'Estilos y sub-estilos', key: 'admin.tags', href: '/admin/tags' },
       { label: 'Configuración del sitio', key: 'admin.settings', href: '/admin/settings' },
     ],

@@ -150,6 +150,25 @@ export class AcademiesService implements OnApplicationBootstrap {
     return m?.userId ?? null;
   }
 
+  /** Academias del usuario: donde es director/profesor o alumno inscrito (stickers). */
+  async academyIdsFor(userId: string): Promise<string[]> {
+    const [member, enrolled] = await Promise.all([
+      this.prisma.academyMember.findMany({ where: { userId }, select: { academyId: true } }),
+      this.prisma.academyEnrollment.findMany({
+        where: { userId, status: 'ACCEPTED' },
+        select: { class: { select: { academyId: true } } },
+      }),
+    ]);
+    return [...new Set([...member.map((m) => m.academyId), ...enrolled.map((e) => e.class.academyId)])];
+  }
+
+  /** Nombres de las academias (para mostrar). */
+  async academyNames(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.academy.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
   /** Director y profesores (entran a los chats de clase). */
   async staffIds(academyId: string): Promise<string[]> {
     const rows = await this.prisma.academyMember.findMany({ where: { academyId }, select: { userId: true } });

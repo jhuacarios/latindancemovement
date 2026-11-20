@@ -11,6 +11,7 @@ import {
   chatKeys,
   formatListTime,
   listConversations,
+  messagePreview,
   searchChatUsers,
   startConversation,
 } from '@/lib/chat';
@@ -114,7 +115,7 @@ function ConversationRow({
   const cls = c.kind === 'CLASS' ? c.classGroup : null;
   const title = isChannel ? `# ${c.channel!.name}` : cls ? cls.title : (c.other?.name ?? '—');
   const text = c.lastMessage
-    ? c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : '')
+    ? messagePreview(c.lastMessage)
     : 'Sin mensajes todavía';
   // En los canales, quién escribió el último mensaje.
   const preview =
@@ -272,7 +273,7 @@ function CommunityGroup({
       {expanded &&
         channels.map((c) => {
           const text = c.lastMessage
-            ? c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : '')
+            ? messagePreview(c.lastMessage)
             : 'Sin mensajes todavía';
           const preview = c.lastMessage ? `${c.lastMessage.senderName}: ${text}` : text;
           return (
