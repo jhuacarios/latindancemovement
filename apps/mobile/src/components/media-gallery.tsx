@@ -23,6 +23,7 @@ export function MediaGallery({
   subtitle,
   emptyText,
   upload = 'none',
+  columns = 3,
 }: {
   academyId: string;
   classId: string | null;
@@ -31,6 +32,8 @@ export function MediaGallery({
   emptyText: string;
   /** Quien administra: 'yes' = puede subir; 'no-plan' = sin Plan Director vigente (solo lectura). */
   upload?: 'none' | 'yes' | 'no-plan';
+  /** Columnas de la grilla (2 = miniaturas grandes, para la galería de la academia). */
+  columns?: number;
 }) {
   const [open, setOpen] = useState<number | null>(null);
   // Ancho real de la grilla (medido): así caben 3 columnas en cualquier pantalla.
@@ -40,7 +43,7 @@ export function MediaGallery({
     queryFn: () => academiesApi.media(academyId, classId),
   });
   const GAP = 2;
-  const cell = gridWidth > 0 ? Math.floor((gridWidth - GAP * 2) / 3) : 0;
+  const cell = gridWidth > 0 ? Math.floor((gridWidth - GAP * (columns - 1)) / columns) : 0;
   const qc = useQueryClient();
   // Galería abierta: lo que no es de ninguna clase + lo marcado con ⭐. Clase: lo suyo.
   const items = (data ?? []).filter((v) => (classId ? v.classId === classId : v.classId === null || v.featured));

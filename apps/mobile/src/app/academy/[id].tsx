@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -13,42 +14,130 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { placeLabel, regionName, type AcademyClassDto, type AcademyDto } from '@baile-latino/types';
-import { LEVEL_LABEL, WEEKDAYS, WEEK_ORDER, academiesApi, academyLogoUrl, timeRange, uploadMode } from '@/lib/academies';
+import {
+  LEVEL_LABEL,
+  MEMBER_ROLE_LABEL,
+  WEEKDAYS,
+  WEEK_ORDER,
+  academiesApi,
+  academyLogoUrl,
+  academyMapsLink,
+  timeRange,
+  uploadMode,
+} from '@/lib/academies';
+import { Button } from '@/components/button';
+import { UserAvatar } from '@/components/avatar-editor';
 import { ApiError } from '@/lib/api';
 import { StyleTag } from '@/components/chips';
 import { EnrollPill, enrolledLabel } from '@/components/class-enroll';
 import { MediaGallery } from '@/components/media-gallery';
 import { colors, radius, space, ui, detailHeader } from '@/lib/theme';
 
-function Header({ a }: { a: AcademyDto }) {
+/** Portada: mosaico con la galería abierta (fotos primero) y, encima, logo, nombre y datos. */
+function Hero({ a }: { a: AcademyDto }) {
   const logo = academyLogoUrl(a);
+  const { data } = useQuery({
+    queryKey: ['academy-media', a.id, null],
+    queryFn: () => academiesApi.media(a.id, null),
+  });
+  const covers = (data ?? [])
+    .filter((v) => (v.classId === null || v.featured) && v.thumbUrl)
+    .sort((x, y) => Number(y.kind === 'PHOTO') - Number(x.kind === 'PHOTO'))
+    .slice(0, 3);
+  const where = [placeLabel(a.city, a.commune), regionName(a.region)].filter(Boolean).join(' · ');
   return (
-    <View style={[ui.card, { flexDirection: 'row', alignItems: 'center' }]}>
-      {logo ? (
-        <Image source={logo} style={styles.logo} contentFit="cover" />
-      ) : (
-        <View style={[styles.logo, { alignItems: 'center', justifyContent: 'center' }]}>
-          <Text style={{ fontSize: 34 }}>🎓</Text>
-        </View>
-      )}
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={ui.h2}>{a.name}</Text>
-        <Text style={ui.muted}>
-          {[a.address, placeLabel(a.city, a.commune), regionName(a.region)].filter(Boolean).join(' · ')}
-        </Text>
+    <View style={styles.hero}>
+      <View style={styles.mosaic}>
+        {covers.length === 0 ? (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.brand, opacity: 0.35 }]} />
+        ) : (
+          <>
+            <Image source={covers[0].thumbUrl!} style={{ flex: 2 }} contentFit="cover" />
+            {covers.length > 1 && (
+              <View style={{ flex: 1, gap: 2 }}>
+                {covers.slice(1).map((v) => (
+                  <Image key={v.id} source={v.thumbUrl!} style={{ flex: 1 }} contentFit="cover" />
+                ))}
+              </View>
+            )}
+          </>
+        )}
+        <View style={styles.shade} />
+      </View>
+      <View style={styles.heroBody}>
+        {logo ? (
+          <Image source={logo} style={styles.logo} contentFit="cover" />
+        ) : (
+          <View style={[styles.logo, { alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: 34 }}>🎓</Text>
+          </View>
+        )}
+        <Text style={ui.h1}>{a.name}</Text>
+        {where ? <Text style={ui.muted}>{where}</Text> : null}
         <View style={styles.row}>
-          {a.styles.map((s) => <StyleTag key={s} style={s} />)}
+          {a.styles.map((s) => (
+            <StyleTag key={s} style={s} />
+          ))}
           {a.instagramHandle && (
-            <Text
-              style={styles.link}
+            <Pressable
               onPress={() => void Linking.openURL(`https://instagram.com/${a.instagramHandle}`)}
+              style={styles.igBtn}
             >
-              @{a.instagramHandle}
-            </Text>
+              <Text style={styles.igText}>@{a.instagramHandle}</Text>
+            </Pressable>
           )}
         </View>
       </View>
     </View>
+  );
+}
+
+function About({ a }: { a: AcademyDto }) {
+  const [more, setMore] = useState(false);
+  if (!a.description) return null;
+  const long = a.description.length > 260;
+  return (
+    <View style={ui.card}>
+      <Text style={ui.h2}>Sobre la academia</Text>
+      <Text style={[ui.body, { lineHeight: 22 }]} numberOfLines={long && !more ? 6 : undefined}>
+        {a.description}
+      </Text>
+      {long && (
+        <Text style={styles.link} onPress={() => setMore((m) => !m)}>
+          {more ? 'Ver menos' : 'Ver más'}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function WhereAndTeam({ a }: { a: AcademyDto }) {
+  const maps = academyMapsLink(a);
+  return (
+    <>
+      {(a.address || a.city) && (
+        <View style={ui.card}>
+          <Text style={ui.h2}>Dónde</Text>
+          {a.address ? <Text style={ui.body}>{a.address}</Text> : null}
+          <Text style={ui.muted}>{[placeLabel(a.city, a.commune), regionName(a.region)].filter(Boolean).join(' · ')}</Text>
+          {maps && <Button title="📍 Cómo llegar" variant="ghost" onPress={() => void Linking.openURL(maps)} />}
+        </View>
+      )}
+      {a.team.length > 0 && (
+        <View style={ui.card}>
+          <Text style={ui.h2}>Equipo</Text>
+          {a.team.map((m) => (
+            <View key={m.userId} style={styles.member}>
+              <UserAvatar user={{ id: m.userId, avatarAt: m.avatarAt, name: m.name, displayName: null }} size={40} />
+              <View style={{ flex: 1 }}>
+                <Text style={ui.body}>{m.name}</Text>
+                <Text style={ui.small}>{MEMBER_ROLE_LABEL[m.role]}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </>
   );
 }
 
@@ -117,21 +206,18 @@ export default function AcademyScreen() {
         {error && <Text style={ui.error}>{error instanceof ApiError ? error.message : 'No se pudo cargar.'}</Text>}
         {a && (
           <>
-            <Header a={a} />
-            {a.description ? (
-              <View style={ui.card}>
-                <Text style={ui.body}>{a.description}</Text>
-              </View>
-            ) : null}
-            <Schedule classes={a.classes} academyId={a.id} manages={a.myRole !== null || user?.role === 'SUPER_ADMIN'} />
+            <Hero a={a} />
+            <About a={a} />
             <MediaGallery
               academyId={a.id}
               classId={null}
+              columns={2}
               upload={uploadMode(a, user?.role === 'SUPER_ADMIN')}
               title="Galería"
-              subtitle="El trabajo de la academia, abierto a todos."
               emptyText="La academia todavía no ha publicado fotos ni videos."
             />
+            <Schedule classes={a.classes} academyId={a.id} manages={a.myRole !== null || user?.role === 'SUPER_ADMIN'} />
+            <WhereAndTeam a={a} />
           </>
         )}
       </ScrollView>
@@ -140,7 +226,28 @@ export default function AcademyScreen() {
 }
 
 const styles = StyleSheet.create({
-  logo: { width: 76, height: 76, borderRadius: radius.md, backgroundColor: colors.selva },
+  hero: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  mosaic: { height: 190, flexDirection: 'row', gap: 2, backgroundColor: colors.selva },
+  shade: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#0d1f1a55' },
+  heroBody: { marginTop: -44, padding: space.lg, paddingTop: 0, gap: 6 },
+  logo: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.lg,
+    backgroundColor: colors.selva,
+    borderWidth: 3,
+    borderColor: colors.surface,
+    marginBottom: 4,
+  },
+  igBtn: { backgroundColor: '#d6297a', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  igText: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  member: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   link: { color: colors.clave, fontSize: 13, fontWeight: '600' },
   day: { color: colors.clave, fontSize: 13, fontWeight: '700', textTransform: 'uppercase' },

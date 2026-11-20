@@ -10,6 +10,7 @@ import {
   type OnApplicationBootstrap,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { publicName } from '@baile-latino/types';
 import type {
   AcademyAdminRowDto,
   AcademyClassDto,
@@ -321,7 +322,11 @@ export class AcademiesService implements OnApplicationBootstrap {
         createdAt: true,
         classes: { orderBy: CLASS_ORDER },
         members: {
-          select: { userId: true, role: true, user: { select: { name: true, email: true } } },
+          select: {
+            userId: true,
+            role: true,
+            user: { select: { name: true, displayName: true, email: true, avatarAt: true } },
+          },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -346,6 +351,15 @@ export class AcademiesService implements OnApplicationBootstrap {
             role: m.role as AcademyMemberRole,
           }))
         : [],
+      // El equipo lo ve cualquiera (sin correo): director primero, con su foto.
+      team: [...a.members]
+        .sort((x, y) => Number(y.role === 'OWNER') - Number(x.role === 'OWNER'))
+        .map((m) => ({
+          userId: m.userId,
+          name: publicName(m.user),
+          role: m.role as AcademyMemberRole,
+          avatarAt: m.user.avatarAt ? m.user.avatarAt.toISOString() : null,
+        })),
       storage: manages
         ? {
             usedBytes: await this.usedBytes(id),

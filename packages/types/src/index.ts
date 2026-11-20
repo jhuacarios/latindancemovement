@@ -1212,6 +1212,16 @@ export interface AcademySummaryDto {
   myRole: AcademyMemberRole | null;
 }
 
+/** Integrante del equipo tal como se muestra en la presentación de la academia. */
+export interface AcademyTeamMemberDto {
+  userId: string;
+  /** Nombre visible. */
+  name: string;
+  role: AcademyMemberRole;
+  /** Versión de la foto de perfil (`avatarPath`); null = sin foto. */
+  avatarAt: string | null;
+}
+
 export interface AcademyMemberDto {
   userId: string;
   name: string;
@@ -1286,6 +1296,8 @@ export interface AcademyDto extends AcademySummaryDto {
   classes: AcademyClassDto[];
   /** Solo para quienes la administran (vacío para el resto). */
   members: AcademyMemberDto[];
+  /** Director y profesores, para la presentación (lo ve cualquiera; sin correo). */
+  team: AcademyTeamMemberDto[];
   /** Uso de la galería y de la bóveda (solo para quienes la administran; null para el resto). */
   storage: { usedBytes: number; quotaBytes: number; vaultUsedBytes: number; vaultQuotaBytes: number } | null;
   /** Plan Director (solo para quienes la administran; null para el resto). */

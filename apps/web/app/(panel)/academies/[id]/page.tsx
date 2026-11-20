@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { placeLabel, regionName, type AcademyClassDto, type AcademyDto, type AcademyVideoDto } from '@baile-latino/types';
+import type { AcademyClassDto, AcademyDto, AcademyVideoDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -32,7 +32,6 @@ import {
   validateAcademy,
   type AcademyFormValues,
 } from '@/lib/academies';
-import { AcademyLogo } from '@/components/academy-card';
 import { AcademyForm } from '@/components/academy-form';
 import { LogoPicker } from '@/components/academy-logo-picker';
 import { AcademyClassModal } from '@/components/academy-class-modal';
@@ -41,18 +40,18 @@ import { AcademyVideoPlayer } from '@/components/academy-video-player';
 import { AcademyVault, StorageBar, downloadMedia } from '@/components/academy-vault';
 import { AcademyShareModal } from '@/components/academy-share-modal';
 import { ConfirmDialog, type ConfirmOptions } from '@/components/confirm-dialog';
-import { InstagramLink } from '@/components/instagram-link';
 import { ClassEnrollmentInfo, EnrollBox, RequestsTab } from '@/components/academy-enrollment';
+import { AcademyHero, AcademyPresentation } from '@/components/academy-presentation';
 import { Button, Card, Input, Select, Spinner, StyleBadge } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 
-type Tab = 'clases' | 'solicitudes' | 'videos' | 'vault' | 'admin';
+type Tab = 'inicio' | 'clases' | 'solicitudes' | 'videos' | 'vault' | 'admin';
 
 export default function AcademyPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>('clases');
+  const [tab, setTab] = useState<Tab>('inicio');
   const q = useQuery({ queryKey: ['academies', 'detail', id], queryFn: () => academiesApi.get(id) });
   const a = q.data;
   const manages = Boolean(a && (a.myRole || user?.role === 'SUPER_ADMIN'));
@@ -71,40 +70,18 @@ export default function AcademyPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="space-y-3">
         <Link href="/academies" className="text-sm text-neutral-400 hover:text-neutral-200">
           ← Academias
         </Link>
-        <div className="mt-2 flex flex-wrap items-start gap-4">
-          <AcademyLogo a={a} className="h-20 w-20" />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold">{a.name}</h1>
-            <p className="text-sm text-neutral-400">
-              {[a.address, placeLabel(a.city, a.commune), regionName(a.region)].filter(Boolean).join(' · ')}
-            </p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {a.styles.map((s) => (
-                <StyleBadge key={s} style={s} />
-              ))}
-              {a.instagramHandle && <InstagramLink handle={a.instagramHandle} />}
-            </div>
-          </div>
-          {manages && a.storage && (
-            <div className="w-full space-y-2 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 sm:w-72">
-              <PlanStatus a={a} />
-              <StorageBar label="Galería" used={a.storage.usedBytes} quota={a.storage.quotaBytes} />
-              <StorageBar label="🗄️ Bóveda" used={a.storage.vaultUsedBytes} quota={a.storage.vaultQuotaBytes} />
-            </div>
-          )}
-        </div>
-        {manages && <StorageAlerts a={a} />}
-        {a.description && <p className="mt-3 max-w-3xl whitespace-pre-line text-sm text-neutral-300">{a.description}</p>}
+        <AcademyHero a={a} />
       </div>
 
-      <div className="flex gap-1 border-b border-neutral-800">
+      <div className="flex gap-1 overflow-x-auto border-b border-neutral-800">
         {(
           [
-            ['clases', `Clases (${a.classCount})`],
+            ['inicio', 'Presentación'],
+            ['clases', `Horario (${a.classCount})`],
             ...(isDirector
               ? [['solicitudes', `Solicitudes${a.pendingEnrollments ? ` (${a.pendingEnrollments})` : ''}`]]
               : []),
@@ -117,7 +94,7 @@ export default function AcademyPage() {
             type="button"
             onClick={() => setTab(k)}
             className={clsx(
-              '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition',
+              '-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition',
               tab === k ? 'border-brand text-brand' : 'border-transparent text-neutral-400 hover:text-neutral-200',
             )}
           >
@@ -126,18 +103,56 @@ export default function AcademyPage() {
         ))}
       </div>
 
+      {tab === 'inicio' && (
+        <AcademyPresentation
+          a={a}
+          manages={manages}
+          onSchedule={() => setTab('clases')}
+          onEdit={() => setTab('admin')}
+        />
+      )}
       {tab === 'clases' && (
         <ClassesTab a={a} manages={manages} onChanged={refresh} onRequests={() => setTab('solicitudes')} />
       )}
       {tab === 'solicitudes' && isDirector && <RequestsTab a={a} onChanged={refresh} />}
-      {tab === 'videos' && <VideosTab a={a} manages={manages} onChanged={refresh} />}
-      {tab === 'vault' && manages && <AcademyVault a={a} onChanged={refresh} />}
-      {tab === 'admin' && manages && <AdminTab a={a} onChanged={refresh} />}
+      {tab === 'videos' && (
+        <>
+          {manages && <StaffStorage a={a} />}
+          <VideosTab a={a} manages={manages} onChanged={refresh} />
+        </>
+      )}
+      {tab === 'vault' && manages && (
+        <>
+          <StaffStorage a={a} />
+          <AcademyVault a={a} onChanged={refresh} />
+        </>
+      )}
+      {tab === 'admin' && manages && (
+        <>
+          <StaffStorage a={a} />
+          <AdminTab a={a} onChanged={refresh} />
+        </>
+      )}
     </div>
   );
 }
 
 // --- Plan Director ----------------------------------------------------------------
+
+/** Plan, cupos y avisos: solo en las pestañas de gestión (la presentación queda limpia). */
+function StaffStorage({ a }: { a: AcademyDto }) {
+  if (!a.storage) return null;
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 sm:grid-cols-[auto_1fr_1fr] sm:items-center sm:gap-6">
+        <PlanStatus a={a} />
+        <StorageBar label="Galería" used={a.storage.usedBytes} quota={a.storage.quotaBytes} />
+        <StorageBar label="🗄️ Bóveda" used={a.storage.vaultUsedBytes} quota={a.storage.vaultQuotaBytes} />
+      </div>
+      <StorageAlerts a={a} />
+    </div>
+  );
+}
 
 function PlanStatus({ a }: { a: AcademyDto }) {
   if (!a.plan) return null;
@@ -170,7 +185,7 @@ function StorageAlerts({ a }: { a: AcademyDto }) {
   }
   if (msgs.length === 0) return null;
   return (
-    <div className="mt-3 space-y-1 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+    <div className="space-y-1 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
       {msgs.map((m) => (
         <p key={m}>⚠️ {m}</p>
       ))}

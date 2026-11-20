@@ -6,6 +6,7 @@ import type {
   ClassLevel,
   MyEnrollmentDto,
 } from '@baile-latino/types';
+import { regionName } from '@baile-latino/types';
 import { API_BASE, api } from './api';
 
 export const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -71,4 +72,15 @@ export function uploadMode(a: AcademyDto, superAdmin: boolean): 'none' | 'yes' |
   if (superAdmin) return 'yes';
   if (!a.myRole) return 'none';
   return a.plan?.active ? 'yes' : 'no-plan';
+}
+
+export const MEMBER_ROLE_LABEL = { OWNER: 'Director', TEACHER: 'Profesor' } as const;
+
+/** Google Maps con la dirección de la academia (o su nombre); null si no hay dónde. */
+export function academyMapsLink(a: Pick<AcademyDto, 'name' | 'address' | 'city' | 'commune' | 'region'>): string | null {
+  if (!a.address && !a.city) return null;
+  const q = [a.address ? a.name : null, a.address ?? a.name, a.commune || a.city, regionName(a.region), 'Chile']
+    .filter(Boolean)
+    .join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }
