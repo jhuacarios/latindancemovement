@@ -16,6 +16,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { UserAvatar } from '@/components/avatar-editor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ChatMessageDto } from '@baile-latino/types';
@@ -51,12 +52,14 @@ function Bubble({
   m,
   mine,
   showSender,
+  isGroup,
   convId,
   maxWidth,
 }: {
   m: ChatMessageDto;
   mine: boolean;
   showSender: boolean;
+  isGroup: boolean;
   convId: string;
   maxWidth: number;
 }) {
@@ -64,6 +67,13 @@ function Bubble({
   const imgH = m.imageWidth && m.imageHeight ? Math.round((imgW * m.imageHeight) / m.imageWidth) : imgW;
   return (
     <View style={[styles.bubbleRow, mine ? { justifyContent: 'flex-end' } : null]}>
+      {/* En grupos, la foto de quien escribe al inicio de cada tanda (si no, el hueco para alinear). */}
+      {isGroup && !mine &&
+        (showSender ? (
+          <UserAvatar user={{ id: m.senderId, avatarAt: m.senderAvatarAt, name: m.senderName, displayName: null }} size={28} />
+        ) : (
+          <View style={{ width: 28 }} />
+        ))}
       <View style={[styles.bubble, mine ? styles.mine : styles.theirs, { maxWidth }]}>
         {showSender && <Text style={styles.sender}>{m.senderName}</Text>}
         {m.hasImage && (
@@ -253,7 +263,14 @@ export default function ChatThreadScreen() {
               return (
                 <View>
                   {newDay && <Text style={styles.day}>{formatDayLabel(m.createdAt)}</Text>}
-                  <Bubble m={m} mine={mine} showSender={showSender} convId={id} maxWidth={bubbleMax} />
+                  <Bubble
+                    m={m}
+                    mine={mine}
+                    showSender={showSender}
+                    isGroup={isGroup}
+                    convId={id}
+                    maxWidth={bubbleMax - (isGroup && !mine ? 34 : 0)}
+                  />
                 </View>
               );
             }}
@@ -318,7 +335,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginVertical: space.sm,
   },
-  bubbleRow: { flexDirection: 'row' },
+  bubbleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   bubble: { borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   mine: { backgroundColor: colors.brand, borderBottomRightRadius: 6 },
   theirs: { backgroundColor: colors.surface, borderBottomLeftRadius: 6 },

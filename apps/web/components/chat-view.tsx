@@ -20,6 +20,7 @@ import { ChannelAvatar } from '@/components/channel-avatar';
 import { ClassAvatar } from '@/components/class-avatar';
 import { Button, Card, Input, Spinner } from '@/components/ui';
 import { ChatThread } from '@/components/chat-thread';
+import { UserAvatar } from '@/components/user-avatar';
 
 /** Modal "Nuevo chat": buscador de usuarios por nombre o Instagram. */
 function NewChatModal({
@@ -83,9 +84,7 @@ function NewChatModal({
               onClick={() => onPick(u)}
               className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-neutral-800"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
-                {u.name.slice(0, 1).toUpperCase()}
-              </div>
+              <UserAvatar user={{ ...u, displayName: null }} className="h-9 w-9 shrink-0 text-sm" />
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{u.name}</div>
                 <div className="truncate text-xs text-neutral-500">
@@ -133,6 +132,8 @@ function ConversationRow({
         <ClassAvatar academyId={cls.academyId} />
       ) : isChannel ? (
         <ChannelAvatar channel={c.channel!} />
+      ) : c.other ? (
+        <UserAvatar user={{ ...c.other, displayName: null }} className="h-10 w-10 shrink-0 text-sm" />
       ) : (
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
           {title.slice(0, 1).toUpperCase()}

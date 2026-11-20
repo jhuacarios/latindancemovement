@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
+import { UserAvatar } from '@/components/avatar-editor';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { placeLabel, type ChatUser } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
@@ -64,9 +65,7 @@ export default function NewChatScreen() {
               disabled={Boolean(opening)}
               style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surface }]}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.initial}>{u.name.charAt(0).toUpperCase()}</Text>
-              </View>
+              <UserAvatar user={{ ...u, displayName: null }} size={40} />
               <View style={{ flex: 1 }}>
                 <Text style={ui.body}>{u.name}</Text>
                 <Text style={ui.small}>

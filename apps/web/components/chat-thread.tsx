@@ -27,6 +27,7 @@ import { ChannelAvatar } from '@/components/channel-avatar';
 import { ClassAvatar } from '@/components/class-avatar';
 import { placeDetailPath } from '@/lib/community-places';
 import { ChatImage } from '@/components/chat-image';
+import { UserAvatar } from '@/components/user-avatar';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 /** Tope duro tras comprimir (el servidor también lo exige). */
@@ -311,9 +312,7 @@ export function ChatThread({
           </>
         ) : other ? (
           <>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/20 text-sm font-semibold text-brand">
-              {other.name.slice(0, 1).toUpperCase()}
-            </div>
+            <UserAvatar user={{ ...other, displayName: null }} className="h-9 w-9 shrink-0 text-sm" />
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold">{other.name}</div>
               <div className="truncate text-xs text-neutral-500">
@@ -386,7 +385,17 @@ export function ChatThread({
                   {formatDayLabel(m.createdAt)}
                 </div>
               )}
-              <div className={clsx('flex', mine ? 'justify-end' : 'justify-start')}>
+              <div className={clsx('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
+                {/* En grupos, la foto de quien escribe (al inicio de cada tanda; si no, el hueco para alinear). */}
+                {isGroup && !mine &&
+                  (showSender ? (
+                    <UserAvatar
+                      user={{ id: m.senderId, avatarAt: m.senderAvatarAt, name: m.senderName, displayName: null }}
+                      className="mb-0.5 h-7 w-7 shrink-0 self-start text-[11px]"
+                    />
+                  ) : (
+                    <div className="w-7 shrink-0" />
+                  ))}
                 <div
                   className={clsx(
                     'max-w-[80%] rounded-2xl px-3 py-2 text-sm lg:max-w-[65%]',

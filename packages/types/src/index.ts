@@ -892,6 +892,8 @@ export interface ChatUser {
   city: string | null;
   commune: string | null;
   instagramHandle: string | null;
+  /** Versión de la foto de perfil (`avatarPath`); null = sin foto. */
+  avatarAt: string | null;
 }
 
 export interface ChatMessageDto {
@@ -900,6 +902,8 @@ export interface ChatMessageDto {
   senderId: string;
   /** Nombre visible de quien lo envió (se muestra en los canales). */
   senderName: string;
+  /** Foto de perfil de quien lo envió (`avatarPath({ id: senderId, avatarAt })`); null = sin foto. */
+  senderAvatarAt: string | null;
   /** Texto; vacío si el mensaje es solo una imagen. */
   body: string;
   /** La imagen se pide aparte: GET /chat/conversations/:id/messages/:mid/image */

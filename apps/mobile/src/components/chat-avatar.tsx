@@ -3,11 +3,12 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import type { ChatConversationDto } from '@baile-latino/types';
 import { API_BASE } from '@/lib/api';
+import { UserAvatar } from '@/components/avatar-editor';
 import { colors, radius } from '@/lib/theme';
 
 /**
  * Avatar de una conversación: foto del social (canal, con #), logo de la academia
- * (clase, con 🎓) o la inicial de la persona (chat privado).
+ * (clase, con 🎓) o la foto de la persona (chat privado; su inicial si no tiene).
  */
 export function ChatAvatar({ c, size = 44 }: { c: ChatConversationDto; size?: number }) {
   const [failed, setFailed] = useState(false);
@@ -26,7 +27,8 @@ export function ChatAvatar({ c, size = 44 }: { c: ChatConversationDto; size?: nu
   }
 
   if (!badge) {
-    const name = c.other?.name ?? '?';
+    if (c.other) return <UserAvatar user={{ ...c.other, displayName: null }} size={size} />;
+    const name = '?';
     return (
       <View style={[styles.round, box, { borderRadius: size / 2 }]}>
         <Text style={styles.initial}>{name.charAt(0).toUpperCase()}</Text>

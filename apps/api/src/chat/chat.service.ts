@@ -26,6 +26,7 @@ const USER_SELECT = {
   city: true,
   commune: true,
   instagramHandle: true,
+  avatarAt: true,
 } satisfies Prisma.UserSelect;
 
 type UserRow = Prisma.UserGetPayload<{ select: typeof USER_SELECT }>;
@@ -40,7 +41,7 @@ const MESSAGE_SELECT = {
   imageWidth: true,
   imageHeight: true,
   createdAt: true,
-  sender: { select: { name: true, displayName: true } },
+  sender: { select: { name: true, displayName: true, avatarAt: true } },
 } satisfies Prisma.ChatMessageSelect;
 
 type MessageRow = Prisma.ChatMessageGetPayload<{ select: typeof MESSAGE_SELECT }>;
@@ -64,6 +65,7 @@ export class ChatService {
       city: u.city,
       commune: u.commune,
       instagramHandle: u.instagramHandle,
+      avatarAt: u.avatarAt ? u.avatarAt.toISOString() : null,
     };
   }
 
@@ -73,6 +75,7 @@ export class ChatService {
       conversationId: m.conversationId,
       senderId: m.senderId,
       senderName: publicName(m.sender),
+      senderAvatarAt: m.sender.avatarAt ? m.sender.avatarAt.toISOString() : null,
       body: m.body,
       hasImage: Boolean(m.imageMime),
       imageWidth: m.imageWidth,
