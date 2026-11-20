@@ -15,7 +15,6 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { placeLabel, regionName, type AcademyClassDto, type AcademyDto } from '@baile-latino/types';
 import {
   LEVEL_LABEL,
@@ -30,7 +29,8 @@ import {
 } from '@/lib/academies';
 import { Button } from '@/components/button';
 import { UserAvatar } from '@/components/avatar-editor';
-import { API_BASE, ApiError, api } from '@/lib/api';
+import { API_BASE, ApiError, api, uploadImage } from '@/lib/api';
+import { toJpeg } from '@/lib/images';
 import { StyleTag } from '@/components/chips';
 import { EnrollPill, enrolledLabel } from '@/components/class-enroll';
 import { MediaGallery } from '@/components/media-gallery';
@@ -49,7 +49,7 @@ function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
       await fn();
       await qc.invalidateQueries({ queryKey: ['academy', a.id] });
     } catch (e) {
-      Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'No se pudo usar esa imagen.');
+      Alert.alert('No se pudo', e instanceof Error && e.message ? e.message : 'No se pudo usar esa imagen.');
     } finally {
       setBusy(false);
     }
@@ -59,13 +59,8 @@ function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
     const asset = res.canceled ? null : res.assets[0];
     if (!asset) return;
     await run(async () => {
-      // Horizontal, 1920 px de ancho como máximo, en JPG (también si era HEIC).
-      const ctx = ImageManipulator.manipulate(asset.uri);
-      if (asset.width > 1920) ctx.resize({ width: 1920 });
-      const out = await (await ctx.renderAsync()).saveAsync({ compress: 0.86, format: SaveFormat.JPEG });
-      const fd = new FormData();
-      fd.append('file', { uri: out.uri, name: 'portada.jpg', type: 'image/jpeg' } as unknown as Blob);
-      await api(`/academies/${a.id}/cover`, { method: 'PUT', form: fd });
+      const jpg = await toJpeg(asset.uri, asset.width > 1920 ? 1920 : null);
+      await uploadImage(`/academies/${a.id}/cover`, jpg);
     });
   };
   const edit = () =>

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { ActionSheetIOS, ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { avatarPath, publicName, type PublicUser } from '@baile-latino/types';
-import { API_BASE, ApiError, api } from '@/lib/api';
+import { API_BASE, ApiError, api, uploadImage } from '@/lib/api';
+import { toJpeg } from '@/lib/images';
 import { useAuth } from '@/lib/auth';
 import { colors } from '@/lib/theme';
 
@@ -45,14 +45,10 @@ export function AvatarEditor({ size = 72 }: { size?: number }) {
     setBusy(true);
     try {
       // Ya viene recortada en cuadrado: se achica a 512 px y se pasa a JPG (también si era HEIC).
-      const ctx = ImageManipulator.manipulate(asset.uri);
-      if (asset.width > 512) ctx.resize({ width: 512 });
-      const out = await (await ctx.renderAsync()).saveAsync({ compress: 0.88, format: SaveFormat.JPEG });
-      const fd = new FormData();
-      fd.append('file', { uri: out.uri, name: 'avatar.jpg', type: 'image/jpeg' } as unknown as Blob);
-      updateUser(await api<PublicUser>('/auth/me/avatar', { method: 'PUT', form: fd }));
+      const jpg = await toJpeg(asset.uri, asset.width > 512 ? 512 : null);
+      updateUser(await uploadImage<PublicUser>('/auth/me/avatar', jpg));
     } catch (e) {
-      Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'No se pudo usar esa imagen.');
+      Alert.alert('No se pudo', e instanceof Error && e.message ? e.message : 'No se pudo usar esa imagen.');
     } finally {
       setBusy(false);
     }

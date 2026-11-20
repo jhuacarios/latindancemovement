@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { File, UploadTask, UploadType } from 'expo-file-system';
 import type { AuthTokens } from '@baile-latino/types';
 
 /** Base de la API (EXPO_PUBLIC_API_URL; por defecto, producción). */
@@ -132,4 +133,43 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   if (!res.ok) throw new ApiError(res.status, await parseError(res));
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/**
+ * Sube una imagen ya preparada (archivo local JPG) como multipart `file`, con la
+ * subida nativa de expo-file-system (lee el archivo desde el disco). Más confiable
+ * que FormData + fetch para PUT con archivos. Devuelve el JSON de la respuesta.
+ */
+export async function uploadImage<T>(path: string, uri: string, method: 'PUT' | 'POST' = 'PUT', retried = false): Promise<T> {
+  await loadTokens();
+  const task = new UploadTask(new File(uri), `${API_BASE}${path}`, {
+    httpMethod: method,
+    uploadType: UploadType.MULTIPART,
+    fieldName: 'file',
+    mimeType: 'image/jpeg',
+    headers: authHeaders(),
+  });
+  let res: { status: number; body: string };
+  try {
+    res = await task.uploadAsync();
+  } catch (e) {
+    throw new ApiError(0, `No se pudo enviar la imagen (${(e as Error).message || 'sin conexión'}).`);
+  } finally {
+    task.release();
+  }
+  if (res.status === 401 && !retried) {
+    if (await tryRefresh()) return uploadImage<T>(path, uri, method, true);
+    await clearTokens();
+  }
+  let data: unknown = null;
+  try {
+    data = res.body ? JSON.parse(res.body) : null;
+  } catch {
+    // respuesta sin JSON
+  }
+  if (res.status < 200 || res.status >= 300) {
+    const msg = (data as { message?: string | string[] } | null)?.message;
+    throw new ApiError(res.status, (Array.isArray(msg) ? msg.join(' ') : msg) || `Error ${res.status} al subir la imagen.`);
+  }
+  return data as T;
 }
