@@ -88,6 +88,7 @@ export function asPlayerItem(m: PlaceMediaDto): AcademyVideoDto {
     compat: { status: null, sizeBytes: null },
     classId: null,
     classTitle: null,
+    featured: false,
     title: m.title,
     description: m.description,
     style: null,

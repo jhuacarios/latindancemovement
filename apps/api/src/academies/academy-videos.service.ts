@@ -58,6 +58,7 @@ export const VIDEO_SELECT = {
   status: true,
   location: true,
   vaultedAt: true,
+  featured: true,
   compatStatus: true,
   compatKey: true,
   compatSizeBytes: true,
@@ -136,6 +137,7 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
       },
       classId: v.classId,
       classTitle: v.class?.title ?? null,
+      featured: v.featured,
       title: v.title,
       description: v.description,
       style: v.style as DanceStyle | null,
@@ -161,7 +163,8 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
 
   async list(user: AuthUser, academyId: string, q: ListVideosQueryDto): Promise<AcademyVideoDto[]> {
     // Los videos de una clase solo los ven sus inscritos (y quienes administran);
-    // los que no tienen clase, cualquiera con cuenta. (404 si la academia no existe.)
+    // los que no tienen clase o están en la galería abierta (featured), cualquiera
+    // con cuenta. (404 si la academia no existe.)
     const visible = await this.academies.visibleClassIds(user, academyId);
     const rows = await this.prisma.academyVideo.findMany({
       where: {
@@ -169,7 +172,7 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
         status: 'READY',
         location: 'GALLERY',
         ...(q.classId ? { classId: q.classId } : {}),
-        ...(visible ? { OR: [{ classId: null }, { classId: { in: visible } }] } : {}),
+        ...(visible ? { OR: [{ classId: null }, { featured: true }, { classId: { in: visible } }] } : {}),
       },
       select: VIDEO_SELECT,
       orderBy: [{ recordedOn: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
@@ -367,6 +370,7 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
     if (dto.style !== undefined) data.style = dto.style;
     if (dto.recordedOn !== undefined) data.recordedOn = toDate(dto.recordedOn);
     if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.featured !== undefined) data.featured = dto.featured;
     const updated = await this.prisma.academyVideo.update({ where: { id: videoId }, data, select: VIDEO_SELECT });
     return this.toDto(updated);
   }
@@ -392,7 +396,7 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
       throw new ConflictException('Este archivo está en la bóveda: no se reproduce, solo se descarga.');
     }
     if (v.status !== 'READY') throw new ConflictException('El archivo todavía se está subiendo.');
-    if (v.classId) {
+    if (v.classId && !v.featured) {
       const visible = await this.academies.visibleClassIds(user, academyId);
       if (visible && !visible.includes(v.classId)) {
         throw new ForbiddenException('Este video es de una clase: inscríbete para verlo.');

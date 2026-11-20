@@ -688,6 +688,8 @@ model AcademyVideo {
   status          String        @default("UPLOADING") // AcademyVideoStatus: UPLOADING | READY
   location        String        @default("GALLERY") // AcademyMediaLocation: GALLERY | VAULT (R2 Infrequent Access: no se reproduce, solo se descarga)
   vaultedAt       DateTime?
+  // También en la galería abierta de la academia aunque sea de una clase (lo ve cualquiera con cuenta).
+  featured        Boolean       @default(false)
   compatStatus    String? // AcademyCompatStatus: PENDING | PROCESSING | DONE | NOT_NEEDED | TOO_LONG | ERROR (null = sin revisar o en la bóveda)
   compatKey       String? // copia MP4 H.264 SDR <= 1080p (no cuenta en el cupo de la academia)
   compatSizeBytes BigInt?

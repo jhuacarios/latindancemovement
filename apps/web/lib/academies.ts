@@ -561,7 +561,14 @@ export const academiesApi = {
   updateVideo: (
     id: string,
     videoId: string,
-    body: { title?: string; classId?: string | null; style?: DanceStyle | null; recordedOn?: string | null; description?: string | null },
+    body: {
+      title?: string;
+      classId?: string | null;
+      style?: DanceStyle | null;
+      recordedOn?: string | null;
+      description?: string | null;
+      featured?: boolean;
+    },
   ) => api<AcademyVideoDto>(`/academies/${id}/videos/${videoId}`, { method: 'PATCH', body }),
   removeVideo: (id: string, videoId: string) =>
     api<void>(`/academies/${id}/videos/${videoId}`, { method: 'DELETE' }),

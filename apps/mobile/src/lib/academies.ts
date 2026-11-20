@@ -58,6 +58,9 @@ export const academiesApi = {
   /** URL firmada (1 h) para ver una foto o reproducir un video. */
   mediaUrl: (id: string, videoId: string) =>
     api<{ url: string }>(`/academies/${id}/videos/${videoId}/url`),
+  /** Mostrar (o no) un archivo de una clase en la galería abierta de la academia. */
+  setFeatured: (id: string, videoId: string, featured: boolean) =>
+    api<AcademyVideoDto>(`/academies/${id}/videos/${videoId}`, { method: 'PATCH', body: { featured } }),
 };
 
 /**

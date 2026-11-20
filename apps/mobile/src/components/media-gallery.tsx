@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AcademyVideoDto } from '@baile-latino/types';
+import { ApiError } from '@/lib/api';
 import { academiesApi, formatDuration } from '@/lib/academies';
 import { MediaViewer } from '@/components/media-viewer';
 import { MediaUploadButton } from '@/components/media-upload-button';
@@ -39,14 +41,42 @@ export function MediaGallery({
   });
   const GAP = 2;
   const cell = gridWidth > 0 ? Math.floor((gridWidth - GAP * 2) / 3) : 0;
-  // La lista sin filtro trae todo lo visible; la de una clase, también los generales.
-  const items = (data ?? []).filter((v) => v.classId === classId);
+  const qc = useQueryClient();
+  // Galería abierta: lo que no es de ninguna clase + lo marcado con ⭐. Clase: lo suyo.
+  const items = (data ?? []).filter((v) => (classId ? v.classId === classId : v.classId === null || v.featured));
+  const manages = upload !== 'none';
+
+  /** Pulsación larga (quien administra): mostrar o quitar de la galería abierta. */
+  const feature = (v: AcademyVideoDto) => {
+    if (!manages || !v.classId) return;
+    const run = async () => {
+      try {
+        await academiesApi.setFeatured(academyId, v.id, !v.featured);
+        void qc.invalidateQueries({ queryKey: ['academy-media', academyId] });
+      } catch (e) {
+        Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+      }
+    };
+    Alert.alert(
+      v.featured ? 'Quitar de la galería' : '⭐ Mostrar en la galería',
+      v.featured
+        ? 'Deja de verse en la galería abierta de la academia. Sigue en su clase.'
+        : 'Sigue en su clase y además lo ve cualquiera en la galería de la academia.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: v.featured ? 'Quitar' : 'Mostrar', onPress: () => void run() },
+      ],
+    );
+  };
 
   return (
     <View style={ui.card}>
       <Text style={ui.h2}>{title}</Text>
       {subtitle ? <Text style={ui.small}>{subtitle}</Text> : null}
       {upload === 'yes' && <MediaUploadButton academyId={academyId} classId={classId} />}
+      {classId && manages && (
+        <Text style={ui.small}>Mantén presionada una foto o video para mostrarlo también en la galería de la academia.</Text>
+      )}
       {upload === 'no-plan' && (
         <Text style={ui.small}>Sin Plan Director vigente: la galería queda en solo lectura.</Text>
       )}
@@ -60,7 +90,12 @@ export function MediaGallery({
         <View style={styles.grid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
           {cell > 0 &&
             items.map((v, i) => (
-              <Pressable key={v.id} onPress={() => setOpen(i)} style={{ width: cell, height: cell }}>
+              <Pressable
+                key={v.id}
+                onPress={() => setOpen(i)}
+                onLongPress={() => feature(v)}
+                style={{ width: cell, height: cell }}
+              >
                 {v.thumbUrl ? (
                   <Image source={v.thumbUrl} style={styles.thumb} contentFit="cover" transition={150} />
                 ) : (
@@ -69,6 +104,7 @@ export function MediaGallery({
                   </View>
                 )}
                 {v.kind !== 'PHOTO' && <Text style={styles.badge}>▶ {formatDuration(v.durationMs) ?? ''}</Text>}
+                {classId && v.featured && <Text style={styles.star}>⭐</Text>}
               </Pressable>
             ))}
         </View>
@@ -87,6 +123,7 @@ export function MediaGallery({
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
   thumb: { width: '100%', height: '100%', backgroundColor: colors.selva },
+  star: { position: 'absolute', top: 4, right: 4, fontSize: 14 },
   badge: {
     position: 'absolute',
     bottom: 4,

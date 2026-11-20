@@ -258,6 +258,11 @@ export class UpdateVideoDto {
   @IsString()
   @MaxLength(2000)
   description?: string | null;
+
+  /** Mostrarlo también en la galería abierta de la academia (aunque sea de una clase). */
+  @IsOptional()
+  @IsBoolean()
+  featured?: boolean;
 }
 
 export class ListVideosQueryDto {

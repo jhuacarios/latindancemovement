@@ -1320,6 +1320,8 @@ export interface AcademyVideoDto {
   compat: { status: AcademyCompatStatus | null; sizeBytes: number | null };
   classId: string | null;
   classTitle: string | null;
+  /** También en la galería abierta de la academia (aunque sea de una clase): lo ve cualquiera con cuenta. */
+  featured: boolean;
   title: string;
   description: string | null;
   style: DanceStyle | null;

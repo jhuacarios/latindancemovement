@@ -321,6 +321,16 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
     }
   };
 
+  /** Muestra (o deja de mostrar) un archivo de una clase en la galería abierta de la academia. */
+  const feature = async (v: AcademyVideoDto) => {
+    try {
+      await academiesApi.updateVideo(a.id, v.id, { featured: !v.featured });
+      void videos.refetch();
+    } catch (e) {
+      window.alert(e instanceof ApiError ? e.message : 'No se pudo cambiar.');
+    }
+  };
+
   const remove = (v: AcademyVideoDto) =>
     setConfirm({
       title: v.kind === 'PHOTO' ? 'Eliminar foto' : 'Eliminar video',
@@ -442,7 +452,8 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
                 <span className="text-neutral-500">{missingExtension(v)}</span>
               </div>
               <div className="text-xs text-neutral-400">
-                {[v.classTitle ?? 'Contenido general', v.recordedOn].filter(Boolean).join(' · ')}
+                {[v.classTitle ?? 'Galería de la academia', v.recordedOn].filter(Boolean).join(' · ')}
+                {v.classId && v.featured && <span className="ml-1.5 text-amber-300">· ⭐ En la galería</span>}
               </div>
               {manages && compatLabel(v) && <div className="text-[11px] text-neutral-500">{compatLabel(v)}</div>}
               {manages && (
@@ -462,6 +473,20 @@ function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean;
                       className="text-brand hover:underline"
                     >
                       MP4
+                    </button>
+                  )}
+                  {v.classId && (
+                    <button
+                      type="button"
+                      onClick={() => void feature(v)}
+                      title={
+                        v.featured
+                          ? 'Deja de mostrarse en la galería abierta (sigue en su clase).'
+                          : 'Sigue en su clase y además lo ve cualquiera en la galería de la academia.'
+                      }
+                      className={v.featured ? 'text-amber-300 hover:text-amber-200' : 'text-neutral-400 hover:text-amber-300'}
+                    >
+                      {v.featured ? 'Quitar de la galería' : '⭐ Mostrar en la galería'}
                     </button>
                   )}
                   {canDeleteMedia(a, v, user) && (
