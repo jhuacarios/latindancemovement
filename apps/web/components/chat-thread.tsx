@@ -53,6 +53,18 @@ function Ticks({ read }: { read: boolean }) {
 }
 
 /** Hilo de una conversación: historial, polling de nuevos, envío y ticks de leído. */
+/** Botón visible para volver de un chat de grupo a su academia o a su social. */
+function BackToLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="shrink-0 rounded-lg border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 transition hover:border-brand/60 hover:text-brand"
+    >
+      ← {label}
+    </Link>
+  );
+}
+
 export function ChatThread({
   conversation,
   onBack,
@@ -281,6 +293,7 @@ export function ChatThread({
                 {` · ${cls.memberCount} ${cls.memberCount === 1 ? 'participante' : 'participantes'}`}
               </div>
             </div>
+            <BackToLink href={`/academies/${cls.academyId}`} label="Ver la academia" />
           </>
         ) : channel ? (
           <>
@@ -294,6 +307,7 @@ export function ChatThread({
                 {` · ${channel.memberCount} ${channel.memberCount === 1 ? 'miembro' : 'miembros'}`}
               </div>
             </div>
+            <BackToLink href={placeDetailPath(channel.placeId)} label="Ver el social" />
           </>
         ) : other ? (
           <>
