@@ -319,6 +319,7 @@ export class AcademiesService implements OnApplicationBootstrap {
         storageQuotaMb: true,
         vaultQuotaMb: true,
         planExpiresAt: true,
+        coverAt: true,
         createdAt: true,
         classes: { orderBy: CLASS_ORDER },
         members: {
@@ -341,6 +342,7 @@ export class AcademiesService implements OnApplicationBootstrap {
       ...summary,
       address: a.address,
       description: a.description,
+      coverAt: a.coverAt ? a.coverAt.toISOString() : null,
       // Quien no la administra ve solo las clases activas, y no ve correos ni el cupo.
       classes: visibleClasses.map((c) => this.toClass(c, extras.get(c.id), manages)),
       members: manages
@@ -505,6 +507,26 @@ export class AcademiesService implements OnApplicationBootstrap {
     await this.prisma.academy.update({
       where: { id },
       data: { logoData: logo ? logo.buffer.toString('base64') : null, logoMime: logo ? logo.mime : null },
+    });
+    return this.findOne(user, id);
+  }
+
+  async getCover(id: string): Promise<UploadedImage | null> {
+    const a = await this.prisma.academy.findUnique({ where: { id }, select: { coverData: true, coverMime: true } });
+    if (!a?.coverData || !a.coverMime) return null;
+    return { buffer: Buffer.from(a.coverData, 'base64'), mime: a.coverMime };
+  }
+
+  /** Cambia (o quita, con null) la foto de portada. Director y profesores (y SUPER_ADMIN). */
+  async setCover(user: AuthUser, id: string, cover: UploadedImage | null): Promise<AcademyDto> {
+    await this.assertMember(user, id);
+    await this.prisma.academy.update({
+      where: { id },
+      data: {
+        coverData: cover ? cover.buffer.toString('base64') : null,
+        coverMime: cover ? cover.mime : null,
+        coverAt: cover ? new Date() : null,
+      },
     });
     return this.findOne(user, id);
   }

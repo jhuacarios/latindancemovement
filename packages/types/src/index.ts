@@ -1297,6 +1297,8 @@ export interface MyEnrollmentDto {
 export interface AcademyDto extends AcademySummaryDto {
   address: string | null;
   description: string | null;
+  /** Versión de la foto de portada; null = sin portada (el banner usa la galería). URL: `/academies/:id/cover?v=`. */
+  coverAt: string | null;
   classes: AcademyClassDto[];
   /** Solo para quienes la administran (vacío para el resto). */
   members: AcademyMemberDto[];

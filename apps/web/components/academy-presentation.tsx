@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { placeLabel, regionName, type AcademyDto, type AcademyVideoDto } from '@baile-latino/types';
 import {
@@ -13,6 +13,7 @@ import {
   formatVideoDuration,
 } from '@/lib/academies';
 import { mapsSearchLink } from '@/lib/maps';
+import { api, API_BASE, ApiError, uploadForm } from '@/lib/api';
 import { AcademyLogo } from '@/components/academy-card';
 import { AcademyVideoPlayer } from '@/components/academy-video-player';
 import { InstagramIcon } from '@/components/instagram-link';
@@ -33,20 +34,85 @@ export function usePublicGallery(academyId: string) {
   return { items, isLoading: q.isLoading };
 }
 
-/** Portada: mosaico con lo de la galería abierta (fotos primero) y, encima, logo, nombre y datos. */
-export function AcademyHero({ a, onEditCover }: { a: AcademyDto; onEditCover?: () => void }) {
-  const [help, setHelp] = useState(false);
+/** Achica la portada a 1920 px de ancho (JPG): se ve nítida y pesa poco. */
+function coverJpeg(file: File, maxW = 1920): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const w = Math.min(maxW, img.naturalWidth);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = Math.round((img.naturalHeight / img.naturalWidth) * w);
+      canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('blob'))), 'image/jpeg', 0.86);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('img'));
+    };
+    img.src = url;
+  });
+}
+
+/**
+ * Portada: la foto que eligió el director o, si no hay, un mosaico de la galería
+ * abierta. Encima van el logo, el nombre y los datos. Quien administra la cambia.
+ */
+export function AcademyHero({
+  a,
+  manages = false,
+  onChanged,
+  onGallery,
+}: {
+  a: AcademyDto;
+  manages?: boolean;
+  onChanged?: () => void;
+  /** Ir a Fotos y videos (para elegir lo que sale en el mosaico). */
+  onGallery?: () => void;
+}) {
+  const [menu, setMenu] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
   const { items } = usePublicGallery(a.id);
   const covers = [...items]
     .filter((v) => v.thumbUrl)
     .sort((x, y) => Number(y.kind === 'PHOTO') - Number(x.kind === 'PHOTO'))
     .slice(0, 5);
   const where = [placeLabel(a.city, a.commune), regionName(a.region)].filter(Boolean).join(' · ');
+  const coverUrl = a.coverAt ? `${API_BASE}/academies/${a.id}/cover?v=${encodeURIComponent(a.coverAt)}` : null;
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      setMenu(false);
+      onChanged?.();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo usar esa imagen.');
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = '';
+    }
+  };
+  const upload = (f: File | undefined) =>
+    f &&
+    void run(async () => {
+      const fd = new FormData();
+      fd.append('file', await coverJpeg(f), 'portada.jpg');
+      await uploadForm(`/academies/${a.id}/cover`, fd, 'PUT');
+    });
 
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60">
-      <div className="relative h-44 sm:h-64">
-        {covers.length > 0 ? (
+      <div className="relative h-48 sm:h-72">
+        {coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+        ) : covers.length > 0 ? (
           <div
             className={clsx(
               'grid h-full gap-0.5',
@@ -71,37 +137,58 @@ export function AcademyHero({ a, onEditCover }: { a: AcademyDto; onEditCover?: (
           <div className="h-full w-full bg-gradient-to-br from-brand/40 via-neutral-900 to-neutral-950" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/30 to-transparent" />
-        {onEditCover && (
+        {manages && (
           <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
             <button
               type="button"
-              onClick={() => setHelp((h) => !h)}
+              onClick={() => setMenu((m) => !m)}
+              disabled={busy}
               className="rounded-lg bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/75"
             >
-              ✎ Editar portada
+              {busy ? 'Guardando…' : '✎ Editar portada'}
             </button>
-            {help && (
-              <div className="max-w-xs space-y-2 rounded-xl border border-neutral-700 bg-neutral-950/95 p-3 text-xs text-neutral-300 shadow-xl">
-                <p>
-                  La portada se arma sola con las fotos y videos de la <b>galería de la academia</b> (fotos primero, hasta
-                  5).
-                </p>
-                <p>
-                  Para elegir qué sale: en <b>Fotos y videos</b>, usa <b>⭐ Mostrar en la galería</b> en los de una clase,
-                  o sube fotos sin clase (&quot;Galería de la academia&quot;).
-                </p>
+            {menu && (
+              <div className="w-64 space-y-2 rounded-xl border border-neutral-700 bg-neutral-950/95 p-3 text-xs text-neutral-300 shadow-xl">
                 <button
                   type="button"
-                  onClick={() => {
-                    setHelp(false);
-                    onEditCover();
-                  }}
-                  className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
+                  onClick={() => input.current?.click()}
+                  className="w-full rounded-lg bg-brand px-3 py-2 font-medium text-white hover:bg-brand-dark"
                 >
-                  Ir a Fotos y videos →
+                  {coverUrl ? 'Cambiar foto de portada' : 'Subir foto de portada'}
                 </button>
+                {coverUrl && (
+                  <button
+                    type="button"
+                    onClick={() => void run(() => api(`/academies/${a.id}/cover`, { method: 'DELETE' }))}
+                    className="w-full rounded-lg border border-neutral-700 px-3 py-2 text-neutral-300 hover:border-red-400/60 hover:text-red-300"
+                  >
+                    Quitar portada
+                  </button>
+                )}
+                <p className="text-neutral-500">
+                  Mejor una foto horizontal. Sin portada, el banner muestra un mosaico de la galería de la academia
+                  {onGallery && (
+                    <>
+                      {' '}
+                      (
+                      <button type="button" onClick={onGallery} className="text-brand hover:underline">
+                        elegir qué sale
+                      </button>
+                      )
+                    </>
+                  )}
+                  .
+                </p>
+                {error && <p className="text-red-300">{error}</p>}
               </div>
             )}
+            <input
+              ref={input}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => upload(e.target.files?.[0])}
+            />
           </div>
         )}
       </div>

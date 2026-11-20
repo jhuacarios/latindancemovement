@@ -13,7 +13,9 @@ import {
 import { Image } from 'expo-image';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/lib/auth';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { placeLabel, regionName, type AcademyClassDto, type AcademyDto } from '@baile-latino/types';
 import {
   LEVEL_LABEL,
@@ -28,15 +30,62 @@ import {
 } from '@/lib/academies';
 import { Button } from '@/components/button';
 import { UserAvatar } from '@/components/avatar-editor';
-import { ApiError } from '@/lib/api';
+import { API_BASE, ApiError, api } from '@/lib/api';
 import { StyleTag } from '@/components/chips';
 import { EnrollPill, enrolledLabel } from '@/components/class-enroll';
 import { MediaGallery } from '@/components/media-gallery';
 import { colors, radius, space, ui, detailHeader } from '@/lib/theme';
 
-/** Portada: mosaico con la galería abierta (fotos primero) y, encima, logo, nombre y datos. */
+/** Portada: la foto elegida o, si no hay, un mosaico de la galería abierta; encima, logo, nombre y datos. */
 function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
   const logo = academyLogoUrl(a);
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const coverUrl = a.coverAt ? `${API_BASE}/academies/${a.id}/cover?v=${encodeURIComponent(a.coverAt)}` : null;
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+      await qc.invalidateQueries({ queryKey: ['academy', a.id] });
+    } catch (e) {
+      Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'No se pudo usar esa imagen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const upload = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 1 });
+    const asset = res.canceled ? null : res.assets[0];
+    if (!asset) return;
+    await run(async () => {
+      // Horizontal, 1920 px de ancho como máximo, en JPG (también si era HEIC).
+      const ctx = ImageManipulator.manipulate(asset.uri);
+      if (asset.width > 1920) ctx.resize({ width: 1920 });
+      const out = await (await ctx.renderAsync()).saveAsync({ compress: 0.86, format: SaveFormat.JPEG });
+      const fd = new FormData();
+      fd.append('file', { uri: out.uri, name: 'portada.jpg', type: 'image/jpeg' } as unknown as Blob);
+      await api(`/academies/${a.id}/cover`, { method: 'PUT', form: fd });
+    });
+  };
+  const edit = () =>
+    Alert.alert(
+      'Foto de portada',
+      'Mejor una foto horizontal. Sin portada, el banner muestra un mosaico de la galería de la academia.',
+      [
+        { text: coverUrl ? 'Cambiar foto' : 'Elegir foto', onPress: () => void upload() },
+        ...(coverUrl
+          ? [
+              {
+                text: 'Quitar portada',
+                style: 'destructive' as const,
+                onPress: () => void run(() => api(`/academies/${a.id}/cover`, { method: 'DELETE' })),
+              },
+            ]
+          : []),
+        { text: 'Cancelar', style: 'cancel' as const },
+      ],
+    );
   const { data } = useQuery({
     queryKey: ['academy-media', a.id, null],
     queryFn: () => academiesApi.media(a.id, null),
@@ -49,7 +98,9 @@ function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
   return (
     <View style={styles.hero}>
       <View style={styles.mosaic}>
-        {covers.length === 0 ? (
+        {coverUrl ? (
+          <Image source={coverUrl} style={{ flex: 1 }} contentFit="cover" transition={150} />
+        ) : covers.length === 0 ? (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.brand, opacity: 0.35 }]} />
         ) : (
           <>
@@ -65,18 +116,12 @@ function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
         )}
         <View style={styles.shade} />
         {manages && (
-          <Pressable
-            style={styles.editCover}
-            onPress={() =>
-              Alert.alert(
-                'Editar portada',
-                'La portada se arma sola con las fotos y videos de la galería de la academia (fotos primero).\n\n' +
-                  'Para elegir qué sale: entra a una clase y mantén presionada una foto o video → "Mostrar en la galería". ' +
-                  'Lo que subas abajo, en Galería, también aparece.',
-              )
-            }
-          >
-            <Text style={styles.editCoverText}>✎ Editar portada</Text>
+          <Pressable style={styles.editCover} onPress={edit} disabled={busy}>
+            {busy ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Text style={styles.editCoverText}>✎ Editar portada</Text>
+            )}
           </Pressable>
         )}
       </View>

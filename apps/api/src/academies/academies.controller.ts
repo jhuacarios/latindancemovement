@@ -174,6 +174,32 @@ export class AcademiesController {
     return this.academies.setLogo(user, id, null);
   }
 
+  /** Foto de portada (pública, para <img>). `?v=coverAt` cambia con cada foto. 404 si no tiene. */
+  @Get(':id/cover')
+  async cover(@Param('id') id: string, @Res() reply: FastifyReply) {
+    const f = await this.academies.getCover(id);
+    if (!f) {
+      reply.code(404).send({ message: 'Esta academia no tiene portada.' });
+      return;
+    }
+    reply.header('Content-Type', f.mime).header('Cache-Control', 'public, max-age=86400').send(f.buffer);
+  }
+
+  /** Cambia la portada. multipart: `file` (JPG, PNG o WEBP; el cliente la achica). */
+  @Put(':id/cover')
+  @UseGuards(JwtAuthGuard)
+  async setCover(@CurrentUser() user: AuthUser, @Param('id') id: string, @Req() req: FastifyRequest) {
+    const { file } = await readMultipart(req);
+    if (!file) throw new BadRequestException('Sube una imagen.');
+    return this.academies.setCover(user, id, file);
+  }
+
+  @Delete(':id/cover')
+  @UseGuards(JwtAuthGuard)
+  clearCover(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.academies.setCover(user, id, null);
+  }
+
   // --- profesores ---------------------------------------------------------------
 
   @Post(':id/members')

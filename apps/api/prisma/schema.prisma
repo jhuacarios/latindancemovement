@@ -587,6 +587,11 @@ model Academy {
   instagramHandle String? // sin @
   logoData        String? // base64, sin prefijo data:
   logoMime        String?
+  // Foto de portada (banner) elegida por el director. Sin ella, el banner es un
+  // mosaico de la galería abierta. coverAt = versión para el caché.
+  coverData       String? // base64, sin prefijo data:
+  coverMime       String?
+  coverAt         DateTime?
   storageQuotaMb  Int       @default(51200) // cupo de fotos y videos (50 GB)
   vaultQuotaMb    Int       @default(204800) // cupo de la bóveda (200 GB): archivo barato, solo descarga
   // Plan Director (la suscripción que paga el dueño): vigente hasta esta fecha.
