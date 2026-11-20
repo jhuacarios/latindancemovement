@@ -67,6 +67,7 @@ model User {
   videoReports         AcademyVideoReport[]
   academyShareLinks    AcademyShareLink[]
   avatar               UserAvatar?
+  chatReactions        ChatReaction[]
 
   @@index([role])
   @@index([rut])
@@ -464,11 +465,28 @@ model ChatMessage {
   imageWidth     Int?
   imageHeight    Int?
   createdAt      DateTime @default(now())
+  // Última vez que cambiaron sus reacciones (para que el polling las refresque).
+  reactionsAt    DateTime?
 
   conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User             @relation("ChatMessageSender", fields: [senderId], references: [id])
+  reactions    ChatReaction[]
 
   @@index([conversationId, createdAt])
+  @@index([conversationId, reactionsAt])
+}
+
+/** Reacción a un mensaje: una por persona (elegir otra la reemplaza). */
+model ChatReaction {
+  messageId String
+  userId    String
+  emoji     String // CHAT_REACTIONS
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
 }
 
 // ─── Módulo Estudio (análisis musical de bachatas) ──────────────────────────

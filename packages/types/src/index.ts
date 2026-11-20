@@ -896,6 +896,27 @@ export interface ChatUser {
   avatarAt: string | null;
 }
 
+/** Emojis para reaccionar a un mensaje (los mismos en la web y en la app). */
+export const CHAT_REACTIONS = ['❤️', '😂', '🔥', '👏', '💃', '😮'] as const;
+export type ChatReactionEmoji = (typeof CHAT_REACTIONS)[number];
+
+/** Resumen de una reacción en un mensaje. */
+export interface ChatReactionSummary {
+  emoji: string;
+  count: number;
+  /** ¿Es la mía? */
+  mine: boolean;
+  /** Nombres de quienes reaccionaron (hasta 10), para el detalle. */
+  names: string[];
+}
+
+/** Cambios de reacciones desde la última consulta (polling del hilo abierto). */
+export interface ChatReactionChanges {
+  /** Hora del servidor: se manda como `since` en la próxima consulta. */
+  now: string;
+  changes: { messageId: string; reactions: ChatReactionSummary[] }[];
+}
+
 export interface ChatMessageDto {
   id: string;
   conversationId: string;
@@ -910,6 +931,8 @@ export interface ChatMessageDto {
   hasImage: boolean;
   imageWidth: number | null;
   imageHeight: number | null;
+  /** Reacciones agrupadas por emoji (orden: la más usada primero). */
+  reactions: ChatReactionSummary[];
   createdAt: string;
 }
 

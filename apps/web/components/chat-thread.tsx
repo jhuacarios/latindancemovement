@@ -15,6 +15,8 @@ import {
   listMessages,
   listMessagesSince,
   markConversationRead,
+  reactionChanges,
+  reactToMessage,
   sendImageMessage,
   sendMessage,
 } from '@/lib/chat';
@@ -28,6 +30,7 @@ import { ClassAvatar } from '@/components/class-avatar';
 import { placeDetailPath } from '@/lib/community-places';
 import { ChatImage } from '@/components/chat-image';
 import { UserAvatar } from '@/components/user-avatar';
+import { ReactionChips, ReactionPicker } from '@/components/chat-reactions';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 /** Tope duro tras comprimir (el servidor también lo exige). */
@@ -130,6 +133,42 @@ export function ChatThread({
       alive = false;
     };
   }, [convId, refreshLists]);
+
+  // --- Reacciones ---
+  const reactionsSince = useRef<string | null>(null);
+  const applyReactions = useCallback((messageId: string, reactions: ChatMessageDto['reactions']) => {
+    setMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, reactions } : x)));
+  }, []);
+  const myReaction = (m: ChatMessageDto) => m.reactions.find((r) => r.mine)?.emoji ?? null;
+  const react = async (messageId: string, emoji: string) => {
+    try {
+      applyReactions(messageId, await reactToMessage(convId, messageId, emoji));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo reaccionar.');
+    }
+  };
+  // Polling de reacciones: trae solo los mensajes cuyas reacciones cambiaron.
+  useEffect(() => {
+    if (loading) return;
+    let alive = true;
+    reactionsSince.current = null;
+    void reactionChanges(convId)
+      .then((r) => {
+        if (alive) reactionsSince.current = r.now;
+      })
+      .catch(() => undefined);
+    const timer = setInterval(async () => {
+      if (document.hidden || !reactionsSince.current) return;
+      const r = await reactionChanges(convId, reactionsSince.current).catch(() => null);
+      if (!alive || !r) return;
+      reactionsSince.current = r.now;
+      for (const c of r.changes) applyReactions(c.messageId, c.reactions);
+    }, POLL_THREAD_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [convId, loading, applyReactions]);
 
   // Al llegar mensajes, bajar si el usuario estaba al final.
   useEffect(() => {
@@ -385,7 +424,8 @@ export function ChatThread({
                   {formatDayLabel(m.createdAt)}
                 </div>
               )}
-              <div className={clsx('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
+              <div className={clsx('group flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
+                {mine && <ReactionPicker mine={myReaction(m)} onPick={(e) => void react(m.id, e)} />}
                 {/* En grupos, la foto de quien escribe (al inicio de cada tanda; si no, el hueco para alinear). */}
                 {isGroup && !mine &&
                   (showSender ? (
@@ -425,6 +465,10 @@ export function ChatThread({
                     {mine && !isGroup && <Ticks read={isRead(m)} />}
                   </div>
                 </div>
+                {!mine && <ReactionPicker mine={myReaction(m)} onPick={(e) => void react(m.id, e)} />}
+              </div>
+              <div className={clsx(isGroup && !mine && 'pl-9')}>
+                <ReactionChips reactions={m.reactions} alignEnd={mine} onToggle={(e) => void react(m.id, e)} />
               </div>
             </div>
           );

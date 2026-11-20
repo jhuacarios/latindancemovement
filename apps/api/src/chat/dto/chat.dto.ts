@@ -1,4 +1,6 @@
+import { CHAT_REACTIONS } from '@baile-latino/types';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -6,6 +8,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class StartConversationDto {
@@ -40,4 +43,19 @@ export class SearchUsersDto {
   @IsString()
   @MaxLength(80)
   q?: string;
+}
+
+export class ReactDto {
+  /** Emoji de CHAT_REACTIONS; null (o el mismo que ya tenía) quita la reacción. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsIn(CHAT_REACTIONS as unknown as string[], { message: 'Esa reacción no está disponible.' })
+  emoji?: string | null;
+}
+
+export class ReactionChangesDto {
+  /** `now` de la consulta anterior (ISO). Sin él, solo devuelve la hora. */
+  @IsOptional()
+  @IsString()
+  since?: string;
 }

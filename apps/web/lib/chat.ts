@@ -4,6 +4,8 @@ import type {
   ChatMessageDto,
   ChatMessagesPage,
   ChatUnreadResponse,
+  ChatReactionChanges,
+  ChatReactionSummary,
   ChatUser,
 } from '@baile-latino/types';
 import { api, fetchProtectedBlob, uploadForm } from './api';
@@ -44,6 +46,21 @@ export function listMessages(conversationId: string, before?: string, limit = 50
 export function listMessagesSince(conversationId: string, sinceId: string) {
   return api<ChatMessageDto[]>(
     `/chat/conversations/${conversationId}/messages/since/${sinceId}`,
+  );
+}
+
+/** Pone, cambia o quita (el mismo emoji o null) mi reacción a un mensaje. */
+export function reactToMessage(conversationId: string, messageId: string, emoji: string | null) {
+  return api<ChatReactionSummary[]>(`/chat/conversations/${conversationId}/messages/${messageId}/reaction`, {
+    method: 'PUT',
+    body: { emoji },
+  });
+}
+
+/** Reacciones que cambiaron desde `since` (sin él, solo la hora del servidor). */
+export function reactionChanges(conversationId: string, since?: string) {
+  return api<ChatReactionChanges>(
+    `/chat/conversations/${conversationId}/reactions${since ? `?since=${encodeURIComponent(since)}` : ''}`,
   );
 }
 

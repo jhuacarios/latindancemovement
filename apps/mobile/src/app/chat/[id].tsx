@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -19,7 +20,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { UserAvatar } from '@/components/avatar-editor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ChatMessageDto } from '@baile-latino/types';
+import { CHAT_REACTIONS, type ChatMessageDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -55,6 +56,8 @@ function Bubble({
   isGroup,
   convId,
   maxWidth,
+  onLongPress,
+  onToggleReaction,
 }: {
   m: ChatMessageDto;
   mine: boolean;
@@ -62,10 +65,13 @@ function Bubble({
   isGroup: boolean;
   convId: string;
   maxWidth: number;
+  onLongPress: () => void;
+  onToggleReaction: (emoji: string) => void;
 }) {
   const imgW = Math.min(maxWidth - 16, 260);
   const imgH = m.imageWidth && m.imageHeight ? Math.round((imgW * m.imageHeight) / m.imageWidth) : imgW;
   return (
+    <View>
     <View style={[styles.bubbleRow, mine ? { justifyContent: 'flex-end' } : null]}>
       {/* En grupos, la foto de quien escribe al inicio de cada tanda (si no, el hueco para alinear). */}
       {isGroup && !mine &&
@@ -74,7 +80,11 @@ function Bubble({
         ) : (
           <View style={{ width: 28 }} />
         ))}
-      <View style={[styles.bubble, mine ? styles.mine : styles.theirs, { maxWidth }]}>
+      <Pressable
+        onLongPress={onLongPress}
+        delayLongPress={300}
+        style={[styles.bubble, mine ? styles.mine : styles.theirs, { maxWidth }]}
+      >
         {showSender && <Text style={styles.sender}>{m.senderName}</Text>}
         {m.hasImage && (
           <Image
@@ -85,8 +95,65 @@ function Bubble({
         )}
         {m.body ? <Text style={[styles.text, mine && { color: colors.white }]}>{m.body}</Text> : null}
         <Text style={[styles.meta, mine && { color: '#ffffffb3' }]}>{formatMsgTime(m.createdAt)}</Text>
-      </View>
+      </Pressable>
     </View>
+    {m.reactions.length > 0 && (
+      <View style={[styles.chips, mine ? { justifyContent: 'flex-end' } : { paddingLeft: isGroup ? 34 : 0 }]}>
+        {m.reactions.map((r) => (
+          <Pressable
+            key={r.emoji}
+            onPress={() => onToggleReaction(r.emoji)}
+            style={[styles.chip, r.mine && styles.chipMine]}
+            accessibilityLabel={`${r.emoji} ${r.count}: ${r.names.join(', ')}`}
+          >
+            <Text style={styles.chipText}>
+              {r.emoji}
+              {r.count > 1 ? ` ${r.count}` : ''}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    )}
+    </View>
+  );
+}
+
+/** Fila de emojis para reaccionar (mantener presionado un mensaje). */
+function ReactionSheet({
+  message,
+  onPick,
+  onClose,
+}: {
+  message: ChatMessageDto | null;
+  onPick: (emoji: string) => void;
+  onClose: () => void;
+}) {
+  const mine = message?.reactions.find((r) => r.mine)?.emoji ?? null;
+  const who = message?.reactions.flatMap((r) => r.names.map((n) => `${r.emoji} ${n}`)) ?? [];
+  return (
+    <Modal visible={Boolean(message)} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <View style={styles.sheet}>
+          <View style={styles.emojiRow}>
+            {CHAT_REACTIONS.map((e) => (
+              <Pressable
+                key={e}
+                onPress={() => onPick(e)}
+                style={[styles.emojiBtn, mine === e && styles.emojiOn]}
+                accessibilityLabel={`Reaccionar ${e}`}
+              >
+                <Text style={{ fontSize: 30 }}>{e}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {who.length > 0 && (
+            <Text style={[ui.small, { textAlign: 'center' }]} numberOfLines={3}>
+              {who.join('  ·  ')}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -140,6 +207,44 @@ export default function ChatThreadScreen() {
       alive = false;
     };
   }, [id, refreshLists]);
+
+  // --- Reacciones ---
+  const [reacting, setReacting] = useState<ChatMessageDto | null>(null);
+  const reactionsSince = useRef<string | null>(null);
+  const applyReactions = useCallback((messageId: string, reactions: ChatMessageDto['reactions']) => {
+    setMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, reactions } : x)));
+  }, []);
+  const react = async (messageId: string, emoji: string) => {
+    setReacting(null);
+    try {
+      applyReactions(messageId, await chatApi.react(id, messageId, emoji));
+    } catch (e) {
+      Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+    }
+  };
+  // Polling de reacciones: solo los mensajes cuyas reacciones cambiaron.
+  useEffect(() => {
+    if (loading) return;
+    let alive = true;
+    reactionsSince.current = null;
+    void chatApi
+      .reactionChanges(id)
+      .then((r) => {
+        if (alive) reactionsSince.current = r.now;
+      })
+      .catch(() => undefined);
+    const t = setInterval(async () => {
+      if (!reactionsSince.current) return;
+      const r = await chatApi.reactionChanges(id, reactionsSince.current).catch(() => null);
+      if (!alive || !r) return;
+      reactionsSince.current = r.now;
+      for (const c of r.changes) applyReactions(c.messageId, c.reactions);
+    }, POLL_THREAD_MS);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [id, loading, applyReactions]);
 
   // Polling de mensajes nuevos.
   useEffect(() => {
@@ -270,6 +375,8 @@ export default function ChatThreadScreen() {
                     isGroup={isGroup}
                     convId={id}
                     maxWidth={bubbleMax - (isGroup && !mine ? 34 : 0)}
+                    onLongPress={() => setReacting(m)}
+                    onToggleReaction={(e) => void react(m.id, e)}
                   />
                 </View>
               );
@@ -319,12 +426,33 @@ export default function ChatThreadScreen() {
             {sending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.sendText}>➤</Text>}
           </Pressable>
         </View>
+        <ReactionSheet
+          message={reacting}
+          onPick={(e) => reacting && void react(reacting.id, e)}
+          onClose={() => setReacting(null)}
+        />
       </KeyboardAvoidingView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: -6, paddingHorizontal: 6 },
+  chip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.line,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  chipMine: { borderColor: colors.brand, backgroundColor: '#1a7a4e55' },
+  chipText: { color: colors.text, fontSize: 13 },
+  sheetBackdrop: { flex: 1, backgroundColor: '#00000088', justifyContent: 'center', padding: space.xl },
+  sheet: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.md, gap: space.sm },
+  emojiRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  emojiBtn: { padding: 6, borderRadius: radius.pill },
+  emojiOn: { backgroundColor: '#1a7a4e88' },
   headTitle: { color: colors.text, fontSize: 16, fontWeight: '700', maxWidth: 240 },
   headSub: { color: colors.textFaint, fontSize: 12, maxWidth: 240 },
   day: {

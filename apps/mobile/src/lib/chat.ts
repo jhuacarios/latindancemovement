@@ -3,6 +3,8 @@ import type {
   ChatConversationDto,
   ChatMessageDto,
   ChatMessagesPage,
+  ChatReactionChanges,
+  ChatReactionSummary,
   ChatUnreadResponse,
   ChatUser,
 } from '@baile-latino/types';
@@ -21,6 +23,15 @@ export const chatKeys = {
 };
 
 export const chatApi = {
+  /** Pone, cambia o quita (el mismo emoji o null) mi reacción a un mensaje. */
+  react: (id: string, messageId: string, emoji: string | null) =>
+    api<ChatReactionSummary[]>(`/chat/conversations/${id}/messages/${messageId}/reaction`, {
+      method: 'PUT',
+      body: { emoji },
+    }),
+  /** Reacciones que cambiaron desde `since` (sin él, solo la hora del servidor). */
+  reactionChanges: (id: string, since?: string) =>
+    api<ChatReactionChanges>(`/chat/conversations/${id}/reactions${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   users: (q: string) => api<ChatUser[]>(`/chat/users?q=${encodeURIComponent(q)}`),
   start: (userId: string) =>
     api<ChatConversationDto>('/chat/conversations', { method: 'POST', body: { userId } }),

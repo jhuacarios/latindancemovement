@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -19,6 +20,8 @@ import type { AuthUser } from '../auth/auth.types';
 import { ChatService } from './chat.service';
 import {
   ListMessagesDto,
+  ReactDto,
+  ReactionChangesDto,
   SearchUsersDto,
   SendMessageDto,
   StartConversationDto,
@@ -70,6 +73,23 @@ export class ChatController {
     @Param('sinceId') sinceId: string,
   ) {
     return this.chat.listMessagesSince(me, id, sinceId);
+  }
+
+  /** Pone, cambia o quita mi reacción a un mensaje. Devuelve las reacciones del mensaje. */
+  @Put('conversations/:id/messages/:mid/reaction')
+  react(
+    @CurrentUser() me: AuthUser,
+    @Param('id') id: string,
+    @Param('mid') mid: string,
+    @Body() dto: ReactDto,
+  ) {
+    return this.chat.react(me, id, mid, dto.emoji ?? null);
+  }
+
+  /** Reacciones que cambiaron desde `since` (polling del hilo abierto). */
+  @Get('conversations/:id/reactions')
+  reactionChanges(@CurrentUser() me: AuthUser, @Param('id') id: string, @Query() q: ReactionChangesDto) {
+    return this.chat.reactionChanges(me, id, q.since);
   }
 
   @Post('conversations/:id/messages')

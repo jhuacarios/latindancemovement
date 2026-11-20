@@ -11,6 +11,8 @@ import type {
   ChatConversationDto,
   ChatMessageDto,
   ChatMessagesPage,
+  ChatReactionChanges,
+  ChatReactionSummary,
   ChatUser,
   UserRole,
 } from '@baile-latino/types';
@@ -42,6 +44,10 @@ const MESSAGE_SELECT = {
   imageHeight: true,
   createdAt: true,
   sender: { select: { name: true, displayName: true, avatarAt: true } },
+  reactions: {
+    select: { userId: true, emoji: true, user: { select: { name: true, displayName: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
 } satisfies Prisma.ChatMessageSelect;
 
 type MessageRow = Prisma.ChatMessageGetPayload<{ select: typeof MESSAGE_SELECT }>;
@@ -69,7 +75,20 @@ export class ChatService {
     };
   }
 
-  private toMessage(m: MessageRow): ChatMessageDto {
+  /** Reacciones agrupadas por emoji, la más usada primero. */
+  private summarize(rows: MessageRow['reactions'], meId: string): ChatReactionSummary[] {
+    const by = new Map<string, ChatReactionSummary>();
+    for (const r of rows) {
+      const s = by.get(r.emoji) ?? { emoji: r.emoji, count: 0, mine: false, names: [] };
+      s.count++;
+      if (r.userId === meId) s.mine = true;
+      if (s.names.length < 10) s.names.push(publicName(r.user));
+      by.set(r.emoji, s);
+    }
+    return [...by.values()].sort((x, y) => y.count - x.count);
+  }
+
+  private toMessage(m: MessageRow, meId: string): ChatMessageDto {
     return {
       id: m.id,
       conversationId: m.conversationId,
@@ -80,6 +99,7 @@ export class ChatService {
       hasImage: Boolean(m.imageMime),
       imageWidth: m.imageWidth,
       imageHeight: m.imageHeight,
+      reactions: this.summarize(m.reactions, meId),
       createdAt: m.createdAt.toISOString(),
     };
   }
@@ -215,7 +235,7 @@ export class ChatService {
               title: r.name ?? 'Clase',
               memberCount: r._count.participants,
             },
-            lastMessage: last ? this.toMessage(last) : null,
+            lastMessage: last ? this.toMessage(last, me.id) : null,
             lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
             unreadCount: unread.get(r.id) ?? 0,
             otherReadAt: null,
@@ -241,7 +261,7 @@ export class ChatService {
             other: null,
             channel,
             classGroup: null,
-            lastMessage: last ? this.toMessage(last) : null,
+            lastMessage: last ? this.toMessage(last, me.id) : null,
             lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
             unreadCount: unread.get(r.id) ?? 0,
             otherReadAt: null,
@@ -258,7 +278,7 @@ export class ChatService {
           channel: null,
           classGroup: null,
           other: this.toUser(otherP.user),
-          lastMessage: last ? this.toMessage(last) : null,
+          lastMessage: last ? this.toMessage(last, me.id) : null,
           lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
           unreadCount: unread.get(r.id) ?? 0,
           otherReadAt: otherP.lastReadAt ? otherP.lastReadAt.toISOString() : null,
@@ -340,7 +360,7 @@ export class ChatService {
     const hasMore = rows.length > limit;
     const page = rows.slice(0, limit).reverse();
     return {
-      messages: page.map((m) => this.toMessage(m)),
+      messages: page.map((m) => this.toMessage(m, me.id)),
       nextCursor: hasMore && page.length ? page[0].id : null,
     };
   }
@@ -363,7 +383,7 @@ export class ChatService {
       orderBy: { createdAt: 'asc' },
       take: 200,
     });
-    return rows.map((m) => this.toMessage(m));
+    return rows.map((m) => this.toMessage(m, me.id));
   }
 
   async sendMessage(
@@ -404,7 +424,7 @@ export class ChatService {
         data: { lastReadAt: now },
       }),
     ]);
-    return this.toMessage(msg);
+    return this.toMessage(msg, me.id);
   }
 
   /** Imagen de un mensaje (solo participantes). */
@@ -609,6 +629,59 @@ export class ChatService {
   /** Borra el canal con sus mensajes (cascade). */
   async deleteChannel(conversationId: string): Promise<void> {
     await this.prisma.chatConversation.delete({ where: { id: conversationId } });
+  }
+
+  // --- Reacciones ----------------------------------------------------------------
+
+  /** Pone, cambia o quita (emoji null o el mismo que ya tenía) mi reacción a un mensaje. */
+  async react(
+    me: AuthUser,
+    conversationId: string,
+    messageId: string,
+    emoji: string | null,
+  ): Promise<ChatReactionSummary[]> {
+    await this.assertMember(me, conversationId);
+    const msg = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId, conversationId },
+      select: { id: true },
+    });
+    if (!msg) throw new NotFoundException('Mensaje no encontrado.');
+    const key = { messageId_userId: { messageId, userId: me.id } };
+    const current = await this.prisma.chatReaction.findUnique({ where: key, select: { emoji: true } });
+    if (!emoji || current?.emoji === emoji) {
+      await this.prisma.chatReaction.deleteMany({ where: { messageId, userId: me.id } });
+    } else {
+      await this.prisma.chatReaction.upsert({
+        where: key,
+        create: { messageId, userId: me.id, emoji },
+        update: { emoji, createdAt: new Date() },
+      });
+    }
+    await this.prisma.chatMessage.update({ where: { id: messageId }, data: { reactionsAt: new Date() } });
+    const rows = await this.prisma.chatReaction.findMany({
+      where: { messageId },
+      select: MESSAGE_SELECT.reactions.select,
+      orderBy: { createdAt: 'asc' },
+    });
+    return this.summarize(rows, me.id);
+  }
+
+  /** Mensajes cuyas reacciones cambiaron después de `since` (polling del hilo abierto). */
+  async reactionChanges(me: AuthUser, conversationId: string, since?: string): Promise<ChatReactionChanges> {
+    await this.assertMember(me, conversationId);
+    const now = new Date();
+    const from = since ? new Date(since) : null;
+    if (!from || Number.isNaN(from.getTime())) return { now: now.toISOString(), changes: [] };
+    // 2 s de margen: una reacción guardada justo durante la consulta anterior no se pierde.
+    const rows = await this.prisma.chatMessage.findMany({
+      where: { conversationId, reactionsAt: { gt: new Date(from.getTime() - 2000) } },
+      select: { id: true, reactions: MESSAGE_SELECT.reactions },
+      take: 200,
+    });
+    return {
+      now: now.toISOString(),
+      changes: rows.map((r) => ({ messageId: r.id, reactions: this.summarize(r.reactions, me.id) })),
+    };
   }
 
   async markRead(me: AuthUser, conversationId: string): Promise<void> {
