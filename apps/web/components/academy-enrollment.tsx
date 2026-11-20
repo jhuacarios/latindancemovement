@@ -19,7 +19,18 @@ export function enrolledLabel(c: Pick<AcademyClassDto, 'enrolledCount' | 'capaci
 const isFull = (c: AcademyClassDto) => c.capacity !== null && c.enrolledCount >= c.capacity;
 
 /** Lo que ve un alumno en cada clase: pedir, esperar, inscrito (chat) o volver a pedir. */
-export function EnrollBox({ a, c, onChanged }: { a: AcademyDto; c: AcademyClassDto; onChanged: () => void }) {
+export function EnrollBox({
+  a,
+  c,
+  onChanged,
+  showCount = true,
+}: {
+  a: AcademyDto;
+  c: AcademyClassDto;
+  onChanged: () => void;
+  /** false cuando arriba ya se ve el conteo (el SUPER_ADMIN ve también la info del director). */
+  showCount?: boolean;
+}) {
   const qc = useQueryClient();
   const [asking, setAsking] = useState(false);
   const [message, setMessage] = useState('');
@@ -46,10 +57,12 @@ export function EnrollBox({ a, c, onChanged }: { a: AcademyDto; c: AcademyClassD
   const full = isFull(c);
   return (
     <div className="space-y-1.5 pt-1.5">
-      <div className="text-[11px] text-neutral-500">
-        {enrolledLabel(c)}
-        {full && ' · clase llena'}
-      </div>
+      {(showCount || full) && (
+        <div className="text-[11px] text-neutral-500">
+          {showCount && enrolledLabel(c)}
+          {full && (showCount ? ' · clase llena' : 'Clase llena')}
+        </div>
+      )}
 
       {c.myEnrollment === 'ACCEPTED' ? (
         <div className="flex flex-wrap items-center gap-3 text-xs">

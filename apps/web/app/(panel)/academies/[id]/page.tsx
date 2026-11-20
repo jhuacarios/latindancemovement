@@ -241,7 +241,7 @@ function ClassesTab({
                 {c.description && <div className="text-xs text-neutral-500">{c.description}</div>}
                 {manages && <ClassEnrollmentInfo c={c} onRequests={onRequests} />}
                 {/* El SUPER_ADMIN también puede inscribirse, aunque administre. */}
-                {(!manages || superAdmin) && c.active && <EnrollBox a={a} c={c} onChanged={onChanged} />}
+                {(!manages || superAdmin) && c.active && <EnrollBox a={a} c={c} onChanged={onChanged} showCount={!manages} />}
                 {manages && (
                   <div className="flex gap-3 pt-1 text-xs">
                     <button type="button" onClick={() => setSharing(c)} className="text-brand hover:underline">
