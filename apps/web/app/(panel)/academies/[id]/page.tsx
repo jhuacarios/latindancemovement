@@ -74,7 +74,7 @@ export default function AcademyPage() {
         <Link href="/academies" className="text-sm text-neutral-400 hover:text-neutral-200">
           ← Academias
         </Link>
-        <AcademyHero a={a} />
+        <AcademyHero a={a} onEditCover={manages ? () => setTab('videos') : undefined} />
       </div>
 
       <div className="flex gap-1 overflow-x-auto border-b border-neutral-800">

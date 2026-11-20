@@ -34,7 +34,8 @@ export function usePublicGallery(academyId: string) {
 }
 
 /** Portada: mosaico con lo de la galería abierta (fotos primero) y, encima, logo, nombre y datos. */
-export function AcademyHero({ a }: { a: AcademyDto }) {
+export function AcademyHero({ a, onEditCover }: { a: AcademyDto; onEditCover?: () => void }) {
+  const [help, setHelp] = useState(false);
   const { items } = usePublicGallery(a.id);
   const covers = [...items]
     .filter((v) => v.thumbUrl)
@@ -70,6 +71,39 @@ export function AcademyHero({ a }: { a: AcademyDto }) {
           <div className="h-full w-full bg-gradient-to-br from-brand/40 via-neutral-900 to-neutral-950" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/30 to-transparent" />
+        {onEditCover && (
+          <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={() => setHelp((h) => !h)}
+              className="rounded-lg bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/75"
+            >
+              ✎ Editar portada
+            </button>
+            {help && (
+              <div className="max-w-xs space-y-2 rounded-xl border border-neutral-700 bg-neutral-950/95 p-3 text-xs text-neutral-300 shadow-xl">
+                <p>
+                  La portada se arma sola con las fotos y videos de la <b>galería de la academia</b> (fotos primero, hasta
+                  5).
+                </p>
+                <p>
+                  Para elegir qué sale: en <b>Fotos y videos</b>, usa <b>⭐ Mostrar en la galería</b> en los de una clase,
+                  o sube fotos sin clase (&quot;Galería de la academia&quot;).
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHelp(false);
+                    onEditCover();
+                  }}
+                  className="rounded-lg bg-brand px-3 py-1.5 font-medium text-white hover:bg-brand-dark"
+                >
+                  Ir a Fotos y videos →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div className="relative -mt-14 flex flex-wrap items-end gap-4 px-4 pb-4 sm:-mt-16 sm:px-6 sm:pb-5">
         <AcademyLogo a={a} className="h-24 w-24 rounded-2xl ring-4 ring-neutral-950 sm:h-28 sm:w-28" />

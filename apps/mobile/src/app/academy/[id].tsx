@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Pressable,
   RefreshControl,
@@ -34,7 +35,7 @@ import { MediaGallery } from '@/components/media-gallery';
 import { colors, radius, space, ui, detailHeader } from '@/lib/theme';
 
 /** Portada: mosaico con la galería abierta (fotos primero) y, encima, logo, nombre y datos. */
-function Hero({ a }: { a: AcademyDto }) {
+function Hero({ a, manages }: { a: AcademyDto; manages: boolean }) {
   const logo = academyLogoUrl(a);
   const { data } = useQuery({
     queryKey: ['academy-media', a.id, null],
@@ -63,6 +64,21 @@ function Hero({ a }: { a: AcademyDto }) {
           </>
         )}
         <View style={styles.shade} />
+        {manages && (
+          <Pressable
+            style={styles.editCover}
+            onPress={() =>
+              Alert.alert(
+                'Editar portada',
+                'La portada se arma sola con las fotos y videos de la galería de la academia (fotos primero).\n\n' +
+                  'Para elegir qué sale: entra a una clase y mantén presionada una foto o video → "Mostrar en la galería". ' +
+                  'Lo que subas abajo, en Galería, también aparece.',
+              )
+            }
+          >
+            <Text style={styles.editCoverText}>✎ Editar portada</Text>
+          </Pressable>
+        )}
       </View>
       <View style={styles.heroBody}>
         {logo ? (
@@ -206,7 +222,7 @@ export default function AcademyScreen() {
         {error && <Text style={ui.error}>{error instanceof ApiError ? error.message : 'No se pudo cargar.'}</Text>}
         {a && (
           <>
-            <Hero a={a} />
+            <Hero a={a} manages={a.myRole !== null || user?.role === 'SUPER_ADMIN'} />
             <About a={a} />
             <MediaGallery
               academyId={a.id}
@@ -245,6 +261,16 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
     marginBottom: 4,
   },
+  editCover: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#000000aa',
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  editCoverText: { color: colors.white, fontSize: 12, fontWeight: '600' },
   igBtn: { backgroundColor: '#d6297a', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   igText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   member: { flexDirection: 'row', alignItems: 'center', gap: space.md },
