@@ -17,7 +17,8 @@ import { placeLabel, type EventDto } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { eventsApi, flyerUrl, formatEventDate, styleFamilies } from '@/lib/events';
 import { StyleMixBar } from '@/components/style-mix-bar';
-import { StyleTag } from '@/components/chips';
+import { Chips, StyleTag } from '@/components/chips';
+import { useRegionFilter } from '@/lib/region';
 import { colors, radius, space, ui } from '@/lib/theme';
 
 function EventCard({ ev, past }: { ev: EventDto; past: boolean }) {
@@ -82,8 +83,9 @@ export default function EventsScreen() {
     queryFn: () => eventsApi.list(includePast),
   });
   // La API trae primero los próximos y después los ya realizados de cada región.
+  const { region, setRegion, options } = useRegionFilter();
   const sections = (data?.sections ?? [])
-    .filter((s) => s.events.length > 0)
+    .filter((s) => s.events.length > 0 && (!region || s.region === region))
     .map((s) => ({
       title: s.name,
       upcoming: s.upcomingCount,
@@ -116,6 +118,7 @@ export default function EventsScreen() {
               Sociales y eventos de baile por región, de norte a sur.
               {data ? ` ${data.upcomingTotal} próximo${data.upcomingTotal === 1 ? '' : 's'} en todo Chile.` : ''}
             </Text>
+            <Chips options={options} value={region} onChange={setRegion} allLabel="Todas las regiones" />
             <View style={styles.toggle}>
               <Text style={ui.muted}>Mostrar ya realizados</Text>
               <Switch
@@ -135,7 +138,11 @@ export default function EventsScreen() {
             </Text>
           ) : (
             <Text style={ui.muted}>
-              {includePast ? 'Todavía no hay eventos publicados.' : 'No hay eventos próximos por ahora.'}
+              {region
+                ? `No hay eventos${includePast ? '' : ' próximos'} en esta región. Prueba con "Todas las regiones".`
+                : includePast
+                  ? 'Todavía no hay eventos publicados.'
+                  : 'No hay eventos próximos por ahora.'}
             </Text>
           )
         }

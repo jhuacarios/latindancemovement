@@ -37,6 +37,12 @@
           "photosPermission": "Nectason usa tus fotos para enviarlas por el chat.",
           "cameraPermission": "Nectason usa la cámara para tomar fotos y enviarlas por el chat."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Nectason usa tu ubicación para mostrarte primero los sociales, eventos y academias de tu región."
+        }
       ]
     ],
     "experiments": {

@@ -35,6 +35,7 @@ type UserRow = {
   createdAt: Date;
   passwordHash?: string | null;
   googleId?: string | null;
+  avatarAt?: Date | null;
 };
 
 function toPublicUser(u: UserRow): PublicUser {
@@ -57,6 +58,7 @@ function toPublicUser(u: UserRow): PublicUser {
     createdAt: u.createdAt.toISOString(),
     hasPassword: Boolean(u.passwordHash),
     hasGoogle: Boolean(u.googleId),
+    avatarAt: u.avatarAt ? u.avatarAt.toISOString() : null,
   };
 }
 

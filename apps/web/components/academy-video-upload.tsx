@@ -296,7 +296,7 @@ export function AcademyVideoUpload({
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Clase">
               <Select value={classId} onChange={(e) => pickClass(e.target.value)} disabled={running} className="w-full">
-                <option value="">Contenido general</option>
+                <option value="">Galería de la academia (la ve todo el mundo)</option>
                 {classes.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title} ({WEEKDAYS[c.weekday].slice(0, 3)} {c.startTime})

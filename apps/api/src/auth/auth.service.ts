@@ -41,6 +41,7 @@ type UserRecord = {
   createdAt: Date;
   passwordHash?: string | null;
   googleId?: string | null;
+  avatarAt?: Date | null;
 };
 
 @Injectable()
@@ -434,7 +435,31 @@ export class AuthService {
       createdAt: user.createdAt.toISOString(),
       hasPassword: Boolean(user.passwordHash),
       hasGoogle: Boolean(user.googleId),
+      avatarAt: user.avatarAt ? user.avatarAt.toISOString() : null,
     };
+  }
+
+  // --- Foto de perfil ----------------------------------------------------------
+
+  /** Cambia (o quita, con null) la foto de perfil propia. */
+  async setAvatar(userId: string, image: { buffer: Buffer; mime: string } | null): Promise<PublicUser> {
+    if (image) {
+      const data = image.buffer.toString('base64');
+      await this.prisma.userAvatar.upsert({
+        where: { userId },
+        create: { userId, data, mime: image.mime },
+        update: { data, mime: image.mime },
+      });
+    } else {
+      await this.prisma.userAvatar.deleteMany({ where: { userId } });
+    }
+    await this.prisma.user.update({ where: { id: userId }, data: { avatarAt: image ? new Date() : null } });
+    return this.me(userId);
+  }
+
+  async getAvatar(userId: string): Promise<{ buffer: Buffer; mime: string } | null> {
+    const a = await this.prisma.userAvatar.findUnique({ where: { userId }, select: { data: true, mime: true } });
+    return a ? { buffer: Buffer.from(a.data, 'base64'), mime: a.mime } : null;
   }
 
   /**

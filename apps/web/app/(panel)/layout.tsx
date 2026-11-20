@@ -18,6 +18,7 @@ import { SpotifyIcon } from '@/components/spotify-icon';
 import { LayoutUIContext } from '@/lib/layout-ui';
 import { ViewAsRoleContext } from '@/lib/view-as-role';
 import { useUnreadChat } from '@/lib/chat';
+import { UserAvatar } from '@/components/user-avatar';
 
 const VIEW_AS_KEY = 'nectason.viewAsRole';
 
@@ -346,9 +347,9 @@ export default function PanelLayout({
               href="/profile"
               title={`Mi perfil — ${publicName(user)}`}
               aria-label="Mi perfil"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white transition hover:bg-brand-dark"
+              className="rounded-full transition hover:opacity-85"
             >
-              {publicName(user).trim().charAt(0).toUpperCase() || '👤'}
+              <UserAvatar user={user} className="h-8 w-8 text-xs" />
             </Link>
             <button
               type="button"

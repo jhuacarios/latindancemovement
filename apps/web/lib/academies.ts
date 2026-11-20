@@ -693,9 +693,9 @@ export function planDaysLeft(iso: string): number {
   return Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000);
 }
 
-/** Subir y mover archivos requiere el Plan Director vigente. */
-export function canWrite(a: AcademyDto): boolean {
-  return Boolean(a.plan?.active);
+/** Subir y mover archivos requiere el Plan Director vigente; el SUPER_ADMIN no depende del plan. */
+export function canWrite(a: AcademyDto, superAdmin = false): boolean {
+  return superAdmin || Boolean(a.plan?.active);
 }
 
 /**

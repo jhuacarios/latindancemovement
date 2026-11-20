@@ -68,7 +68,8 @@ export class AcademyEnrollmentsService {
   async request(user: AuthUser, academyId: string, classId: string, message?: string | null): Promise<void> {
     const c = await this.klass(academyId, classId);
     if (!c.active) throw new BadRequestException('Esta clase no está recibiendo alumnos.');
-    if (await this.academies.roleIn(user, academyId)) {
+    // El SUPER_ADMIN puede inscribirse igual (para probar el flujo completo), aunque administre.
+    if (user.role !== 'SUPER_ADMIN' && (await this.academies.roleIn(user, academyId))) {
       throw new BadRequestException('Eres parte de la academia: no necesitas inscribirte.');
     }
     const existing = await this.prisma.academyEnrollment.findUnique({
@@ -181,23 +182,6 @@ export class AcademyEnrollmentsService {
     return e;
   }
 
-  /** Grupo de la clase con el director y los profesores (se crea con el primer alumno). */
-  private async classChat(c: Awaited<ReturnType<AcademyEnrollmentsService['klass']>>, directorId: string) {
-    if (c.chatId) return c.chatId;
-    const id = await this.chat.ensureClassGroup({
-      academyId: c.academy.id,
-      academyName: c.academy.name,
-      classId: c.id,
-      title: c.title,
-      createdById: directorId,
-    });
-    await this.prisma.academyClass.update({ where: { id: c.id }, data: { chatId: id } });
-    for (const staffId of await this.academies.staffIds(c.academy.id)) {
-      await this.chat.addParticipant(id, staffId);
-    }
-    return id;
-  }
-
   async accept(user: AuthUser, academyId: string, enrollmentId: string): Promise<AcademyEnrollmentDto[]> {
     await this.academies.assertOwner(user, academyId);
     const e = await this.enrollment(academyId, enrollmentId);
@@ -215,7 +199,7 @@ export class AcademyEnrollmentsService {
         where: { id: e.id },
         data: { status: 'ACCEPTED', decidedAt: new Date() },
       });
-      const chatId = await this.classChat(c, user.id);
+      const chatId = c.chatId ?? (await this.academies.ensureClassChat(c.id, user.id));
       await this.chat.addParticipant(chatId, e.userId);
       await this.notify(
         user.id,

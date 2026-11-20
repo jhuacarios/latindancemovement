@@ -33,6 +33,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/button';
+import { AvatarEditor } from '@/components/avatar-editor';
 import { colors, radius, space, ui } from '@/lib/theme';
 
 function Field({
@@ -246,9 +247,7 @@ export default function ProfileScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={ui.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{publicName(user).charAt(0).toUpperCase()}</Text>
-            </View>
+            <AvatarEditor />
             <View style={{ flex: 1 }}>
               <Text style={ui.h1} numberOfLines={1}>{publicName(user)}</Text>
               <Text style={ui.muted} numberOfLines={1}>{user.email}</Text>
@@ -278,15 +277,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: colors.white, fontSize: 26, fontWeight: '700' },
   months: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   classRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   classLogo: { width: 40, height: 40, borderRadius: radius.sm, backgroundColor: colors.selva },

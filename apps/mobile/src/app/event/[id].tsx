@@ -27,7 +27,7 @@ import { Button } from '@/components/button';
 import { MediaViewer } from '@/components/media-viewer';
 import { StyleMixBar } from '@/components/style-mix-bar';
 import { StyleTag } from '@/components/chips';
-import { colors, radius, space, ui } from '@/lib/theme';
+import { colors, radius, space, ui, detailHeader } from '@/lib/theme';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -143,7 +143,7 @@ export default function EventScreen() {
   if (isLoading) {
     return (
       <View style={[ui.screen, styles.center]}>
-        <Stack.Screen options={{ title: 'Evento' }} />
+        <Stack.Screen options={{ ...detailHeader, title: 'Evento' }} />
         <ActivityIndicator color={colors.clave} />
       </View>
     );
@@ -151,7 +151,7 @@ export default function EventScreen() {
   if (error || !ev) {
     return (
       <View style={[ui.screen, styles.center]}>
-        <Stack.Screen options={{ title: 'Evento' }} />
+        <Stack.Screen options={{ ...detailHeader, title: 'Evento' }} />
         <Text style={ui.error}>{error instanceof ApiError ? error.message : 'Evento no encontrado.'}</Text>
       </View>
     );
@@ -163,8 +163,9 @@ export default function EventScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: ev.title }} />
+      <Stack.Screen options={{ ...detailHeader, title: ev.title }} />
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         style={ui.screen}
         contentContainerStyle={[ui.scroll, { paddingBottom: space.xxl }]}
         refreshControl={

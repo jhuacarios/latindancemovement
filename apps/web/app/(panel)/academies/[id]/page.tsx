@@ -191,6 +191,8 @@ function ClassesTab({
   onChanged: () => void;
   onRequests: () => void;
 }) {
+  const { user } = useAuth();
+  const superAdmin = user?.role === 'SUPER_ADMIN';
   const [modal, setModal] = useState<AcademyClassDto | 'new' | null>(null);
   const [sharing, setSharing] = useState<AcademyClassDto | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
@@ -237,11 +239,9 @@ function ClassesTab({
                 </div>
                 {c.priceInfo && <div className="text-xs text-neutral-300">{c.priceInfo}</div>}
                 {c.description && <div className="text-xs text-neutral-500">{c.description}</div>}
-                {manages ? (
-                  <ClassEnrollmentInfo c={c} onRequests={onRequests} />
-                ) : (
-                  c.active && <EnrollBox a={a} c={c} onChanged={onChanged} />
-                )}
+                {manages && <ClassEnrollmentInfo c={c} onRequests={onRequests} />}
+                {/* El SUPER_ADMIN también puede inscribirse, aunque administre. */}
+                {(!manages || superAdmin) && c.active && <EnrollBox a={a} c={c} onChanged={onChanged} />}
                 {manages && (
                   <div className="flex gap-3 pt-1 text-xs">
                     <button type="button" onClick={() => setSharing(c)} className="text-brand hover:underline">
@@ -281,7 +281,7 @@ function ClassesTab({
 
 function VideosTab({ a, manages, onChanged }: { a: AcademyDto; manages: boolean; onChanged: () => void }) {
   const { user } = useAuth();
-  const writable = canWrite(a);
+  const writable = canWrite(a, user?.role === 'SUPER_ADMIN');
   const [classId, setClassId] = useState('');
   const [sort, setSort] = useState<GallerySort>('class-date');
   // El orden elegido se recuerda en este navegador (se lee después de montar).

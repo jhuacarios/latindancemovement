@@ -39,6 +39,8 @@ model User {
   // y por eso se le pregunta al entrar.
   stylePreference  String?
   refreshTokenHash String?
+  // Cuándo cambió la foto de perfil (versión para el caché). null = sin foto.
+  avatarAt         DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -64,9 +66,19 @@ model User {
   academyVideos        AcademyVideo[]        @relation("AcademyVideoUploadedBy")
   videoReports         AcademyVideoReport[]
   academyShareLinks    AcademyShareLink[]
+  avatar               UserAvatar?
 
   @@index([role])
   @@index([rut])
+}
+
+/** Foto de perfil (aparte de User para no cargarla en cada consulta). Pública por URL. */
+model UserAvatar {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      String // base64, sin prefijo data:
+  mime      String
+  updatedAt DateTime @updatedAt
 }
 
 /**

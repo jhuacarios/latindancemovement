@@ -51,3 +51,15 @@ export const ui = StyleSheet.create({
     fontSize: 15,
   },
 });
+
+/**
+ * Barra superior de las pantallas de detalle (clase, evento, social, academia).
+ * Cada pantalla la declara también en su <Stack.Screen>: así nunca queda sin
+ * barra (y con el texto bajo el notch) aunque el layout raíz no se haya recargado.
+ */
+export const detailHeader = {
+  headerShown: true,
+  headerStyle: { backgroundColor: colors.selva },
+  headerTintColor: colors.clave,
+  headerTitleStyle: { color: colors.text },
+} as const;

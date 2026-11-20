@@ -117,6 +117,13 @@ export interface PublicUser {
   hasPassword: boolean;
   /** Cuenta vinculada con Google. */
   hasGoogle: boolean;
+  /** Versión de la foto de perfil (ISO); null = sin foto. URL: `avatarPath(user)`. */
+  avatarAt: string | null;
+}
+
+/** Ruta (relativa a la API) de la foto de perfil, o null si no tiene. Es pública. */
+export function avatarPath(u: { id: string; avatarAt: string | null }): string | null {
+  return u.avatarAt ? `/auth/users/${u.id}/avatar?v=${encodeURIComponent(u.avatarAt)}` : null;
 }
 
 export interface Track {
@@ -1235,7 +1242,7 @@ export interface AcademyClassDto {
   pendingCount: number;
   /** Estado de la inscripción del usuario actual (null = no pidió). */
   myEnrollment: AcademyEnrollmentStatus | null;
-  /** Chat de la clase (si el usuario está inscrito o la administra y ya existe). */
+  /** Chat de la clase (solo si el usuario está inscrito o la administra). */
   chatId: string | null;
 }
 

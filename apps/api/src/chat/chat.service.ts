@@ -291,7 +291,17 @@ export class ChatService {
       where: { conversationId_userId: { conversationId, userId: me.id } },
       select: { userId: true },
     });
-    if (!p) throw new ForbiddenException('No participas en esta conversación.');
+    if (p) return;
+    // El SUPER_ADMIN entra a cualquier grupo (canal o clase) y queda como participante;
+    // los chats 1 a 1 siguen siendo privados.
+    if (me.role === 'SUPER_ADMIN') {
+      const c = await this.prisma.chatConversation.findUnique({ where: { id: conversationId }, select: { kind: true } });
+      if (c && c.kind !== 'DIRECT') {
+        await this.addParticipant(conversationId, me.id);
+        return;
+      }
+    }
+    throw new ForbiddenException('No participas en esta conversación.');
   }
 
   /**
@@ -537,7 +547,7 @@ export class ChatService {
     academyName: string;
     classId: string;
     title: string;
-    createdById: string;
+    createdById?: string;
   }): Promise<string> {
     const found = await this.prisma.chatConversation.findFirst({
       where: { kind: 'CLASS', classId: input.classId },

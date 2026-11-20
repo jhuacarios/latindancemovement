@@ -1,19 +1,13 @@
-import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
-import {
-  CHILE_REGIONS,
-  placeLabel,
-  regionName,
-  type AcademySummaryDto,
-  type ChileRegion,
-} from '@baile-latino/types';
+import { placeLabel, regionName, type AcademySummaryDto } from '@baile-latino/types';
 import { academiesApi, academyLogoUrl } from '@/lib/academies';
 import { ApiError } from '@/lib/api';
 import { Chips, StyleTag } from '@/components/chips';
+import { useRegionFilter } from '@/lib/region';
 import { colors, radius, space, ui } from '@/lib/theme';
 
 function AcademyCard({ a }: { a: AcademySummaryDto }) {
@@ -48,7 +42,7 @@ function AcademyCard({ a }: { a: AcademySummaryDto }) {
 }
 
 export default function AcademiesScreen() {
-  const [region, setRegion] = useState<ChileRegion | null>(null);
+  const { region, setRegion, options } = useRegionFilter();
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['academies', region],
     queryFn: () => academiesApi.list(region),
@@ -66,7 +60,7 @@ export default function AcademiesScreen() {
           <View style={{ gap: space.md }}>
             <Text style={ui.h1}>Academias</Text>
             <Chips
-              options={CHILE_REGIONS.map((r) => ({ value: r.code, label: r.name }))}
+              options={options}
               value={region}
               onChange={setRegion}
               allLabel="Todas las regiones"

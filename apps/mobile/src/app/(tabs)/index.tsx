@@ -7,6 +7,8 @@ import { pctFromStyles, placeLabel, type CommunityPlaceDto } from '@baile-latino
 import { ApiError } from '@/lib/api';
 import { placePhotoUrl, placesApi } from '@/lib/places';
 import { StyleMixBar } from '@/components/style-mix-bar';
+import { Chips } from '@/components/chips';
+import { useRegionFilter } from '@/lib/region';
 import { colors, radius, space, ui } from '@/lib/theme';
 
 function PlaceCard({ p }: { p: CommunityPlaceDto }) {
@@ -41,8 +43,9 @@ export default function SocialsScreen() {
     queryKey: ['places', 'outdoor'],
     queryFn: placesApi.outdoor,
   });
+  const { region, setRegion, options } = useRegionFilter();
   const sections = (data?.sections ?? [])
-    .filter((s) => s.count > 0)
+    .filter((s) => s.count > 0 && (!region || s.region === region))
     .map((s) => ({ title: s.name, count: s.count, data: s.places }));
 
   return (
@@ -60,9 +63,10 @@ export default function SocialsScreen() {
         contentContainerStyle={[ui.scroll, { paddingBottom: space.xxl }]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.clave} />}
         ListHeaderComponent={
-          <View style={{ gap: 4 }}>
+          <View style={{ gap: space.sm }}>
             <Text style={ui.h1}>Sociales</Text>
             <Text style={ui.muted}>Juntas al aire libre en playas, parques y plazas.</Text>
+            <Chips options={options} value={region} onChange={setRegion} allLabel="Todas las regiones" />
           </View>
         }
         ListEmptyComponent={
@@ -71,7 +75,9 @@ export default function SocialsScreen() {
           ) : error ? (
             <Text style={ui.error}>{error instanceof ApiError ? error.message : 'No se pudo cargar.'}</Text>
           ) : (
-            <Text style={ui.muted}>Todavía no hay sociales publicados.</Text>
+            <Text style={ui.muted}>
+              {region ? 'No hay sociales en esta región todavía.' : 'Todavía no hay sociales publicados.'}
+            </Text>
           )
         }
       />

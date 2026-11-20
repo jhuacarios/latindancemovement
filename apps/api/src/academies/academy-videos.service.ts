@@ -264,7 +264,7 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
     dto: CreateVideoUploadDto,
   ): Promise<AcademyVideoUploadTicket> {
     await this.academies.assertMember(user, academyId);
-    await this.academies.assertPlan(academyId);
+    await this.academies.assertPlan(academyId, user);
     this.media.assertEnabled();
     if (kindOf(dto.mimeType) === 'PHOTO' && dto.sizeBytes > ACADEMY_PHOTO_MAX_BYTES) {
       throw new BadRequestException('La foto no puede superar 25 MB.');
@@ -483,7 +483,7 @@ export class AcademyVideosService implements OnModuleInit, OnModuleDestroy {
     to: AcademyMediaLocation,
   ): Promise<{ moved: number }> {
     await this.academies.assertMember(user, academyId);
-    await this.academies.assertPlan(academyId);
+    await this.academies.assertPlan(academyId, user);
     this.media.assertEnabled();
     const from: AcademyMediaLocation = to === 'VAULT' ? 'GALLERY' : 'VAULT';
     const rows = await this.prisma.academyVideo.findMany({

@@ -5,7 +5,9 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnApplicationBootstrap,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
@@ -85,12 +87,55 @@ const CLASS_ORDER: Prisma.AcademyClassOrderByWithRelationInput[] = [{ weekday: '
  * profesores y el SUPER_ADMIN.
  */
 @Injectable()
-export class AcademiesService {
+export class AcademiesService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(AcademiesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaStorageService,
     private readonly chat: ChatService,
   ) {}
+
+  /** Toda clase tiene su chat: al arrancar se crea el de las clases que aún no lo tienen. */
+  async onApplicationBootstrap(): Promise<void> {
+    try {
+      const pending = await this.prisma.academyClass.findMany({ where: { chatId: null }, select: { id: true } });
+      for (const c of pending) await this.ensureClassChat(c.id);
+      if (pending.length) this.logger.log(`Chats de clase creados: ${pending.length}`);
+    } catch (e) {
+      this.logger.warn(`No se pudieron crear los chats de clase: ${(e as Error).message}`);
+    }
+  }
+
+  // --- chat de la clase ----------------------------------------------------------
+
+  /**
+   * El grupo de la clase (lo crea si no existe) con el director, los profesores y
+   * los alumnos inscritos. Devuelve su id.
+   */
+  async ensureClassChat(classId: string, createdById?: string): Promise<string> {
+    const c = await this.prisma.academyClass.findUnique({
+      where: { id: classId },
+      select: { id: true, title: true, chatId: true, academy: { select: { id: true, name: true } } },
+    });
+    if (!c) throw new NotFoundException('Clase no encontrada.');
+    if (c.chatId) return c.chatId;
+    const id = await this.chat.ensureClassGroup({
+      academyId: c.academy.id,
+      academyName: c.academy.name,
+      classId: c.id,
+      title: c.title,
+      createdById: createdById ?? (await this.ownerId(c.academy.id)) ?? undefined,
+    });
+    await this.prisma.academyClass.update({ where: { id: c.id }, data: { chatId: id } });
+    const students = await this.prisma.academyEnrollment.findMany({
+      where: { classId: c.id, status: 'ACCEPTED' },
+      select: { userId: true },
+    });
+    const people = new Set([...(await this.staffIds(c.academy.id)), ...students.map((s) => s.userId)]);
+    for (const userId of people) await this.chat.addParticipant(id, userId);
+    return id;
+  }
 
   // --- inscripciones (los usa AcademyEnrollmentsService y los videos) --------------
 
@@ -179,8 +224,9 @@ export class AcademiesService {
     if (role !== 'OWNER') throw new ForbiddenException('Solo el director de la academia puede hacer esto.');
   }
 
-  /** Subir y mover archivos requiere el Plan Director vigente (sin él: solo lectura). */
-  async assertPlan(academyId: string): Promise<void> {
+  /** Subir y mover archivos requiere el Plan Director vigente (sin él: solo lectura). El SUPER_ADMIN no. */
+  async assertPlan(academyId: string, user?: AuthUser): Promise<void> {
+    if (user?.role === 'SUPER_ADMIN') return; // el SUPER_ADMIN no depende del plan
     const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { planExpiresAt: true } });
     if (!a) throw new NotFoundException('Academia no encontrada.');
     if (!planOf(a.planExpiresAt).active) throw new ForbiddenException(NO_PLAN_MESSAGE);
@@ -557,6 +603,7 @@ export class AcademiesService {
         startTime: dto.startTime,
       },
     });
+    c.chatId = await this.ensureClassChat(c.id, user.id);
     return this.toClass(c, undefined, true);
   }
 

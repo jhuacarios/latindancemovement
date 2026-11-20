@@ -59,3 +59,13 @@ export const academiesApi = {
   mediaUrl: (id: string, videoId: string) =>
     api<{ url: string }>(`/academies/${id}/videos/${videoId}/url`),
 };
+
+/**
+ * Qué puede hacer con la galería quien la mira: subir (administra y hay plan, o es
+ * SUPER_ADMIN, que no depende del plan), solo lectura por falta de plan, o nada.
+ */
+export function uploadMode(a: AcademyDto, superAdmin: boolean): 'none' | 'yes' | 'no-plan' {
+  if (superAdmin) return 'yes';
+  if (!a.myRole) return 'none';
+  return a.plan?.active ? 'yes' : 'no-plan';
+}

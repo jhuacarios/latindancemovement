@@ -19,6 +19,7 @@ import { api, ApiError } from '@/lib/api';
 import { Button, Card, Input, Select, Spinner } from '@/components/ui';
 import { clsx } from '@/components/clsx';
 import { MyClasses } from '@/components/my-classes';
+import { AvatarEditor } from '@/components/user-avatar';
 import {
   StylePreferencePicker,
   useSaveStylePreference,
@@ -38,14 +39,10 @@ export default function ProfilePage() {
 
   if (loading || !user) return <Spinner />;
 
-  const initial = publicName(user).trim().charAt(0).toUpperCase() || '👤';
-
   return (
     <div className="space-y-6">
       <header className="flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-xl font-bold text-white">
-          {initial}
-        </div>
+        <AvatarEditor />
         <div>
           <h1 className="text-2xl font-bold">{publicName(user)}</h1>
           <span className="mt-1 inline-block rounded bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-400">

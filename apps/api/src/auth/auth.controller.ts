@@ -1,15 +1,21 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  Param,
   Patch,
   Post,
+  Put,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { readMultipart } from '../common/multipart';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -63,6 +69,32 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   updateProfile(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.id, dto);
+  }
+
+  /** Cambia la foto de perfil. multipart: `file` (JPG, PNG o WEBP; el cliente la recorta y achica). */
+  @Put('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  async setAvatar(@CurrentUser() user: AuthUser, @Req() req: FastifyRequest) {
+    const { file } = await readMultipart(req);
+    if (!file) throw new BadRequestException('Sube una imagen.');
+    return this.auth.setAvatar(user.id, file);
+  }
+
+  @Delete('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  clearAvatar(@CurrentUser() user: AuthUser) {
+    return this.auth.setAvatar(user.id, null);
+  }
+
+  /** Foto de perfil (pública, para <img>). `?v=` cambia con cada foto nueva. 404 si no tiene. */
+  @Get('users/:id/avatar')
+  async avatar(@Param('id') id: string, @Res() reply: FastifyReply) {
+    const f = await this.auth.getAvatar(id);
+    if (!f) {
+      reply.code(404).send({ message: 'Sin foto de perfil.' });
+      return;
+    }
+    reply.header('Content-Type', f.mime).header('Cache-Control', 'public, max-age=86400').send(f.buffer);
   }
 
   // --- Login con Google -----------------------------------------------------

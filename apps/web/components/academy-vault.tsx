@@ -52,7 +52,7 @@ export function StorageBar({ label, used, quota }: { label: string; used: number
  */
 export function AcademyVault({ a, onChanged }: { a: AcademyDto; onChanged: () => void }) {
   const { user } = useAuth();
-  const writable = canWrite(a);
+  const writable = canWrite(a, user?.role === 'SUPER_ADMIN');
   const q = useQuery({ queryKey: ['academies', 'vault', a.id], queryFn: () => academiesApi.vault(a.id) });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);

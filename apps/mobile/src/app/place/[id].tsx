@@ -28,7 +28,7 @@ import { formatDuration } from '@/lib/academies';
 import { Button } from '@/components/button';
 import { MediaViewer } from '@/components/media-viewer';
 import { StyleMixBar } from '@/components/style-mix-bar';
-import { colors, radius, space, ui } from '@/lib/theme';
+import { colors, radius, space, ui, detailHeader } from '@/lib/theme';
 
 function Grid3<T extends { id: string }>({
   items,
@@ -277,8 +277,9 @@ export default function PlaceScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: p?.name ?? 'Social' }} />
+      <Stack.Screen options={{ ...detailHeader, title: p?.name ?? 'Social' }} />
       <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
         style={ui.screen}
         contentContainerStyle={[ui.scroll, { paddingBottom: space.xxl }]}
         refreshControl={
