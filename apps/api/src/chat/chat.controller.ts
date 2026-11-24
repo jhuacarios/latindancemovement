@@ -27,6 +27,9 @@ import {
   SearchUsersDto,
   SendMessageDto,
   StartConversationDto,
+  CreatePollDto,
+  PinDto,
+  VoteDto,
 } from './dto/chat.dto';
 
 /** Mensajes directos 1 a 1 entre usuarios. Todo requiere sesión. */
@@ -92,6 +95,24 @@ export class ChatController {
   @Get('conversations/:id/reactions')
   reactionChanges(@CurrentUser() me: AuthUser, @Param('id') id: string, @Query() q: ReactionChangesDto) {
     return this.chat.reactionChanges(me, id, q.since);
+  }
+
+  /** Crea una encuesta (es un mensaje; su texto es la pregunta). */
+  @Post('conversations/:id/messages/poll')
+  createPoll(@CurrentUser() me: AuthUser, @Param('id') id: string, @Body() dto: CreatePollDto) {
+    return this.chat.createPoll(me, id, dto);
+  }
+
+  /** Mi voto en una encuesta (reemplaza el anterior). Devuelve la encuesta actualizada. */
+  @Put('conversations/:id/messages/:mid/vote')
+  vote(@CurrentUser() me: AuthUser, @Param('id') id: string, @Param('mid') mid: string, @Body() dto: VoteDto) {
+    return this.chat.vote(me, id, mid, dto.optionIds);
+  }
+
+  /** Fija (o desfija con null) un mensaje arriba del chat. Solo administradores del grupo. */
+  @Put('conversations/:id/pin')
+  pin(@CurrentUser() me: AuthUser, @Param('id') id: string, @Body() dto: PinDto) {
+    return this.chat.pin(me, id, dto.messageId ?? null);
   }
 
   /** Envía un GIF (por su id de GIPHY). */

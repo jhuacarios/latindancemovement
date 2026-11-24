@@ -20,7 +20,15 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { UserAvatar } from '@/components/avatar-editor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CHAT_REACTIONS, STICKER_DELETED, type ChatMessageDto } from '@baile-latino/types';
+import {
+  CHAT_REACTIONS,
+  STICKER_DELETED,
+  type ChatMessageDto,
+  type ChatPinnedDto,
+  type ChatReactionChanges,
+  type CreateChatPollRequest,
+} from '@baile-latino/types';
+import { PollCard, PollSheet } from '@/components/chat-poll';
 import { StickerSheet } from '@/components/sticker-sheet';
 import { GifSheet, useGifsEnabled } from '@/components/gif-sheet';
 import { stickerUrl } from '@/lib/stickers';
@@ -35,6 +43,7 @@ import {
   formatDayLabel,
   formatMsgTime,
   messageImageSource,
+  messagePreview,
 } from '@/lib/chat';
 import { colors, radius, space, ui } from '@/lib/theme';
 
@@ -61,6 +70,8 @@ function Bubble({
   maxWidth,
   onLongPress,
   onToggleReaction,
+  onVote,
+  pinned,
 }: {
   m: ChatMessageDto;
   mine: boolean;
@@ -70,6 +81,9 @@ function Bubble({
   maxWidth: number;
   onLongPress: () => void;
   onToggleReaction: (emoji: string) => void;
+  onVote: (optionIds: string[]) => Promise<void>;
+  /** Es el mensaje fijado del chat. */
+  pinned: boolean;
 }) {
   // Sticker y GIF van sin globo.
   const isSticker = Boolean((m.stickerId && m.stickerId !== STICKER_DELETED) || m.gif);
@@ -112,8 +126,15 @@ function Bubble({
             contentFit="cover"
           />
         )}
-        {m.body ? <Text style={[styles.text, mine && { color: colors.white }]}>{m.body}</Text> : null}
-        <Text style={[styles.meta, mine && !isSticker && { color: '#ffffffb3' }]}>{formatMsgTime(m.createdAt)}</Text>
+        {m.poll ? (
+          <PollCard poll={m.poll} mine={mine} width={Math.min(maxWidth - 24, 280)} onVote={onVote} />
+        ) : m.body ? (
+          <Text style={[styles.text, mine && { color: colors.white }]}>{m.body}</Text>
+        ) : null}
+        <Text style={[styles.meta, mine && !isSticker && { color: '#ffffffb3' }]}>
+          {pinned ? '📌 ' : ''}
+          {formatMsgTime(m.createdAt)}
+        </Text>
       </Pressable>
     </View>
     {m.reactions.length > 0 && (
@@ -142,10 +163,13 @@ function ReactionSheet({
   message,
   onPick,
   onClose,
+  pinAction,
 }: {
   message: ChatMessageDto | null;
   onPick: (emoji: string) => void;
   onClose: () => void;
+  /** Fijar/desfijar (solo quien administra el grupo; en un 1 a 1, ambos). */
+  pinAction: { label: string; onPress: () => void } | null;
 }) {
   const mine = message?.reactions.find((r) => r.mine)?.emoji ?? null;
   const who = message?.reactions.flatMap((r) => r.names.map((n) => `${r.emoji} ${n}`)) ?? [];
@@ -170,6 +194,11 @@ function ReactionSheet({
               {who.join('  ·  ')}
             </Text>
           )}
+          {pinAction ? (
+            <Pressable onPress={pinAction.onPress} style={styles.sheetAction}>
+              <Text style={styles.sheetActionText}>📌 {pinAction.label}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </Pressable>
     </Modal>
@@ -234,6 +263,49 @@ export default function ChatThreadScreen() {
   const applyReactions = useCallback((messageId: string, reactions: ChatMessageDto['reactions']) => {
     setMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, reactions } : x)));
   }, []);
+  const applyPoll = useCallback((messageId: string, poll: ChatMessageDto['poll']) => {
+    setMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, poll } : x)));
+  }, []);
+  // --- Mensaje fijado (viene en cada consulta de reacciones) ---
+  const [pinned, setPinned] = useState<ChatPinnedDto | null>(null);
+  const [canPin, setCanPin] = useState(false);
+  const applySync = useCallback(
+    (r: ChatReactionChanges) => {
+      setPinned(r.pinned);
+      setCanPin(r.canPin);
+      for (const c of r.changes) {
+        applyReactions(c.messageId, c.reactions);
+        if (c.poll) applyPoll(c.messageId, c.poll);
+      }
+    },
+    [applyReactions, applyPoll],
+  );
+  const togglePin = async (messageId: string) => {
+    setReacting(null);
+    try {
+      setPinned(await chatApi.pin(id, pinned?.message.id === messageId ? null : messageId));
+    } catch (e) {
+      Alert.alert('No se pudo', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+    }
+  };
+  const vote = async (messageId: string, optionIds: string[]) => {
+    try {
+      applyPoll(messageId, await chatApi.vote(id, messageId, optionIds));
+    } catch (e) {
+      Alert.alert('No se pudo votar', e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+    }
+  };
+  const [pollOpen, setPollOpen] = useState(false);
+  const sendPoll = async (req: CreateChatPollRequest) => {
+    try {
+      const m = await chatApi.createPoll(id, req);
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      refreshLists();
+    } catch (e) {
+      throw new Error(e instanceof ApiError ? e.message : 'Revisa tu conexión.');
+    }
+  };
+  const listRef = useRef<FlatList<ChatMessageDto>>(null);
   const react = async (messageId: string, emoji: string) => {
     setReacting(null);
     try {
@@ -250,7 +322,9 @@ export default function ChatThreadScreen() {
     void chatApi
       .reactionChanges(id)
       .then((r) => {
-        if (alive) reactionsSince.current = r.now;
+        if (!alive) return;
+        reactionsSince.current = r.now;
+        applySync(r);
       })
       .catch(() => undefined);
     const t = setInterval(async () => {
@@ -258,13 +332,13 @@ export default function ChatThreadScreen() {
       const r = await chatApi.reactionChanges(id, reactionsSince.current).catch(() => null);
       if (!alive || !r) return;
       reactionsSince.current = r.now;
-      for (const c of r.changes) applyReactions(c.messageId, c.reactions);
+      applySync(r);
     }, POLL_THREAD_MS);
     return () => {
       alive = false;
       clearInterval(t);
     };
-  }, [id, loading, applyReactions]);
+  }, [id, loading, applySync]);
 
   // Polling de mensajes nuevos.
   useEffect(() => {
@@ -377,14 +451,46 @@ export default function ChatThreadScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
       >
+        {pinned ? (
+          <Pressable
+            style={styles.pinBar}
+            onPress={() => {
+              const index = data.findIndex((x) => x.id === pinned.message.id);
+              if (index >= 0) listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+              else Alert.alert('Mensaje fijado', messagePreview(pinned.message));
+            }}
+            onLongPress={canPin ? () => void togglePin(pinned.message.id) : undefined}
+            accessibilityLabel="Mensaje fijado: ir al mensaje"
+          >
+            <Text style={{ fontSize: 16 }}>📌</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pinText} numberOfLines={1}>
+                {messagePreview(pinned.message) || 'Mensaje'}
+              </Text>
+              <Text style={styles.pinSub} numberOfLines={1}>
+                {pinned.message.senderName}
+                {pinned.pinnedByName ? ` · fijado por ${pinned.pinnedByName}` : ''}
+              </Text>
+            </View>
+            {canPin ? (
+              <Pressable onPress={() => void togglePin(pinned.message.id)} hitSlop={10} accessibilityLabel="Desfijar">
+                <Text style={styles.pinSub}>Desfijar</Text>
+              </Pressable>
+            ) : null}
+          </Pressable>
+        ) : null}
         {loading ? (
           <ActivityIndicator color={colors.clave} style={{ marginTop: space.xl }} />
         ) : error ? (
           <Text style={[ui.error, { padding: space.lg }]}>{error}</Text>
         ) : (
           <FlatList
+            ref={listRef}
             data={data}
             inverted
+            onScrollToIndexFailed={(info) =>
+              listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true })
+            }
             keyExtractor={(m) => m.id}
             contentContainerStyle={{ padding: space.md, gap: 4 }}
             onEndReached={() => void loadMore()}
@@ -412,6 +518,8 @@ export default function ChatThreadScreen() {
                     maxWidth={bubbleMax - (isGroup && !mine ? 34 : 0)}
                     onLongPress={() => setReacting(m)}
                     onToggleReaction={(e) => void react(m.id, e)}
+                    onVote={(ids) => vote(m.id, ids)}
+                    pinned={pinned?.message.id === m.id}
                   />
                 </View>
               );
@@ -432,16 +540,17 @@ export default function ChatThreadScreen() {
         <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
           <Pressable
             onPress={() =>
-              Alert.alert('Enviar foto', undefined, [
-                { text: 'Tomar foto', onPress: () => void pick('camera') },
-                { text: 'Elegir de la galería', onPress: () => void pick('library') },
+              Alert.alert('Enviar', undefined, [
+                { text: '📷 Tomar foto', onPress: () => void pick('camera') },
+                { text: '🖼️ Elegir de la galería', onPress: () => void pick('library') },
+                { text: '📊 Crear encuesta', onPress: () => setPollOpen(true) },
                 { text: 'Cancelar', style: 'cancel' },
               ])
             }
             style={styles.iconBtn}
-            accessibilityLabel="Adjuntar foto"
+            accessibilityLabel="Adjuntar foto o crear encuesta"
           >
-            <Text style={{ fontSize: 20 }}>📷</Text>
+            <Text style={{ fontSize: 24, color: colors.clave, fontWeight: '600' }}>＋</Text>
           </Pressable>
           <Pressable onPress={() => setStickers(true)} style={styles.iconBtn} accessibilityLabel="Stickers">
             <Text style={{ fontSize: 20 }}>🩰</Text>
@@ -484,7 +593,16 @@ export default function ChatThreadScreen() {
           message={reacting}
           onPick={(e) => reacting && void react(reacting.id, e)}
           onClose={() => setReacting(null)}
+          pinAction={
+            reacting && canPin
+              ? {
+                  label: pinned?.message.id === reacting.id ? 'Desfijar' : 'Fijar arriba del chat',
+                  onPress: () => void togglePin(reacting.id),
+                }
+              : null
+          }
         />
+        <PollSheet visible={pollOpen} onClose={() => setPollOpen(false)} onCreate={sendPoll} />
       </KeyboardAvoidingView>
     </>
   );
@@ -509,6 +627,25 @@ const styles = StyleSheet.create({
   emojiRow: { flexDirection: 'row', justifyContent: 'space-around' },
   emojiBtn: { padding: 6, borderRadius: radius.pill },
   emojiOn: { backgroundColor: '#1a7a4e88' },
+  sheetAction: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+    paddingTop: space.sm,
+    alignItems: 'center',
+  },
+  sheetActionText: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  pinBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    backgroundColor: colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  pinText: { color: colors.text, fontSize: 14 },
+  pinSub: { color: colors.textFaint, fontSize: 11 },
   headTitle: { color: colors.text, fontSize: 16, fontWeight: '700', maxWidth: 240 },
   headSub: { color: colors.textFaint, fontSize: 12, maxWidth: 240 },
   day: {

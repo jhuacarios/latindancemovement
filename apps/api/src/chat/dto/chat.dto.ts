@@ -1,5 +1,15 @@
-import { CHAT_REACTIONS } from '@baile-latino/types';
 import {
+  CHAT_POLL_MAX_OPTIONS,
+  CHAT_POLL_MIN_OPTIONS,
+  CHAT_POLL_OPTION_MAX,
+  CHAT_POLL_QUESTION_MAX,
+  CHAT_REACTIONS,
+} from '@baile-latino/types';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -71,4 +81,38 @@ export class SendGifDto {
   @MinLength(1)
   @MaxLength(40)
   gifId!: string;
+}
+
+export class CreatePollDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(CHAT_POLL_QUESTION_MAX)
+  question!: string;
+
+  @IsArray()
+  @ArrayMinSize(CHAT_POLL_MIN_OPTIONS)
+  @ArrayMaxSize(CHAT_POLL_MAX_OPTIONS)
+  @IsString({ each: true })
+  @MaxLength(CHAT_POLL_OPTION_MAX, { each: true })
+  options!: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  multiple?: boolean;
+}
+
+export class VoteDto {
+  /** Opciones que marco (reemplaza mi voto anterior); vacío = quitar mi voto. */
+  @IsArray()
+  @ArrayMaxSize(CHAT_POLL_MAX_OPTIONS)
+  @IsString({ each: true })
+  optionIds!: string[];
+}
+
+export class PinDto {
+  /** Mensaje a fijar; null lo desfija. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  messageId?: string | null;
 }

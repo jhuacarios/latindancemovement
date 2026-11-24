@@ -978,7 +978,49 @@ export interface ChatReactionSummary {
 export interface ChatReactionChanges {
   /** Hora del servidor: se manda como `since` en la próxima consulta. */
   now: string;
-  changes: { messageId: string; reactions: ChatReactionSummary[] }[];
+  /** Reacciones (y votos, si el mensaje es una encuesta) de los mensajes que cambiaron. */
+  changes: { messageId: string; reactions: ChatReactionSummary[]; poll: ChatPollDto | null }[];
+  /** Mensaje fijado arriba del chat (o null). Viene en cada consulta. */
+  pinned: ChatPinnedDto | null;
+  /** ¿Puedo fijar/desfijar? (administradores del grupo; en un 1 a 1, ambos). */
+  canPin: boolean;
+}
+
+export interface ChatPinnedDto {
+  message: ChatMessageDto;
+  pinnedByName: string;
+  pinnedAt: string;
+}
+
+// --- Encuestas en el chat ---------------------------------------------------------
+export const CHAT_POLL_MAX_OPTIONS = 12;
+export const CHAT_POLL_MIN_OPTIONS = 2;
+export const CHAT_POLL_QUESTION_MAX = 255;
+export const CHAT_POLL_OPTION_MAX = 100;
+
+export interface ChatPollOptionDto {
+  id: string;
+  text: string;
+  votes: number;
+  /** ¿La marqué yo? */
+  mine: boolean;
+  /** Quiénes votaron por ella (hasta 20), para el detalle. */
+  voters: string[];
+}
+
+export interface ChatPollDto {
+  question: string;
+  /** true = se pueden marcar varias opciones. */
+  multiple: boolean;
+  options: ChatPollOptionDto[];
+  /** Personas distintas que votaron (no la suma de votos: en las múltiples alguien vota varias). */
+  totalVoters: number;
+}
+
+export interface CreateChatPollRequest {
+  question: string;
+  options: string[];
+  multiple?: boolean;
 }
 
 export interface ChatMessageDto {
@@ -1004,6 +1046,8 @@ export interface ChatMessageDto {
   stickerId: string | null;
   /** Mensaje con GIF (URL de GIPHY y su tamaño). */
   gif: { url: string; width: number; height: number } | null;
+  /** Encuesta (el `body` es la pregunta). */
+  poll: ChatPollDto | null;
   createdAt: string;
 }
 

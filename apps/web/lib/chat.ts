@@ -3,7 +3,10 @@ import type {
   ChatConversationDto,
   ChatMessageDto,
   ChatMessagesPage,
+  ChatPinnedDto,
+  ChatPollDto,
   ChatUnreadResponse,
+  CreateChatPollRequest,
   ChatReactionChanges,
   ChatReactionSummary,
   ChatUser,
@@ -78,8 +81,28 @@ export function sendSticker(conversationId: string, stickerId: string) {
   });
 }
 
-/** Texto corto de un mensaje para la bandeja (foto, sticker o el texto). */
-export function messagePreview(m: Pick<ChatMessageDto, 'body' | 'hasImage' | 'stickerId' | 'gif'>): string {
+export function createPoll(conversationId: string, req: CreateChatPollRequest) {
+  return api<ChatMessageDto>(`/chat/conversations/${conversationId}/messages/poll`, { method: 'POST', body: req });
+}
+
+/** Mi voto (reemplaza el anterior; vacío = quitarlo). */
+export function votePoll(conversationId: string, messageId: string, optionIds: string[]) {
+  return api<ChatPollDto>(`/chat/conversations/${conversationId}/messages/${messageId}/vote`, {
+    method: 'PUT',
+    body: { optionIds },
+  });
+}
+
+/** Fija un mensaje arriba del chat (null = desfijar). */
+export function pinMessage(conversationId: string, messageId: string | null) {
+  return api<ChatPinnedDto | null>(`/chat/conversations/${conversationId}/pin`, { method: 'PUT', body: { messageId } });
+}
+
+/** Texto corto de un mensaje para la bandeja (foto, sticker, encuesta o el texto). */
+export function messagePreview(
+  m: Pick<ChatMessageDto, 'body' | 'hasImage' | 'stickerId' | 'gif'> & { poll?: ChatMessageDto['poll'] },
+): string {
+  if (m.poll) return `📊 ${m.body}`;
   if (m.body) return m.body;
   if (m.hasImage) return '📷 Foto';
   if (m.gif) return '🎞️ GIF';

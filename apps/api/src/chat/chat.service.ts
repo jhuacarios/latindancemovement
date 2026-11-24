@@ -5,13 +5,22 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { CHAT_REACTIONS, publicName, STICKER_DELETED } from '@baile-latino/types';
+import {
+  CHAT_POLL_MAX_OPTIONS,
+  CHAT_POLL_MIN_OPTIONS,
+  CHAT_REACTIONS,
+  publicName,
+  STICKER_DELETED,
+} from '@baile-latino/types';
 import type {
   ChatChannelInfo,
   ChatConversationDto,
   ChatMessageDto,
   ChatMessagesPage,
+  ChatPinnedDto,
+  ChatPollDto,
   ChatReactionChanges,
+  CreateChatPollRequest,
   ChatReactionSummary,
   ChatUser,
   UserRole,
@@ -53,11 +62,40 @@ const MESSAGE_SELECT = {
     select: { userId: true, emoji: true, user: { select: { name: true, displayName: true } } },
     orderBy: { createdAt: 'asc' },
   },
+  poll: {
+    select: {
+      question: true,
+      multiple: true,
+      options: {
+        select: {
+          id: true,
+          text: true,
+          votes: {
+            select: { userId: true, user: { select: { name: true, displayName: true } } },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { order: 'asc' },
+      },
+    },
+  },
 } satisfies Prisma.ChatMessageSelect;
 
 type MessageRow = Prisma.ChatMessageGetPayload<{ select: typeof MESSAGE_SELECT }>;
 
 const DEFAULT_PAGE = 50;
+
+/** Datos del grupo que necesita quien decide si alguien lo administra. */
+export interface ChatGroupRef {
+  placeId: string | null;
+  academyId: string | null;
+  classId: string | null;
+}
+/**
+ * ¿`user` administra este grupo? (fijar mensajes). Lo registra el módulo dueño del
+ * grupo (comunidades para CHANNEL, academias para CLASS): así el chat no lee sus tablas.
+ */
+export type ChatModerator = (user: AuthUser, group: ChatGroupRef) => Promise<boolean>;
 
 /** Clave única de la pareja, independiente de quién inició. */
 function pairKey(a: string, b: string): string {
@@ -66,10 +104,17 @@ function pairKey(a: string, b: string): string {
 
 @Injectable()
 export class ChatService {
+  private readonly moderators = new Map<string, ChatModerator>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly gifs: GifsService,
   ) {}
+
+  /** Lo llaman CommunityModule (CHANNEL) y AcademiesModule (CLASS) al arrancar. */
+  registerModerator(kind: 'CHANNEL' | 'CLASS', fn: ChatModerator): void {
+    this.moderators.set(kind, fn);
+  }
 
   private toUser(u: UserRow): ChatUser {
     return {
@@ -98,6 +143,23 @@ export class ChatService {
     return [...by.values()].sort((x, y) => y.count - x.count || rank(x.emoji) - rank(y.emoji));
   }
 
+  private toPoll(p: NonNullable<MessageRow['poll']>, meId: string): ChatPollDto {
+    const voters = new Set<string>();
+    for (const o of p.options) for (const v of o.votes) voters.add(v.userId);
+    return {
+      question: p.question,
+      multiple: p.multiple,
+      totalVoters: voters.size,
+      options: p.options.map((o) => ({
+        id: o.id,
+        text: o.text,
+        votes: o.votes.length,
+        mine: o.votes.some((v) => v.userId === meId),
+        voters: o.votes.slice(0, 20).map((v) => publicName(v.user)),
+      })),
+    };
+  }
+
   private toMessage(m: MessageRow, meId: string): ChatMessageDto {
     return {
       id: m.id,
@@ -113,6 +175,7 @@ export class ChatService {
       // Sin texto, imagen, GIF ni sticker = era un sticker que se borró.
       stickerId: m.stickerId ?? (!m.body && !m.imageMime && !m.gifUrl ? STICKER_DELETED : null),
       gif: m.gifUrl ? { url: m.gifUrl, width: m.gifWidth ?? 200, height: m.gifHeight ?? 200 } : null,
+      poll: m.poll ? this.toPoll(m.poll, meId) : null,
       createdAt: m.createdAt.toISOString(),
     };
   }
@@ -695,17 +758,146 @@ export class ChatService {
     await this.assertMember(me, conversationId);
     const now = new Date();
     const from = since ? new Date(since) : null;
-    if (!from || Number.isNaN(from.getTime())) return { now: now.toISOString(), changes: [] };
-    // 2 s de margen: una reacción guardada justo durante la consulta anterior no se pierde.
+    const [pinned, canPin] = await Promise.all([this.pinned(me, conversationId), this.canPin(me, conversationId)]);
+    if (!from || Number.isNaN(from.getTime())) return { now: now.toISOString(), changes: [], pinned, canPin };
+    // 2 s de margen: una reacción (o voto) guardada justo durante la consulta anterior no se pierde.
     const rows = await this.prisma.chatMessage.findMany({
       where: { conversationId, reactionsAt: { gt: new Date(from.getTime() - 2000) } },
-      select: { id: true, reactions: MESSAGE_SELECT.reactions },
+      select: { id: true, reactions: MESSAGE_SELECT.reactions, poll: MESSAGE_SELECT.poll },
       take: 200,
     });
     return {
       now: now.toISOString(),
-      changes: rows.map((r) => ({ messageId: r.id, reactions: this.summarize(r.reactions, me.id) })),
+      changes: rows.map((r) => ({
+        messageId: r.id,
+        reactions: this.summarize(r.reactions, me.id),
+        poll: r.poll ? this.toPoll(r.poll, me.id) : null,
+      })),
+      pinned,
+      canPin,
     };
+  }
+
+  // --- Encuestas -------------------------------------------------------------------
+
+  async createPoll(me: AuthUser, conversationId: string, req: CreateChatPollRequest): Promise<ChatMessageDto> {
+    await this.assertMember(me, conversationId);
+    const question = req.question.trim();
+    const options = req.options.map((o) => o.trim()).filter(Boolean);
+    if (!question) throw new BadRequestException('Escribe la pregunta.');
+    if (options.length < CHAT_POLL_MIN_OPTIONS) {
+      throw new BadRequestException(`La encuesta necesita al menos ${CHAT_POLL_MIN_OPTIONS} opciones.`);
+    }
+    if (options.length > CHAT_POLL_MAX_OPTIONS) {
+      throw new BadRequestException(`Máximo ${CHAT_POLL_MAX_OPTIONS} opciones.`);
+    }
+    if (new Set(options.map((o) => o.toLowerCase())).size !== options.length) {
+      throw new BadRequestException('Hay opciones repetidas.');
+    }
+    const now = new Date();
+    const [msg] = await this.prisma.$transaction([
+      this.prisma.chatMessage.create({
+        data: {
+          conversationId,
+          senderId: me.id,
+          body: question,
+          createdAt: now,
+          poll: {
+            create: {
+              question,
+              multiple: Boolean(req.multiple),
+              options: { create: options.map((text, order) => ({ text, order })) },
+            },
+          },
+        },
+        select: MESSAGE_SELECT,
+      }),
+      this.prisma.chatConversation.update({ where: { id: conversationId }, data: { lastMessageAt: now } }),
+      this.prisma.chatParticipant.update({
+        where: { conversationId_userId: { conversationId, userId: me.id } },
+        data: { lastReadAt: now },
+      }),
+    ]);
+    return this.toMessage(msg, me.id);
+  }
+
+  /**
+   * Mi voto: reemplaza lo que había marcado por `optionIds` (vacío = quitar mi voto).
+   * En las de una sola opción, máximo una.
+   */
+  async vote(me: AuthUser, conversationId: string, messageId: string, optionIds: string[]): Promise<ChatPollDto> {
+    await this.assertMember(me, conversationId);
+    const poll = await this.prisma.chatPoll.findFirst({
+      where: { messageId, message: { conversationId } },
+      select: { id: true, multiple: true, options: { select: { id: true } } },
+    });
+    if (!poll) throw new NotFoundException('Encuesta no encontrada.');
+    const ids = [...new Set(optionIds)];
+    const valid = new Set(poll.options.map((o) => o.id));
+    if (ids.some((id) => !valid.has(id))) throw new BadRequestException('Esa opción no es de esta encuesta.');
+    if (!poll.multiple && ids.length > 1) throw new BadRequestException('En esta encuesta se elige una sola opción.');
+    await this.prisma.$transaction([
+      this.prisma.chatPollVote.deleteMany({ where: { userId: me.id, option: { pollId: poll.id } } }),
+      this.prisma.chatPollVote.createMany({ data: ids.map((optionId) => ({ optionId, userId: me.id })) }),
+      this.prisma.chatMessage.update({ where: { id: messageId }, data: { reactionsAt: new Date() } }),
+    ]);
+    const row = await this.prisma.chatPoll.findUniqueOrThrow({ where: { id: poll.id }, select: MESSAGE_SELECT.poll.select });
+    return this.toPoll(row, me.id);
+  }
+
+  // --- Mensaje fijado --------------------------------------------------------------
+
+  /** En un 1 a 1, ambos; en un grupo, quien lo administra (según su módulo); el SUPER_ADMIN siempre. */
+  async canPin(me: AuthUser, conversationId: string): Promise<boolean> {
+    if (me.role === 'SUPER_ADMIN') return true;
+    const c = await this.prisma.chatConversation.findUnique({
+      where: { id: conversationId },
+      select: { kind: true, placeId: true, academyId: true, classId: true },
+    });
+    if (!c) return false;
+    if (c.kind === 'DIRECT') return true;
+    const fn = this.moderators.get(c.kind);
+    if (!fn) return false;
+    try {
+      return await fn(me, { placeId: c.placeId, academyId: c.academyId, classId: c.classId });
+    } catch {
+      return false;
+    }
+  }
+
+  private async pinned(me: AuthUser, conversationId: string): Promise<ChatPinnedDto | null> {
+    const c = await this.prisma.chatConversation.findUnique({
+      where: { id: conversationId },
+      select: { pinnedMessageId: true, pinnedById: true, pinnedAt: true },
+    });
+    if (!c?.pinnedMessageId || !c.pinnedAt) return null;
+    const [m, by] = await Promise.all([
+      this.prisma.chatMessage.findFirst({ where: { id: c.pinnedMessageId, conversationId }, select: MESSAGE_SELECT }),
+      c.pinnedById
+        ? this.prisma.user.findUnique({ where: { id: c.pinnedById }, select: { name: true, displayName: true } })
+        : null,
+    ]);
+    if (!m) return null;
+    return { message: this.toMessage(m, me.id), pinnedByName: by ? publicName(by) : '', pinnedAt: c.pinnedAt.toISOString() };
+  }
+
+  /** Fija un mensaje arriba del chat (reemplaza al anterior); null lo desfija. */
+  async pin(me: AuthUser, conversationId: string, messageId: string | null): Promise<ChatPinnedDto | null> {
+    await this.assertMember(me, conversationId);
+    if (!(await this.canPin(me, conversationId))) {
+      throw new ForbiddenException('Solo los administradores del grupo pueden fijar mensajes.');
+    }
+    if (messageId) {
+      const m = await this.prisma.chatMessage.findFirst({ where: { id: messageId, conversationId }, select: { id: true } });
+      if (!m) throw new NotFoundException('Mensaje no encontrado.');
+    }
+    await this.prisma.chatConversation.update({
+      where: { id: conversationId },
+      data: messageId
+        ? { pinnedMessageId: messageId, pinnedById: me.id, pinnedAt: new Date() }
+        : { pinnedMessageId: null, pinnedById: null, pinnedAt: null },
+    });
+    return this.pinned(me, conversationId);
   }
 
   async markRead(me: AuthUser, conversationId: string): Promise<void> {

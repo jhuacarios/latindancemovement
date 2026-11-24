@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { placeLabel, STICKER_DELETED } from '@baile-latino/types';
-import type { ChatConversationDto, ChatMessageDto } from '@baile-latino/types';
+import type { ChatConversationDto, ChatMessageDto, ChatPinnedDto, ChatReactionChanges } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
@@ -15,6 +15,10 @@ import {
   listMessages,
   listMessagesSince,
   markConversationRead,
+  messagePreview,
+  createPoll,
+  pinMessage,
+  votePoll,
   reactionChanges,
   reactToMessage,
   sendImageMessage,
@@ -35,6 +39,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { ReactionChips, ReactionPicker } from '@/components/chat-reactions';
 import { StickerButton } from '@/components/sticker-panel';
 import { GifButton } from '@/components/gif-panel';
+import { PollButton, PollCard } from '@/components/chat-poll';
 import { stickerUrl } from '@/lib/stickers';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
@@ -58,6 +63,24 @@ function Ticks({ read }: { read: boolean }) {
         </svg>
       )}
     </span>
+  );
+}
+
+/** 📌 al pasar el mouse por un mensaje (solo quien puede fijar). */
+function PinButton({ pinned, onClick }: { pinned: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={pinned ? 'Desfijar' : 'Fijar arriba del chat'}
+      aria-label={pinned ? 'Desfijar mensaje' : 'Fijar mensaje'}
+      className={clsx(
+        'self-center rounded-full p-1 text-sm leading-none transition hover:bg-neutral-800',
+        pinned ? 'opacity-100' : 'text-neutral-500 opacity-0 group-hover:opacity-100 focus:opacity-100',
+      )}
+    >
+      📌
+    </button>
   );
 }
 
@@ -153,6 +176,45 @@ export function ChatThread({
   const applyReactions = useCallback((messageId: string, reactions: ChatMessageDto['reactions']) => {
     setMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, reactions } : x)));
   }, []);
+  const applyPoll = useCallback((messageId: string, poll: ChatMessageDto['poll']) => {
+    setMessages((prev) => prev.map((x) => (x.id === messageId ? { ...x, poll } : x)));
+  }, []);
+
+  // --- Mensaje fijado (viene en cada consulta de reacciones) ---
+  const [pinned, setPinned] = useState<ChatPinnedDto | null>(null);
+  const [canPin, setCanPin] = useState(false);
+  const applySync = useCallback(
+    (r: ChatReactionChanges) => {
+      setPinned(r.pinned);
+      setCanPin(r.canPin);
+      for (const c of r.changes) {
+        applyReactions(c.messageId, c.reactions);
+        if (c.poll) applyPoll(c.messageId, c.poll);
+      }
+    },
+    [applyReactions, applyPoll],
+  );
+  const togglePin = async (messageId: string) => {
+    try {
+      setPinned(await pinMessage(convId, pinned?.message.id === messageId ? null : messageId));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo fijar.');
+    }
+  };
+  const goToMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-amber-300/70', 'rounded-2xl');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-amber-300/70', 'rounded-2xl'), 1500);
+  };
+  const vote = async (messageId: string, optionIds: string[]) => {
+    try {
+      applyPoll(messageId, await votePoll(convId, messageId, optionIds));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo votar.');
+    }
+  };
   const myReaction = (m: ChatMessageDto) => m.reactions.find((r) => r.mine)?.emoji ?? null;
   const react = async (messageId: string, emoji: string) => {
     try {
@@ -166,9 +228,13 @@ export function ChatThread({
     if (loading) return;
     let alive = true;
     reactionsSince.current = null;
+    setPinned(null);
+    setCanPin(false);
     void reactionChanges(convId)
       .then((r) => {
-        if (alive) reactionsSince.current = r.now;
+        if (!alive) return;
+        reactionsSince.current = r.now;
+        applySync(r);
       })
       .catch(() => undefined);
     const timer = setInterval(async () => {
@@ -176,13 +242,13 @@ export function ChatThread({
       const r = await reactionChanges(convId, reactionsSince.current).catch(() => null);
       if (!alive || !r) return;
       reactionsSince.current = r.now;
-      for (const c of r.changes) applyReactions(c.messageId, c.reactions);
+      applySync(r);
     }, POLL_THREAD_MS);
     return () => {
       alive = false;
       clearInterval(timer);
     };
-  }, [convId, loading, applyReactions]);
+  }, [convId, loading, applySync]);
 
   // Al llegar mensajes, bajar si el usuario estaba al final.
   useEffect(() => {
@@ -314,6 +380,15 @@ export function ChatThread({
     }
   };
 
+  const sendPoll = async (req: Parameters<typeof createPoll>[1]) => {
+    const msg = await createPoll(convId, req).catch((e: unknown) => {
+      throw new Error(e instanceof ApiError ? e.message : 'No se pudo crear la encuesta.');
+    });
+    stickToBottom.current = true;
+    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    refreshLists();
+  };
+
   const onScroll = () => {
     const el = listRef.current;
     if (!el) return;
@@ -392,6 +467,38 @@ export function ChatThread({
         ) : null}
       </div>
 
+      {/* Mensaje fijado */}
+      {pinned && (
+        <div className="flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/80 px-3 py-2 lg:px-4">
+          <button
+            type="button"
+            onClick={() => goToMessage(pinned.message.id)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            title="Ir al mensaje"
+          >
+            <span aria-hidden="true">📌</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm">
+                {messagePreview(pinned.message) || 'Mensaje'}
+              </span>
+              <span className="block truncate text-[11px] text-neutral-500">
+                {pinned.message.senderName}
+                {pinned.pinnedByName ? ` · fijado por ${pinned.pinnedByName}` : ''}
+              </span>
+            </span>
+          </button>
+          {canPin && (
+            <button
+              type="button"
+              onClick={() => void togglePin(pinned.message.id)}
+              className="shrink-0 rounded-lg px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+            >
+              Desfijar
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Mensajes */}
       <div
         ref={listRef}
@@ -446,13 +553,14 @@ export function ChatThread({
           const showSender =
             isGroup && !mine && (newDay || !prev || prev.senderId !== m.senderId);
           return (
-            <div key={m.id}>
+            <div key={m.id} id={`msg-${m.id}`} className="transition-shadow">
               {newDay && (
                 <div className="my-3 text-center text-[11px] font-medium uppercase tracking-wide text-neutral-500">
                   {formatDayLabel(m.createdAt)}
                 </div>
               )}
               <div className={clsx('group flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
+                {mine && canPin && <PinButton pinned={pinned?.message.id === m.id} onClick={() => void togglePin(m.id)} />}
                 {mine && <ReactionPicker mine={myReaction(m)} onPick={(e) => void react(m.id, e)} />}
                 {/* En grupos, la foto de quien escribe (al inicio de cada tanda; si no, el hueco para alinear). */}
                 {isGroup && !mine &&
@@ -500,8 +608,10 @@ export function ChatThread({
                       <ChatImage message={m} />
                     </div>
                   )}
-                  {m.body && (
-                    <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                  {m.poll ? (
+                    <PollCard poll={m.poll} mine={mine} onVote={(ids) => vote(m.id, ids)} />
+                  ) : (
+                    m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>
                   )}
                   <div
                     className={clsx(
@@ -514,6 +624,7 @@ export function ChatThread({
                   </div>
                 </div>
                 {!mine && <ReactionPicker mine={myReaction(m)} onPick={(e) => void react(m.id, e)} />}
+                {!mine && canPin && <PinButton pinned={pinned?.message.id === m.id} onClick={() => void togglePin(m.id)} />}
               </div>
               <div className={clsx(isGroup && !mine && 'pl-9')}>
                 <ReactionChips reactions={m.reactions} alignEnd={mine} onToggle={(e) => void react(m.id, e)} />
@@ -574,6 +685,7 @@ export function ChatThread({
           </button>
           <StickerButton onSend={(id) => void sendExtra('sticker', id)} disabled={sending} />
           <GifButton onSend={(id) => void sendExtra('gif', id)} disabled={sending} />
+          <PollButton onCreate={sendPoll} disabled={sending} />
           <input
             ref={fileInput}
             type="file"

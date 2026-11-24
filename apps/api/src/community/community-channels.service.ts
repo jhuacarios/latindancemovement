@@ -25,7 +25,10 @@ export class CommunityChannelsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly chat: ChatService,
-  ) {}
+  ) {
+    // Fijar mensajes en los canales: el administrador del social (o SUPER_ADMIN).
+    chat.registerModerator('CHANNEL', async (user, g) => Boolean(g.placeId) && this.canManagePlace(user, g.placeId!));
+  }
 
   private async place(id: string): Promise<{ id: string; adminId: string | null }> {
     const p = await this.prisma.communityPlace.findUnique({

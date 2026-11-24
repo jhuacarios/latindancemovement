@@ -68,6 +68,7 @@ model User {
   academyShareLinks    AcademyShareLink[]
   avatar               UserAvatar?
   chatReactions        ChatReaction[]
+  chatPollVotes        ChatPollVote[]
 
   @@index([role])
   @@index([rut])
@@ -417,23 +418,27 @@ model PlaceMedia {
 /// Conversación 1 a 1. `pairKey` = los dos userId ordenados y unidos con "|",
 /// así la misma pareja siempre reutiliza la conversación (única).
 model ChatConversation {
-  id            String          @id @default(cuid())
+  id              String          @id @default(cuid())
   /// DIRECT = 1 a 1 (usa pairKey) · CHANNEL = canal de la comunidad de un lugar.
-  kind          String          @default("DIRECT")
-  pairKey       String?         @unique // solo DIRECT
+  kind            String          @default("DIRECT")
+  pairKey         String?         @unique // solo DIRECT
   /// Solo CHANNEL: el lugar dueño, nombre, descripción y si es el General.
-  placeId       String?
-  place         CommunityPlace? @relation(fields: [placeId], references: [id], onDelete: Cascade)
-  name          String?
-  description   String?
-  isGeneral     Boolean         @default(false)
+  placeId         String?
+  place           CommunityPlace? @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  name            String?
+  description     String?
+  isGeneral       Boolean         @default(false)
   /// Solo CLASS: academia y clase (sin relación: la clase vive en el módulo de academias).
-  academyId     String?
-  classId       String?
-  createdById   String?
-  lastMessageAt DateTime?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  academyId       String?
+  classId         String?
+  createdById     String?
+  lastMessageAt   DateTime?
+  /// Mensaje fijado arriba del chat (lo eligen los administradores del grupo).
+  pinnedMessageId String?
+  pinnedById      String?
+  pinnedAt        DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   participants ChatParticipant[]
   messages     ChatMessage[]
@@ -481,6 +486,7 @@ model ChatMessage {
   conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User             @relation("ChatMessageSender", fields: [senderId], references: [id])
   reactions    ChatReaction[]
+  poll         ChatPoll?
 
   @@index([conversationId, createdAt])
   @@index([conversationId, reactionsAt])
@@ -530,6 +536,44 @@ model Sticker {
 /**
  * Reacción a un mensaje: una por persona (elegir otra la reemplaza).
  */
+/**
+ * Encuesta en el chat (como en WhatsApp). Es un mensaje más: `body` del mensaje =
+ * la pregunta. Los votos cambian `ChatMessage.reactionsAt` para que el polling los traiga.
+ */
+model ChatPoll {
+  id        String           @id @default(cuid())
+  messageId String           @unique
+  question  String
+  /**
+   * true = se pueden marcar varias opciones.
+   */
+  multiple  Boolean          @default(false)
+  message   ChatMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  options   ChatPollOption[]
+}
+
+model ChatPollOption {
+  id     String         @id @default(cuid())
+  pollId String
+  text   String
+  order  Int
+  poll   ChatPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes  ChatPollVote[]
+
+  @@index([pollId])
+}
+
+model ChatPollVote {
+  optionId  String
+  userId    String
+  createdAt DateTime       @default(now())
+  option    ChatPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([optionId, userId])
+  @@index([userId])
+}
+
 model ChatReaction {
   messageId String
   userId    String

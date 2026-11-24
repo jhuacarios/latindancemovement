@@ -97,7 +97,10 @@ export class AcademiesService implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly media: MediaStorageService,
     private readonly chat: ChatService,
-  ) {}
+  ) {
+    // Fijar mensajes en el grupo de una clase: director, subdirectores y profesores.
+    chat.registerModerator('CLASS', async (user, g) => Boolean(g.academyId && (await this.roleIn(user, g.academyId))));
+  }
 
   /** Toda clase tiene su chat: al arrancar se crea el de las clases que aún no lo tienen. */
   async onApplicationBootstrap(): Promise<void> {

@@ -3,7 +3,10 @@ import type {
   ChatConversationDto,
   ChatMessageDto,
   ChatMessagesPage,
+  ChatPinnedDto,
+  ChatPollDto,
   ChatReactionChanges,
+  CreateChatPollRequest,
   ChatReactionSummary,
   ChatUnreadResponse,
   ChatUser,
@@ -57,7 +60,21 @@ export const chatApi = {
     return api<ChatMessageDto>(`/chat/conversations/${id}/messages/image`, { method: 'POST', form: fd });
   },
   markRead: (id: string) => api<void>(`/chat/conversations/${id}/read`, { method: 'POST' }),
+  createPoll: (id: string, req: CreateChatPollRequest) =>
+    api<ChatMessageDto>(`/chat/conversations/${id}/messages/poll`, { method: 'POST', body: req }),
+  /** Mi voto (reemplaza el anterior; vacío = quitarlo). */
+  vote: (id: string, messageId: string, optionIds: string[]) =>
+    api<ChatPollDto>(`/chat/conversations/${id}/messages/${messageId}/vote`, { method: 'PUT', body: { optionIds } }),
+  /** Fija un mensaje arriba del chat (null = desfijar). */
+  pin: (id: string, messageId: string | null) =>
+    api<ChatPinnedDto | null>(`/chat/conversations/${id}/pin`, { method: 'PUT', body: { messageId } }),
 };
+
+/** Texto corto de un mensaje (bandeja y mensaje fijado). */
+export function messagePreview(m: ChatMessageDto): string {
+  if (m.poll) return `📊 ${m.body}`;
+  return m.body || (m.hasImage ? '📷 Foto' : m.gif ? '🎞️ GIF' : m.stickerId ? '🩰 Sticker' : '');
+}
 
 /** La imagen de un mensaje se pide con sesión: fuente con el header de autorización. */
 export function messageImageSource(conversationId: string, messageId: string) {
@@ -124,6 +141,6 @@ export function conversationTitle(c: ChatConversationDto): { title: string; subt
 /** Vista previa del último mensaje (en grupos, con quién lo escribió). */
 export function preview(c: ChatConversationDto): string {
   if (!c.lastMessage) return 'Sin mensajes todavía';
-  const text = c.lastMessage.body || (c.lastMessage.hasImage ? '📷 Foto' : c.lastMessage.gif ? '🎞️ GIF' : c.lastMessage.stickerId ? '🩰 Sticker' : '');
+  const text = messagePreview(c.lastMessage);
   return c.kind === 'DIRECT' ? text : `${c.lastMessage.senderName}: ${text}`;
 }
