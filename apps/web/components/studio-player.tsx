@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin, { type Region } from 'wavesurfer.js/dist/plugins/regions.esm.js';
-import { countOfBeat, type SongEnergy, type SongStudy } from '@baile-latino/types';
+import { countOfBeat, type SeparationMode, type SongEnergy, type SongStudy } from '@baile-latino/types';
 import { Button } from './ui';
 import { clsx } from './clsx';
 import { InstrumentLanes, SECTION_LABEL, SectionBar } from './studio-instruments';
@@ -69,7 +69,7 @@ export function StudioPlayer({
   /** null = volver al "1" automático. */
   onSetFirstBeat: (timeMs: number | null) => void;
   savingFirstBeat: boolean;
-  onRequestStems: () => void;
+  onRequestStems: (mode: SeparationMode) => void;
   requestingStems: boolean;
   requestStemsError: string | null;
 }) {
@@ -337,6 +337,11 @@ export function StudioPlayer({
         {ready && (study.instrumentsStatus === 'PENDING' || study.instrumentsStatus === 'PROCESSING') && (
           <p className="mt-2 animate-pulse text-xs text-neutral-400">
             Detectando instrumentos y secciones… (varios minutos; ya puedes ir estudiando)
+          </p>
+        )}
+        {ready && study.instrumentsStatus === 'DONE' && study.instrumentsMode === 'BASIC' && (
+          <p className="mt-2 text-xs text-neutral-500">
+            Primer análisis rápido listo. Afinando en segundo plano coros, requinto, segunda y campana…
           </p>
         )}
         {ready && study.instrumentsStatus === 'ERROR' && (

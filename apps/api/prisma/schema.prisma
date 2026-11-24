@@ -610,6 +610,7 @@ model RecordingAnalysis {
   error              String?
   instrumentsStatus  String   @default("PENDING") // AnalysisStatus
   instrumentsVersion String? // versión del analizador que midió los instrumentos
+  instrumentsMode    String? // SeparationMode de lo que está en `instruments` (null = DEEP, de antes)
   instruments        Json? // { stepMs, tracks: { vocals: number[], ... } } (SongInstruments)
   instrumentsError   String?
   createdAt          DateTime @default(now())
@@ -645,6 +646,7 @@ model AudioFile {
   firstBeatOffsetMs Int? // el "1" corregido por el usuario (null = el automático)
   stemsStatus       String? // pistas para el mezclador (AnalysisStatus); null = no se pidieron
   stemsError        String?
+  stemsMode         String? // SeparationMode de las pistas (null = DEEP, de antes)
   rightsAcceptedAt  DateTime // declaró tener derecho a usar el archivo para su práctica
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt

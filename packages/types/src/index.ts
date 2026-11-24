@@ -1202,12 +1202,37 @@ export const INSTRUMENT_KEYS = [
 export type InstrumentKey = (typeof INSTRUMENT_KEYS)[number];
 
 /**
- * Pistas separadas que se guardan para el mezclador. "vocals" = voz principal;
- * "drums" = percusión sin la campana; "other" = lo que no es ninguna de las demás.
+ * Separación de instrumentos:
+ * - BASIC (rápida, ~3 veces menos): las 6 pistas de Demucs tal cual — voz (con coros),
+ *   guitarras juntas, bajo, percusión (con campana), teclados y otros.
+ * - DEEP (completa): además coros vs. voz principal, requinto/segunda y campana.
+ */
+export const SEPARATION_MODES = ['BASIC', 'DEEP'] as const;
+export type SeparationMode = (typeof SEPARATION_MODES)[number];
+
+/** Instrumentos que mide la separación básica (sin coros, requinto, segunda ni campana). */
+export const BASIC_INSTRUMENT_KEYS = [
+  'vocals',
+  'guitar',
+  'bass',
+  'guira',
+  'bongo',
+  'conga',
+  'tumba',
+  'keys',
+  'other',
+] as const satisfies readonly InstrumentKey[];
+
+/**
+ * Pistas separadas que se guardan para el mezclador (todas las posibles; cuáles se
+ * generan depende del modo, ver STEM_KEYS_BY_MODE). En el modo profundo "vocals" =
+ * voz principal y "drums" = percusión sin la campana; en el básico "vocals" son todas
+ * las voces, "guitar" todas las guitarras y "drums" toda la percusión.
  */
 export const STEM_KEYS = [
   'vocals',
   'coros',
+  'guitar',
   'requinto',
   'segunda',
   'bass',
@@ -1218,8 +1243,18 @@ export const STEM_KEYS = [
 ] as const;
 export type StemKey = (typeof STEM_KEYS)[number];
 
-/** URLs firmadas (de corta duración) de las pistas del mezclador. */
-export type StemUrls = Record<StemKey, string>;
+export const STEM_KEYS_BY_MODE: Record<SeparationMode, readonly StemKey[]> = {
+  BASIC: ['vocals', 'guitar', 'bass', 'drums', 'keys', 'other'],
+  DEEP: ['vocals', 'coros', 'requinto', 'segunda', 'bass', 'drums', 'campana', 'keys', 'other'],
+};
+
+/** URLs firmadas (de corta duración) de las pistas del mezclador: las del modo con que se separó. */
+export type StemUrls = Partial<Record<StemKey, string>>;
+
+/** Pedir las pistas del mezclador (sin `mode` = DEEP). */
+export interface RequestStemsRequest {
+  mode?: SeparationMode;
+}
 
 /** Actividad 0..1 de cada instrumento, un valor cada `stepMs`. */
 export interface SongInstruments {
@@ -1278,9 +1313,16 @@ export interface SongStudy extends AudioFileSummary {
   energy: SongEnergy | null;
   /** Estado de la detección de instrumentos (null = no aplica a este estilo). */
   instrumentsStatus: AnalysisStatus | null;
+  /**
+   * Con qué modo se midieron los instrumentos listos. BASIC = ya hay un primer
+   * análisis rápido y el profundo viene en segundo plano.
+   */
+  instrumentsMode: SeparationMode | null;
   instruments: SongInstruments | null;
   /** Pistas para el mezclador: null = no se pidieron (son privadas de este archivo). */
   stemsStatus: AnalysisStatus | null;
+  /** Modo con que se separan (o separaron) las pistas del mezclador. */
+  stemsMode: SeparationMode | null;
   /**
    * Secciones: las del usuario y, si no marcó ninguna, las automáticas (derivadas
    * de los instrumentos, con `origin: 'AUTOMATICO'` e id `auto-N`).

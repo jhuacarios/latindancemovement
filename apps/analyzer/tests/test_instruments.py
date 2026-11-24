@@ -52,6 +52,18 @@ def test_activity_follows_each_stem():
     assert np.mean(act["tumba"][second]) < np.mean(act["guira"][second])
 
 
+def test_basic_activity_skips_derived_tracks():
+    """El modo básico no deriva coros, requinto/segunda ni campana, pero sí las bandas de percusión."""
+    seconds = 4
+    t = np.arange(SR * seconds) / SR
+    drums = (0.3 * np.sin(2 * np.pi * 800 * t)).astype(np.float32)
+    guitar = (0.3 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    act = instruments.activity(drums + guitar, SR, {"drums": drums, "guitar": guitar}, "basic")
+    assert set(act) == set(instruments.BASIC_INSTRUMENT_KEYS)
+    assert max(act["guitar"]) > 0.5
+    assert max(act["bongo"]) > 0.5  # 800 Hz cae en la banda del bongó
+
+
 def test_analyze_instruments_rejects_long_audio(tmp_path, monkeypatch):
     import soundfile as sf
 

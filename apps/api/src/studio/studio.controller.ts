@@ -4,7 +4,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/auth.types';
 import { StudioService } from './studio.service';
 import { StudioEnabledGuard } from './studio-enabled.guard';
-import { CreateUploadDto, ListAudioFilesQueryDto, SetFirstBeatDto } from './dto/studio.dto';
+import { CreateUploadDto, ListAudioFilesQueryDto, RequestStemsDto, SetFirstBeatDto } from './dto/studio.dto';
 
 /**
  * Módulo Estudio: el usuario sube su audio y estudia la canción (grilla de
@@ -50,11 +50,11 @@ export class StudioController {
     return this.studio.reanalyze(user, id);
   }
 
-  /** Pide separar el audio en pistas para el mezclador (tarda un par de minutos). */
+  /** Pide separar el audio en pistas para el mezclador: rápida (BASIC) o completa (DEEP). */
   @Post('audio-files/:id/stems')
   @HttpCode(200)
-  requestStems(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.studio.requestStems(user, id);
+  requestStems(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: RequestStemsDto) {
+    return this.studio.requestStems(user, id, dto?.mode);
   }
 
   /** URLs firmadas de las pistas del mezclador. */

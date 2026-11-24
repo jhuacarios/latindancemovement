@@ -18,7 +18,7 @@ from .instruments import analyze_instruments
 from .stems import StemUploadError, make_stems
 from .video import VideoError, VideoUploadError, make_compat
 from .schemas import (
-    STEM_KEYS,
+    STEM_KEYS_BY_MODE,
     AnalyzeRequest,
     AnalyzeResponse,
     CompatRequest,
@@ -93,7 +93,7 @@ def instruments_endpoint(body: InstrumentsRequest) -> InstrumentsResponse:
         try:
             wav = _prepare(body.audioUrl, Path(tmp), channels=2)
             with HEAVY:
-                return analyze_instruments(wav)
+                return analyze_instruments(wav, body.mode)
         except AudioError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -101,14 +101,14 @@ def instruments_endpoint(body: InstrumentsRequest) -> InstrumentsResponse:
 # Pistas para el mezclador: separa en estéreo y sube cada pista a la URL firmada que manda la API.
 @app.post("/stems", response_model=StemsResponse, dependencies=[Depends(require_token)])
 def stems_endpoint(body: StemsRequest) -> StemsResponse:
-    missing = [k for k in STEM_KEYS if k not in body.uploads]
+    missing = [k for k in STEM_KEYS_BY_MODE[body.mode] if k not in body.uploads]
     if missing:
         raise HTTPException(status_code=400, detail=f"Faltan URLs de subida: {', '.join(missing)}")
     with tempfile.TemporaryDirectory() as tmp:
         try:
             wav = _prepare(body.audioUrl, Path(tmp), channels=2)
             with HEAVY:
-                return make_stems(wav, body.uploads, Path(tmp))
+                return make_stems(wav, body.uploads, Path(tmp), body.mode)
         except AudioError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except StemUploadError as exc:

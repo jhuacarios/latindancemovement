@@ -15,7 +15,7 @@ import soundfile as sf
 from . import ANALYZER_VERSION
 from .audio import MAX_DURATION_SEC, SAMPLE_RATE, AudioError
 from .instruments import separate_all, split_drums, split_guitar
-from .schemas import STEM_KEYS, StemsResponse
+from .schemas import STEM_KEYS_BY_MODE, SeparationMode, StemsResponse
 
 STEM_BITRATE = "128k"
 STEM_MIME = "audio/mp4"
@@ -52,7 +52,7 @@ def upload(path: Path, url: str) -> None:
         raise StemUploadError(f"El storage rechazó la pista (HTTP {res.status_code}).")
 
 
-def make_stems(wav: Path, uploads: dict[str, str], workdir: Path) -> StemsResponse:
+def make_stems(wav: Path, uploads: dict[str, str], workdir: Path, mode: SeparationMode = "deep") -> StemsResponse:
     audio, sr = sf.read(str(wav), dtype="float32", always_2d=True)  # (n, canales)
     stereo = audio.T if audio.shape[1] == 2 else np.repeat(audio.T[:1], 2, axis=0)
     if sr != SAMPLE_RATE:
@@ -61,8 +61,19 @@ def make_stems(wav: Path, uploads: dict[str, str], workdir: Path) -> StemsRespon
     if duration_sec > MAX_DURATION_SEC:
         raise AudioError("El audio supera la duración máxima de 10 minutos.")
 
-    sources = separate_all(stereo, sr)
+    sources = separate_all(stereo, sr, mode)
     zeros = np.zeros_like(stereo)
+    if mode == "basic":
+        # Las 6 pistas de Demucs tal cual: voces juntas, guitarras juntas, percusión entera.
+        stems = {
+            "vocals": sources.get("vocals", zeros),
+            "guitar": sources.get("guitar", zeros),
+            "bass": sources.get("bass", zeros),
+            "drums": sources.get("drums", zeros),
+            "keys": sources.get("piano", zeros),
+            "other": sources.get("other", zeros),
+        }
+        return _upload_all(stems, uploads, workdir, sr, duration_sec, mode)
     requinto, segunda = split_guitar(sources.get("guitar", zeros), sr)
     campana, drums = split_drums(sources.get("drums", zeros), sr)
     stems = {
@@ -77,9 +88,15 @@ def make_stems(wav: Path, uploads: dict[str, str], workdir: Path) -> StemsRespon
         "keys": sources.get("piano", zeros),
         "other": sources.get("other", zeros),
     }
-    for key in STEM_KEYS:
-        upload(encode_m4a(stems[key], sr, workdir / f"{key}.m4a"), uploads[key])
+    return _upload_all(stems, uploads, workdir, sr, duration_sec, mode)
 
+
+def _upload_all(
+    stems: dict[str, np.ndarray], uploads: dict[str, str], workdir: Path, sr: int, duration_sec: float, mode: SeparationMode
+) -> StemsResponse:
+    keys = STEM_KEYS_BY_MODE[mode]
+    for key in keys:
+        upload(encode_m4a(stems[key], sr, workdir / f"{key}.m4a"), uploads[key])
     return StemsResponse(
-        analyzerVersion=ANALYZER_VERSION, durationMs=round(duration_sec * 1000), stems=list(STEM_KEYS)
+        analyzerVersion=ANALYZER_VERSION, mode=mode, durationMs=round(duration_sec * 1000), stems=list(keys)
     )

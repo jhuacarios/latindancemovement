@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { STEM_KEYS } from '@baile-latino/types';
+import { STEM_KEYS_BY_MODE, type SeparationMode } from '@baile-latino/types';
 import { AudioStorageService, STEM_MIME_TYPE, stemStorageKey } from './audio-storage.service';
 import { AnalyzerClient, AnalyzerFileError } from './analyzer.client';
 import type { AnalyzerResultDto } from './dto/analyzer-result.dto';
@@ -142,48 +142,66 @@ export class StudioAnalysisService {
     return (await this.needsInstruments(recordingId, result.analyzerVersion)) ? recordingId : null;
   }
 
-  /** ¿Falta (o está desactualizada) la actividad de instrumentos de la grabación? La deja en PENDING. */
+  /**
+   * ¿Falta (o está desactualizada) la actividad de instrumentos de la grabación? La deja
+   * en PENDING. Si solo falta el profundo (ya hay un básico al día), la deja como está:
+   * el básico se sigue viendo mientras tanto.
+   */
   private async needsInstruments(recordingId: string, analyzerVersion: string): Promise<boolean> {
     const rec = await this.prisma.recordingAnalysis.findUnique({
       where: { id: recordingId },
-      select: { instrumentsStatus: true, instrumentsVersion: true },
+      select: { instrumentsStatus: true, instrumentsVersion: true, instrumentsMode: true },
     });
     if (!rec || rec.instrumentsStatus === 'PROCESSING') return false;
-    const needed =
+    const outdated =
       rec.instrumentsStatus !== 'DONE' || isNewerVersion(analyzerVersion, rec.instrumentsVersion);
-    if (needed) {
-      await this.prisma.recordingAnalysis.update({
-        where: { id: recordingId },
-        data: { instrumentsStatus: 'PENDING', instrumentsError: null },
-      });
-    }
-    return needed;
+    if (!outdated) return rec.instrumentsMode === 'BASIC';
+    await this.prisma.recordingAnalysis.update({
+      where: { id: recordingId },
+      data: { instrumentsStatus: 'PENDING', instrumentsError: null },
+    });
+    return true;
   }
 
   /**
    * Detecta los instrumentos de una grabación (lo llama el worker de instrumentos).
    * Usa cualquier archivo listo de esa grabación solo para que el analizador lo
    * lea; el resultado (datos, no audio) queda en la grabación compartida.
+   *
+   * En dos pasadas: primero la rápida (BASIC, secciones aproximadas en ~1/3 del
+   * tiempo) y después la profunda (DEEP), que las afina. Devuelve true si falta la
+   * profunda (el worker la encola con baja prioridad).
    */
-  async processInstruments(recordingId: string): Promise<void> {
+  async processInstruments(recordingId: string, background = false): Promise<boolean> {
+    const rec = await this.prisma.recordingAnalysis.findUnique({
+      where: { id: recordingId },
+      select: { instrumentsStatus: true, instrumentsMode: true },
+    });
     const file = await this.prisma.audioFile.findFirst({
       where: { recordingId, status: 'READY' },
       orderBy: { createdAt: 'asc' },
     });
-    if (!file) return; // la grabación se quedó sin archivos
+    if (!rec || !file) return false; // la grabación se quedó sin archivos
 
-    await this.prisma.recordingAnalysis.updateMany({
-      where: { id: recordingId },
-      data: { instrumentsStatus: 'PROCESSING', instrumentsError: null },
-    });
+    // Ya hay un básico: toca el profundo, sin esconder el básico mientras corre.
+    const mode: SeparationMode =
+      rec.instrumentsStatus === 'DONE' && rec.instrumentsMode === 'BASIC' ? 'DEEP' : 'BASIC';
+    if (rec.instrumentsStatus === 'DONE' && mode === 'BASIC') return false; // ya está el profundo
+    if (mode === 'DEEP' && !background) return true; // el profundo va al final de la cola
+    if (mode === 'BASIC') {
+      await this.prisma.recordingAnalysis.updateMany({
+        where: { id: recordingId },
+        data: { instrumentsStatus: 'PROCESSING', instrumentsError: null },
+      });
+    }
 
     let result;
     try {
-      result = await this.analyzer.instruments(await this.storage.analyzerUrl(file.storageKey));
+      result = await this.analyzer.instruments(await this.storage.analyzerUrl(file.storageKey), mode);
     } catch (err) {
       if (err instanceof AnalyzerFileError) {
         await this.markInstrumentsFailed(recordingId, err.message);
-        return;
+        return false;
       }
       throw err; // BullMQ reintenta
     }
@@ -194,12 +212,14 @@ export class StudioAnalysisService {
       where: { id: recordingId },
       data: {
         instrumentsStatus: 'DONE',
+        instrumentsMode: mode,
         instrumentsVersion: result.analyzerVersion,
         instruments: instruments as unknown as Prisma.InputJsonValue,
         instrumentsError: null,
       },
     });
-    this.logger.log(`Instrumentos listos: grabación ${recordingId}`);
+    this.logger.log(`Instrumentos listos (${mode}): grabación ${recordingId}`);
+    return mode === 'BASIC';
   }
 
   /** Separa el archivo de un usuario en pistas para el mezclador (privadas de ese archivo). */
@@ -211,9 +231,10 @@ export class StudioAnalysisService {
       where: { id: file.id },
       data: { stemsStatus: 'PROCESSING', stemsError: null },
     });
+    const mode: SeparationMode = file.stemsMode === 'BASIC' ? 'BASIC' : 'DEEP';
     const uploads = Object.fromEntries(
       await Promise.all(
-        STEM_KEYS.map(async (k) => [
+        STEM_KEYS_BY_MODE[mode].map(async (k) => [
           k,
           await this.storage.analyzerUploadUrl(stemStorageKey(file.storageKey, k), STEM_MIME_TYPE),
         ]),
@@ -221,7 +242,7 @@ export class StudioAnalysisService {
     ) as Record<string, string>;
 
     try {
-      await this.analyzer.stems(await this.storage.analyzerUrl(file.storageKey), uploads);
+      await this.analyzer.stems(await this.storage.analyzerUrl(file.storageKey), uploads, mode);
     } catch (err) {
       if (err instanceof AnalyzerFileError) {
         await this.markStemsFailed(file.id, err.message);
@@ -233,7 +254,7 @@ export class StudioAnalysisService {
       where: { id: file.id },
       data: { stemsStatus: 'DONE', stemsError: null },
     });
-    this.logger.log(`Pistas listas: archivo ${file.id}`);
+    this.logger.log(`Pistas listas (${mode}): archivo ${file.id}`);
   }
 
   async markStemsFailed(audioFileId: string, message: string): Promise<void> {
@@ -243,9 +264,10 @@ export class StudioAnalysisService {
     });
   }
 
+  /** Si ya hay un análisis listo (el básico, y falló el profundo), se conserva ese. */
   async markInstrumentsFailed(recordingId: string, message: string): Promise<void> {
     await this.prisma.recordingAnalysis.updateMany({
-      where: { id: recordingId },
+      where: { id: recordingId, instrumentsStatus: { not: 'DONE' } },
       data: { instrumentsStatus: 'ERROR', instrumentsError: message.slice(0, 500) },
     });
   }

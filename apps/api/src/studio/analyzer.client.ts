@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { INSTRUMENT_KEYS } from '@baile-latino/types';
+import { BASIC_INSTRUMENT_KEYS, INSTRUMENT_KEYS, type SeparationMode } from '@baile-latino/types';
 import { postJson } from '../common/post-json';
 import { STUDIO_CONFIG, type StudioConfig } from './studio.config';
 import { AnalyzerInstrumentsDto, AnalyzerResultDto } from './dto/analyzer-result.dto';
@@ -29,14 +29,15 @@ export class AnalyzerClient {
     return result;
   }
 
-  async instruments(audioUrl: string): Promise<AnalyzerInstrumentsDto> {
-    const body = await this.post('/instruments', { audioUrl }, INSTRUMENTS_TIMEOUT_MS);
+  async instruments(audioUrl: string, mode: SeparationMode): Promise<AnalyzerInstrumentsDto> {
+    const body = await this.post('/instruments', { audioUrl, mode: mode.toLowerCase() }, INSTRUMENTS_TIMEOUT_MS);
+    const expected: readonly string[] = mode === 'BASIC' ? BASIC_INSTRUMENT_KEYS : INSTRUMENT_KEYS;
     const result = plainToInstance(AnalyzerInstrumentsDto, body);
     const errors = await validate(result);
     const tracks = result?.tracks as Record<string, unknown> | undefined;
     const badTracks =
       !tracks ||
-      INSTRUMENT_KEYS.some(
+      expected.some(
         (k) => !Array.isArray(tracks[k]) || (tracks[k] as unknown[]).some((v) => typeof v !== 'number'),
       );
     if (errors.length > 0 || badTracks) {
@@ -47,8 +48,8 @@ export class AnalyzerClient {
   }
 
   /** Separa y sube las pistas a las URLs firmadas que se le pasan. */
-  async stems(audioUrl: string, uploads: Record<string, string>): Promise<void> {
-    await this.post('/stems', { audioUrl, uploads }, INSTRUMENTS_TIMEOUT_MS);
+  async stems(audioUrl: string, uploads: Record<string, string>, mode: SeparationMode): Promise<void> {
+    await this.post('/stems', { audioUrl, uploads, mode: mode.toLowerCase() }, INSTRUMENTS_TIMEOUT_MS);
   }
 
   private async post(path: string, payload: unknown, timeoutMs: number): Promise<unknown> {

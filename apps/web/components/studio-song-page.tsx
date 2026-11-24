@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { SeparationMode } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { INSTRUMENTS_IN_PROGRESS, IN_PROGRESS, formatDuration, studioApi } from '@/lib/studio';
 import { Button, Card, Spinner } from '@/components/ui';
@@ -23,6 +24,8 @@ export function StudioSongPage({ backHref, backLabel }: { backHref: string; back
       // La separación (instrumentos o pistas del mezclador) tarda varios minutos: se consulta más espaciado.
       if (d.instrumentsStatus && INSTRUMENTS_IN_PROGRESS.has(d.instrumentsStatus)) return 10_000;
       if (d.stemsStatus && INSTRUMENTS_IN_PROGRESS.has(d.stemsStatus)) return 10_000;
+      // Hay un análisis rápido y el profundo viene en segundo plano: se revisa de vez en cuando.
+      if (d.instrumentsMode === 'BASIC') return 30_000;
       return false;
     },
   });
@@ -42,7 +45,7 @@ export function StudioSongPage({ backHref, backLabel }: { backHref: string; back
   });
 
   const stems = useMutation({
-    mutationFn: () => studioApi.requestStems(id),
+    mutationFn: (mode: SeparationMode) => studioApi.requestStems(id, mode),
     onSuccess: (updated) => qc.setQueryData(['studio', 'audio-file', id], updated),
   });
 
@@ -95,7 +98,7 @@ export function StudioSongPage({ backHref, backLabel }: { backHref: string; back
           audioUrl={audio.data.url}
           onSetFirstBeat={(t) => firstBeat.mutate(t)}
           savingFirstBeat={firstBeat.isPending}
-          onRequestStems={() => stems.mutate()}
+          onRequestStems={(mode) => stems.mutate(mode)}
           requestingStems={stems.isPending}
           requestStemsError={stems.error?.message ?? null}
         />

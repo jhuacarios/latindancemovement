@@ -5,7 +5,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from app.schemas import INSTRUMENT_KEYS, STEM_KEYS, AnalyzeResponse, FingerprintResponse, InstrumentsResponse
+from app.schemas import (
+    BASIC_INSTRUMENT_KEYS,
+    BASIC_STEM_KEYS,
+    DEEP_STEM_KEYS,
+    INSTRUMENT_KEYS,
+    AnalyzeResponse,
+)
+from app.schemas import FingerprintResponse, InstrumentsResponse
 
 TOKEN = "test-token"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -64,24 +71,38 @@ def test_download_error_is_422(client):
     assert res.status_code == 422
 
 
-def test_instruments_contract(client, monkeypatch):
+@pytest.mark.parametrize(
+    "mode,keys", [(None, INSTRUMENT_KEYS), ("deep", INSTRUMENT_KEYS), ("basic", BASIC_INSTRUMENT_KEYS)]
+)
+def test_instruments_contract(client, monkeypatch, mode, keys):
     # Sin correr Demucs (eso lo cubre test_instruments): pistas falsas.
     from app import instruments
 
-    monkeypatch.setattr(instruments, "separate_all", lambda x, sr: {"drums": x, "vocals": x * 0.5, "guitar": x * 0.3})
-    res = client.post("/instruments", json={"audioUrl": "https://storage.test/a"}, headers=AUTH)
+    seen = {}
+
+    def fake_separate(x, sr, m="deep"):
+        seen["mode"] = m
+        return {"drums": x, "vocals": x * 0.5, "guitar": x * 0.3}
+
+    monkeypatch.setattr(instruments, "separate_all", fake_separate)
+    payload = {"audioUrl": "https://storage.test/a", **({"mode": mode} if mode else {})}
+    res = client.post("/instruments", json=payload, headers=AUTH)
     assert res.status_code == 200
     body = InstrumentsResponse.model_validate(res.json())
-    assert set(body.tracks) == set(INSTRUMENT_KEYS)
+    assert body.mode == (mode or "deep") == seen["mode"]
+    assert set(body.tracks) == set(keys)
     assert body.stepMs > 0 and body.durationMs > 0
     assert len({len(v) for v in body.tracks.values()}) == 1
 
 
-def test_stems_uploads_every_stem(client, monkeypatch):
-    from app import instruments, stems
+@pytest.mark.parametrize("mode,keys", [("deep", DEEP_STEM_KEYS), ("basic", BASIC_STEM_KEYS)])
+def test_stems_uploads_every_stem(client, monkeypatch, mode, keys):
+    from app import stems
 
     monkeypatch.setattr(
-        stems, "separate_all", lambda x, sr: {"vocals": x * 0.5, "coros": x * 0.1, "drums": x * 0.2, "piano": x * 0.1}
+        stems,
+        "separate_all",
+        lambda x, sr, m="deep": {"vocals": x * 0.5, "coros": x * 0.1, "drums": x * 0.2, "piano": x * 0.1},
     )
     put = {}
 
@@ -90,11 +111,13 @@ def test_stems_uploads_every_stem(client, monkeypatch):
         put[url] = path.name
 
     monkeypatch.setattr(stems, "upload", fake_upload)
-    keys = list(STEM_KEYS)
+    keys = list(keys)
     uploads = {k: f"https://storage.test/put/{k}" for k in keys}
-    res = client.post("/stems", json={"audioUrl": "https://storage.test/a", "uploads": uploads}, headers=AUTH)
+    res = client.post(
+        "/stems", json={"audioUrl": "https://storage.test/a", "uploads": uploads, "mode": mode}, headers=AUTH
+    )
     assert res.status_code == 200, res.text
-    assert res.json()["stems"] == keys
+    assert res.json()["stems"] == keys and res.json()["mode"] == mode
     assert put == {uploads[k]: f"{k}.m4a" for k in keys}
 
 
@@ -110,12 +133,12 @@ def test_stems_requires_every_upload_url(client):
 def test_stems_upload_failure_is_502(client, monkeypatch):
     from app import stems
 
-    monkeypatch.setattr(stems, "separate_all", lambda x, sr: {})
+    monkeypatch.setattr(stems, "separate_all", lambda x, sr, m="deep": {})
 
     def failing(path, url):
         raise stems.StemUploadError("El storage rechazó la pista (HTTP 403).")
 
     monkeypatch.setattr(stems, "upload", failing)
-    uploads = {k: "https://storage.test/put" for k in STEM_KEYS}
+    uploads = {k: "https://storage.test/put" for k in DEEP_STEM_KEYS}
     res = client.post("/stems", json={"audioUrl": "https://storage.test/a", "uploads": uploads}, headers=AUTH)
     assert res.status_code == 502

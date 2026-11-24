@@ -8,7 +8,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { STEM_KEYS, type SongStudy, type StudioUploadTicket } from '@baile-latino/types';
+import { STEM_KEYS_BY_MODE, type SongStudy, type StudioUploadTicket } from '@baile-latino/types';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { JwtStrategy } from '../src/auth/strategies/jwt.strategy';
 import { TracksService } from '../src/music/tracks/tracks.service';
@@ -112,16 +112,20 @@ function instrumentsResult() {
 class FakeAnalyzer {
   next: () => AnalyzerResultDto = () => analyzerResult();
   instrumentsCalls = 0;
+  instrumentModes: string[] = [];
   async analyze() {
     return this.next();
   }
-  async instruments() {
+  async instruments(_audioUrl: string, mode: string) {
     this.instrumentsCalls++;
+    this.instrumentModes.push(mode);
     return instrumentsResult();
   }
   stemUploads: Record<string, string> = {};
-  async stems(_audioUrl: string, uploads: Record<string, string>) {
+  stemsMode = '';
+  async stems(_audioUrl: string, uploads: Record<string, string>, mode: string) {
     this.stemUploads = uploads;
+    this.stemsMode = mode;
   }
 }
 
@@ -130,7 +134,10 @@ class InlineQueue {
   constructor(private readonly analysis: StudioAnalysisService) {}
   async enqueue(id: string) {
     const recordingId = await this.analysis.process(id);
-    if (recordingId) await this.analysis.processInstruments(recordingId);
+    // Primero la pasada rápida y, si la pide, la profunda (en prod va al final de la cola).
+    if (recordingId && (await this.analysis.processInstruments(recordingId))) {
+      await this.analysis.processInstruments(recordingId, true);
+    }
   }
   async enqueueStems(id: string) {
     await this.analysis.processStems(id);
@@ -276,6 +283,8 @@ describe('Estudio (e2e)', () => {
     const study = await uploadAndAnalyze(owner().token);
     expect(study.style).toBe('BACHATA');
     expect(study.instrumentsStatus).toBe('DONE');
+    expect(study.instrumentsMode).toBe('DEEP');
+    expect(analyzer.instrumentModes.slice(-2)).toEqual(['BASIC', 'DEEP']);
     expect(study.instruments?.tracks.vocals).toHaveLength(128);
     expect(study.sections.map((x) => [x.type, x.origin])).toEqual([
       ['INTRO', 'AUTOMATICO'],
@@ -296,14 +305,29 @@ describe('Estudio (e2e)', () => {
 
     const req = await call('POST', `/audio-files/${study.id}/stems`, owner().token);
     expect(req.statusCode).toBe(200);
-    expect(Object.keys(analyzer.stemUploads).sort()).toEqual([...STEM_KEYS].sort());
+    expect(analyzer.stemsMode).toBe('DEEP');
+    expect(Object.keys(analyzer.stemUploads).sort()).toEqual([...STEM_KEYS_BY_MODE.DEEP].sort());
     for (const url of Object.values(analyzer.stemUploads)) storage.put(url.replace('memory://upload/', ''), MB);
 
     const after = (await call('GET', `/audio-files/${study.id}`, owner().token)).json<SongStudy>();
     expect(after.stemsStatus).toBe('DONE');
     const urls = await call('GET', `/audio-files/${study.id}/stems`, owner().token);
     expect(urls.statusCode).toBe(200);
-    expect(Object.keys(urls.json()).sort()).toEqual([...STEM_KEYS].sort());
+    expect(Object.keys(urls.json()).sort()).toEqual([...STEM_KEYS_BY_MODE.DEEP].sort());
+
+    // Separación rápida: otro modo rehace las pistas (6, con guitarras y percusión enteras).
+    const fast = await call('POST', `/audio-files/${study.id}/stems`, owner().token, { mode: 'BASIC' });
+    expect(fast.statusCode).toBe(200);
+    expect(analyzer.stemsMode).toBe('BASIC');
+    expect(Object.keys(analyzer.stemUploads).sort()).toEqual([...STEM_KEYS_BY_MODE.BASIC].sort());
+    for (const url of Object.values(analyzer.stemUploads)) storage.put(url.replace('memory://upload/', ''), MB);
+    expect((await call('GET', `/audio-files/${study.id}`, owner().token)).json<SongStudy>().stemsMode).toBe('BASIC');
+    const fastUrls = await call('GET', `/audio-files/${study.id}/stems`, owner().token);
+    expect(Object.keys(fastUrls.json()).sort()).toEqual([...STEM_KEYS_BY_MODE.BASIC].sort());
+    expect((await call('POST', `/audio-files/${study.id}/stems`, owner().token, { mode: 'X' })).statusCode).toBe(400);
+    // Vuelve a la completa para seguir.
+    expect((await call('POST', `/audio-files/${study.id}/stems`, owner().token)).statusCode).toBe(200);
+    for (const url of Object.values(analyzer.stemUploads)) storage.put(url.replace('memory://upload/', ''), MB);
 
     // Otro usuario no ve ni pide las pistas.
     expect((await call('GET', `/audio-files/${study.id}/stems`, other().token)).statusCode).toBe(404);

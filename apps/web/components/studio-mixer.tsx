@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type WaveSurfer from 'wavesurfer.js';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SongStudy, StemKey, StemUrls } from '@baile-latino/types';
+import type { SeparationMode, SongStudy, StemKey, StemUrls } from '@baile-latino/types';
 import { studioApi } from '@/lib/studio';
 import { Button } from './ui';
 import { clsx } from './clsx';
@@ -17,6 +17,9 @@ import { clsx } from './clsx';
  * La campana llega como pista propia; el resto de la percusión llega junto y
  * güira, bongó y tumba se ajustan con filtros por banda (aproximado, igual que
  * las franjas de instrumentos).
+ *
+ * Con la separación rápida (BASIC) hay menos pistas: voces juntas, guitarras juntas
+ * y la percusión entera (la campana queda dentro de las bandas).
  */
 
 /** Un canal del mezclador: suma de una o más pistas, opcionalmente filtradas a una banda (Hz). */
@@ -85,8 +88,66 @@ const SALSA: MixerLayout = {
   ],
 };
 
-const LAYOUTS: Record<string, MixerLayout> = { BACHATA, SALSA };
-const layoutFor = (style: string) => LAYOUTS[style] ?? BACHATA;
+/** Separación rápida de bachata: 6 pistas; la percusión entera se parte por bandas. */
+const BACHATA_BASIC: MixerLayout = {
+  channels: [
+    { key: 'vocals', label: 'Voces', sources: one('vocals') },
+    { key: 'guitar', label: 'Guitarras', sources: one('guitar') },
+    { key: 'bass', label: 'Bajo', sources: one('bass') },
+    { key: 'bongo', label: 'Bongó + campana', group: 'Percusión', sources: drumsBand(200, 4000) },
+    { key: 'guira', label: 'Güira', group: 'Percusión', sources: drumsBand(4000, NYQUIST) },
+    { key: 'tumba', label: 'Tumba', group: 'Percusión', sources: drumsBand(0, 200) },
+    { key: 'keys', label: 'Teclados', sources: one('keys') },
+    { key: 'other', label: 'Otros', sources: one('other') },
+  ],
+  presets: [
+    { label: 'Todo', off: [] },
+    { label: 'Sin voz', off: ['vocals'] },
+    { label: 'Solo percusión', off: ['vocals', 'guitar', 'keys', 'other', 'bass'] },
+    { label: 'Bajo + percusión', off: ['vocals', 'guitar', 'keys', 'other'] },
+    { label: 'Solo guitarras', off: ['vocals', 'bass', 'keys', 'other', 'bongo', 'guira', 'tumba'] },
+  ],
+};
+
+/** Separación rápida de salsa. */
+const SALSA_BASIC: MixerLayout = {
+  channels: [
+    { key: 'vocals', label: 'Voces', sources: one('vocals') },
+    { key: 'keys', label: 'Piano', sources: one('keys') },
+    { key: 'other', label: 'Metales', sources: one('other') },
+    { key: 'guitar', label: 'Guitarra / tres', sources: one('guitar') },
+    { key: 'bass', label: 'Bajo', sources: one('bass') },
+    { key: 'conga', label: 'Congas', group: 'Percusión', sources: drumsBand(0, 400) },
+    { key: 'bongo', label: 'Bongó / timbal / campana', group: 'Percusión', sources: drumsBand(400, 4000) },
+    { key: 'guira', label: 'Güiro / maracas', group: 'Percusión', sources: drumsBand(4000, NYQUIST) },
+  ],
+  presets: [
+    { label: 'Todo', off: [] },
+    { label: 'Sin voz', off: ['vocals'] },
+    { label: 'Solo percusión', off: ['vocals', 'keys', 'other', 'guitar', 'bass'] },
+    { label: 'Bajo + percusión', off: ['vocals', 'keys', 'other', 'guitar'] },
+    { label: 'Piano + bajo', off: ['vocals', 'other', 'guitar', 'conga', 'bongo', 'guira'] },
+    { label: 'Sin metales', off: ['other'] },
+  ],
+};
+
+const LAYOUTS: Record<SeparationMode, Record<string, MixerLayout>> = {
+  DEEP: { BACHATA, SALSA },
+  BASIC: { BACHATA: BACHATA_BASIC, SALSA: SALSA_BASIC },
+};
+const layoutFor = (style: string, mode: SeparationMode) => LAYOUTS[mode][style] ?? LAYOUTS[mode].BACHATA;
+
+/** Los dos botones de separación (rápida / completa). */
+const MODE_INFO: Record<SeparationMode, { label: string; hint: string }> = {
+  BASIC: {
+    label: '⚡ Separación rápida',
+    hint: 'Instrumentos principales: voces, guitarras, bajo, percusión, teclados y otros. ~3 veces más rápida.',
+  },
+  DEEP: {
+    label: '🔬 Separación completa',
+    hint: 'Además coros aparte de la voz principal, requinto y segunda, y campana. Tarda varios minutos (hasta ~10).',
+  },
+};
 const fullLevels = (layout: MixerLayout) => Object.fromEntries(layout.channels.map((c) => [c.key, 1]));
 
 /** Desfase tolerado entre una pista y el reloj antes de corregirla (segundos). */
@@ -119,7 +180,7 @@ function buildEngine(urls: StemUrls, layout: MixerLayout): Engine {
     const el = new Audio();
     el.crossOrigin = 'anonymous'; // sin esto Web Audio entrega silencio (URL firmada de otro origen)
     el.preload = 'auto';
-    el.src = urls[stem];
+    el.src = urls[stem] ?? '';
     withPitch(el);
     elements.push(el);
     const node = ctx.createMediaElementSource(el);
@@ -183,23 +244,30 @@ export function StudioMixer({
 }: {
   ws: WaveSurfer | null;
   study: SongStudy;
-  onRequestStems: () => void;
+  onRequestStems: (mode: SeparationMode) => void;
   requesting: boolean;
   requestError: string | null;
 }) {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const layout = layoutFor(study.style);
+  const mode: SeparationMode = study.stemsMode ?? 'DEEP';
+  const layout = layoutFor(study.style, mode);
   const [levels, setLevels] = useState<Record<string, number>>(() => fullLevels(layout));
   const [muted, setMuted] = useState<Set<string>>(new Set());
   const [solo, setSolo] = useState<Set<string>>(new Set());
+  // Al cambiar de modo cambian los canales: se vuelve a todo al 100 %.
+  useEffect(() => {
+    setLevels(fullLevels(layout));
+    setMuted(new Set());
+    setSolo(new Set());
+  }, [layout]);
   const engineRef = useRef<Engine | null>(null);
   const qc = useQueryClient();
 
   // Las URLs firmadas duran 1 h: se piden al activar y se reutilizan 50 min.
   const urls = useQuery({
-    queryKey: ['studio', 'stem-urls', study.id],
+    queryKey: ['studio', 'stem-urls', study.id, mode],
     queryFn: () => studioApi.stemUrls(study.id),
     enabled: enabled && study.stemsStatus === 'DONE',
     staleTime: 50 * 60 * 1000,
@@ -330,27 +398,53 @@ export function StudioMixer({
       </div>
 
       {status === null && (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          {urls.error && <p className="w-full text-xs text-amber-300">{urls.error.message}</p>}
-          {requestError && <p className="w-full text-xs text-amber-300">{requestError}</p>}
-          <Button size="sm" onClick={onRequestStems} disabled={requesting}>
-            Separar instrumentos para mezclar
-          </Button>
-          <span className="text-xs text-neutral-500">Tarda varios minutos (hasta ~10). Sigue en segundo plano: puedes cerrar la pestaña y volver después. Una canción a la vez.</span>
+        <div className="space-y-2 text-sm">
+          {urls.error && <p className="text-xs text-amber-300">{urls.error.message}</p>}
+          {requestError && <p className="text-xs text-amber-300">{requestError}</p>}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(['BASIC', 'DEEP'] as const).map((m) => (
+              <div key={m} className="flex flex-col gap-1 rounded-lg border border-neutral-800 p-3">
+                <Button
+                  size="sm"
+                  variant={m === 'DEEP' ? 'ghost' : undefined}
+                  onClick={() => onRequestStems(m)}
+                  disabled={requesting}
+                >
+                  {MODE_INFO[m].label}
+                </Button>
+                <span className="text-xs text-neutral-500">{MODE_INFO[m].hint}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-neutral-500">
+            Sigue en segundo plano: puedes cerrar la pestaña y volver después. Una canción a la vez.
+          </p>
         </div>
       )}
       {(status === 'PENDING' || status === 'PROCESSING') && (
         <p className="animate-pulse text-sm text-neutral-400">
-          Separando instrumentos… (varios minutos, hasta ~10). Puedes cerrar la pestaña: sigue en segundo plano.
+          {mode === 'BASIC'
+            ? 'Separando los instrumentos principales… (un par de minutos).'
+            : 'Separando todos los instrumentos… (varios minutos, hasta ~10).'}{' '}
+          Puedes cerrar la pestaña: sigue en segundo plano.
         </p>
       )}
       {status === 'ERROR' && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-red-300">
           No se pudieron separar las pistas.
           {requestError && <span className="w-full text-xs text-amber-300">{requestError}</span>}
-          <Button size="sm" variant="ghost" onClick={onRequestStems} disabled={requesting}>
+          <Button size="sm" variant="ghost" onClick={() => onRequestStems(mode)} disabled={requesting}>
             Reintentar
           </Button>
+        </div>
+      )}
+      {status === 'DONE' && mode === 'BASIC' && !enabled && (
+        <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
+          <span>Pistas de la separación rápida. ¿Quieres coros, requinto, segunda y campana aparte?</span>
+          <Button size="sm" variant="ghost" onClick={() => onRequestStems('DEEP')} disabled={requesting}>
+            {MODE_INFO.DEEP.label}
+          </Button>
+          {requestError && <span className="w-full text-amber-300">{requestError}</span>}
         </div>
       )}
 
@@ -420,8 +514,10 @@ export function StudioMixer({
             ))}
           </div>
           <p className="text-[11px] text-neutral-500">
-            Los coros, las guitarras y cada instrumento de percusión son aproximados: se separan a partir de
-            la voz, la guitarra y la percusión. M = silenciar, S = escuchar solo ese.
+            {mode === 'BASIC'
+              ? 'Separación rápida: cada instrumento de percusión es aproximado (por bandas de la percusión).'
+              : 'Los coros, las guitarras y cada instrumento de percusión son aproximados: se separan a partir de la voz, la guitarra y la percusión.'}{' '}
+            M = silenciar, S = escuchar solo ese.
           </p>
         </>
       )}

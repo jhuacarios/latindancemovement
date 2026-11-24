@@ -13,7 +13,11 @@ interface AnalysisJob {
 }
 
 /** Trabajos pesados (separación con Demucs): de a uno, en la misma cola. */
-type HeavyJob = { kind: 'instruments'; recordingId: string } | { kind: 'stems'; audioFileId: string };
+type HeavyJob =
+  | { kind: 'instruments'; recordingId: string; background?: boolean }
+  | { kind: 'stems'; audioFileId: string };
+/** El análisis profundo de fondo va después de todo lo demás (BullMQ: mayor número = menos prioridad). */
+const BACKGROUND_PRIORITY = 100;
 
 export { redisConnection } from '../common/redis';
 
@@ -65,10 +69,14 @@ export class StudioQueue implements OnModuleInit, OnModuleDestroy {
     this.instrumentsQueue = new Queue<HeavyJob>(INSTRUMENTS_QUEUE_NAME, { connection });
     this.instrumentsWorker = new Worker<HeavyJob>(
       INSTRUMENTS_QUEUE_NAME,
-      (job) =>
-        job.data.kind === 'stems'
-          ? this.analysis.processStems(job.data.audioFileId)
-          : this.analysis.processInstruments(job.data.recordingId),
+      async (job) => {
+        const d = job.data;
+        if (d.kind === 'stems') return this.analysis.processStems(d.audioFileId);
+        // Tras el análisis rápido, el profundo queda en cola con baja prioridad.
+        if (await this.analysis.processInstruments(d.recordingId, d.background)) {
+          await this.enqueueInstruments(d.recordingId, true);
+        }
+      },
       // La separación puede tardar varios minutos: el lock se renueva solo, pero con margen.
       { connection, concurrency: 1, lockDuration: 5 * 60 * 1000 },
     );
@@ -108,10 +116,17 @@ export class StudioQueue implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  /** Encola la separación de una grabación. Si ya está en cola o corriendo, no la duplica. */
-  async enqueueInstruments(recordingId: string): Promise<void> {
+  /**
+   * Encola la separación de una grabación. Si ya está en cola o corriendo, no la duplica.
+   * `background` = la pasada profunda tras la rápida: va al final de la cola.
+   */
+  async enqueueInstruments(recordingId: string, background = false): Promise<void> {
     if (!this.instrumentsQueue) throw new Error('Cola de instrumentos no disponible.');
-    await this.addHeavy({ kind: 'instruments', recordingId }, `instruments-${recordingId}`);
+    await this.addHeavy(
+      { kind: 'instruments', recordingId, background },
+      `instruments-${background ? 'deep-' : ''}${recordingId}`,
+      background ? BACKGROUND_PRIORITY : undefined,
+    );
   }
 
   /** Encola la separación en pistas de un archivo (mezclador). No la duplica. */
@@ -119,13 +134,14 @@ export class StudioQueue implements OnModuleInit, OnModuleDestroy {
     await this.addHeavy({ kind: 'stems', audioFileId }, `stems-${audioFileId}`);
   }
 
-  private async addHeavy(data: HeavyJob, jobId: string): Promise<void> {
+  private async addHeavy(data: HeavyJob, jobId: string, priority?: number): Promise<void> {
     if (!this.instrumentsQueue) throw new Error('Cola de instrumentos no disponible.');
     await this.instrumentsQueue.add(
       data.kind,
       data,
       {
         jobId,
+        ...(priority ? { priority } : {}),
         attempts: ATTEMPTS,
         backoff: { type: 'exponential', delay: 30_000 },
         // Se borran al terminar: si no, el jobId fijo impediría volver a encolarla.

@@ -44,32 +44,49 @@ InstrumentKey = Literal[
 ]
 
 
-# Pistas que se guardan para el mezclador ("drums" = percusión sin la campana).
-STEM_KEYS = ("vocals", "coros", "requinto", "segunda", "bass", "drums", "campana", "keys", "other")
-StemKey = Literal["vocals", "coros", "requinto", "segunda", "bass", "drums", "campana", "keys", "other"]
+# Modo de separación:
+# - basic: las 6 pistas de Demucs tal cual (voz con coros, guitarras juntas, percusión
+#   con campana), sin el modelo karaoke ni las derivadas. ~3 veces más rápido.
+# - deep: además coros vs. voz principal, requinto/segunda y campana.
+SeparationMode = Literal["basic", "deep"]
+
+# Lo que mide el modo básico (sin coros, requinto, segunda ni campana).
+BASIC_INSTRUMENT_KEYS = ("vocals", "guitar", "bass", "guira", "bongo", "conga", "tumba", "keys", "other")
+
+# Pistas que se guardan para el mezclador, según el modo. En el profundo "drums" es la
+# percusión sin la campana; en el básico, toda la percusión, y "guitar" todas las guitarras.
+DEEP_STEM_KEYS = ("vocals", "coros", "requinto", "segunda", "bass", "drums", "campana", "keys", "other")
+BASIC_STEM_KEYS = ("vocals", "guitar", "bass", "drums", "keys", "other")
+STEM_KEYS_BY_MODE = {"basic": BASIC_STEM_KEYS, "deep": DEEP_STEM_KEYS}
+StemKey = Literal["vocals", "coros", "guitar", "requinto", "segunda", "bass", "drums", "campana", "keys", "other"]
 
 
 class StemsRequest(BaseModel):
     audioUrl: str = Field(min_length=1)
+    mode: SeparationMode = "deep"
     # URL firmada (PUT, Content-Type audio/mp4) donde subir cada pista. Deben venir todas.
     uploads: dict[StemKey, str]
 
 
 class StemsResponse(BaseModel):
     analyzerVersion: str
+    mode: SeparationMode
     durationMs: int = Field(ge=0)
     stems: list[StemKey]
 
 
 class InstrumentsRequest(BaseModel):
     audioUrl: str = Field(min_length=1)
+    mode: SeparationMode = "deep"
 
 
 class InstrumentsResponse(BaseModel):
     analyzerVersion: str
+    mode: SeparationMode
     durationMs: int = Field(ge=0)
     stepMs: int = Field(gt=0)
-    # Actividad 0..1 de cada instrumento, un valor cada `stepMs`.
+    # Actividad 0..1 de cada instrumento, un valor cada `stepMs` (el modo básico trae
+    # solo BASIC_INSTRUMENT_KEYS).
     tracks: dict[InstrumentKey, list[float]]
 
 

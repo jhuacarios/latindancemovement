@@ -13,6 +13,9 @@ Demucs no conoce los instrumentos de la bachata, así que varios se derivan:
 - "piano" de Demucs → teclados (en bachata casi nunca es piano: teclados, sintes).
 Las derivadas son aproximaciones: sirven para saber cuándo suena cada uno, no
 para aislarlos perfecto.
+
+Modo básico: solo Demucs (con menos solapamiento entre segmentos), sin karaoke ni
+campana ni requinto/segunda: ~3 veces más rápido. La percusión igual se mide por bandas.
 """
 
 import os
@@ -26,12 +29,14 @@ import soundfile as sf
 from . import ANALYZER_VERSION
 from .audio import MAX_DURATION_SEC, SAMPLE_RATE, AudioError
 from .karaoke import split_vocals
-from .schemas import INSTRUMENT_KEYS, InstrumentsResponse
+from .schemas import BASIC_INSTRUMENT_KEYS, INSTRUMENT_KEYS, InstrumentsResponse, SeparationMode
 
 STEP_MS = 250
 HOP = 512
 N_FFT = 2048
 DEMUCS_MODEL = "htdemucs_6s"
+# Solapamiento entre los segmentos de Demucs: menos = más rápido (y bordes algo peores).
+OVERLAP = {"deep": 0.25, "basic": 0.1}
 
 # Bandas (Hz) de la pista de percusión (sin la campana).
 PERCUSSION_BANDS = {
@@ -67,7 +72,7 @@ def _model():
     return model
 
 
-def separate_stereo(stereo: np.ndarray, sr: int) -> dict[str, np.ndarray]:
+def separate_stereo(stereo: np.ndarray, sr: int, overlap: float = OVERLAP["deep"]) -> dict[str, np.ndarray]:
     """Separa audio estéreo (2, n) en las pistas de Demucs, cada una (2, n)."""
     import torch
     from demucs.apply import apply_model
@@ -80,7 +85,7 @@ def separate_stereo(stereo: np.ndarray, sr: int) -> dict[str, np.ndarray]:
     mean, std = ref.mean(), ref.std() + 1e-8
     with torch.no_grad():
         out = apply_model(
-            model, ((wav - mean) / std)[None], device="cpu", shifts=0, split=True, overlap=0.25, progress=False
+            model, ((wav - mean) / std)[None], device="cpu", shifts=0, split=True, overlap=overlap, progress=False
         )[0]
     out = out * std + mean
     return {name: out[i].numpy() for i, name in enumerate(model.sources)}
@@ -196,12 +201,16 @@ def _normalize(values: np.ndarray, reference: float, absent_db: float) -> np.nda
     return np.clip(values / typical, 0.0, 1.0)
 
 
-def activity(y: np.ndarray, sr: int, stems: dict[str, np.ndarray]) -> dict[str, list[float]]:
+def activity(
+    y: np.ndarray, sr: int, stems: dict[str, np.ndarray], mode: SeparationMode = "deep"
+) -> dict[str, list[float]]:
     """Actividad 0..1 por instrumento, cada STEP_MS, a partir de las pistas (mono).
 
     `stems` trae las pistas de Demucs con "vocals" = voz principal y, si se
-    separaron, "coros".
+    separaron, "coros". En modo básico no se derivan coros, requinto/segunda ni
+    campana (y "vocals" son todas las voces).
     """
+    deep = mode == "deep"
     n_steps = max(1, int(np.ceil(len(y) / sr * 1000 / STEP_MS)))
     mix_ref = float(np.percentile(_rms(y, sr, n_steps), 95))
 
@@ -220,7 +229,7 @@ def activity(y: np.ndarray, sr: int, stems: dict[str, np.ndarray]) -> dict[str, 
 
     # Guitarra → requinto / segunda (solo si hay guitarra).
     guitar = stem("guitar")
-    if out["guitar"].any():
+    if deep and out["guitar"].any():
         req, seg, _ = requinto_share(guitar, sr)  # mismo paso que la STFT (HOP a `sr`)
         req, seg = _bin_by_time(req, sr, n_steps), _bin_by_time(seg, sr, n_steps)
         both = float(np.percentile(np.maximum(req, seg), 95))
@@ -233,7 +242,7 @@ def activity(y: np.ndarray, sr: int, stems: dict[str, np.ndarray]) -> dict[str, 
     drums = stem("drums")
     drums_present = _normalize(_rms(drums, sr, n_steps), mix_ref, ABSENT_BELOW_MIX_DB).any()
     mag = np.abs(_stft(drums))
-    cmask = campana_mask(drums, sr) if drums_present else np.zeros_like(mag)
+    cmask = campana_mask(drums, sr) if deep and drums_present else np.zeros_like(mag)
     _, full = _bands(mag, sr, n_steps)
     full_ref = float(np.percentile(full, 95))
     bands, _ = _bands(mag * (1.0 - cmask), sr, n_steps)
@@ -244,18 +253,22 @@ def activity(y: np.ndarray, sr: int, stems: dict[str, np.ndarray]) -> dict[str, 
     for key, values in bands.items():
         out[key] = _normalize(values, full_ref, ABSENT_BAND_BELOW_DB) if drums_present else np.zeros(n_steps)
 
-    return {k: [round(float(v), 3) for v in out[k]] for k in INSTRUMENT_KEYS}
+    keys = INSTRUMENT_KEYS if deep else BASIC_INSTRUMENT_KEYS
+    return {k: [round(float(v), 3) for v in out[k]] for k in keys}
 
 
-def separate_all(stereo: np.ndarray, sr: int) -> dict[str, np.ndarray]:
-    """Demucs + coros: pistas estéreo (2, n) con "vocals" = voz principal y "coros"."""
-    stems = separate_stereo(stereo, sr)
+def separate_all(stereo: np.ndarray, sr: int, mode: SeparationMode = "deep") -> dict[str, np.ndarray]:
+    """Pistas estéreo (2, n) de Demucs. En modo profundo, "vocals" = voz principal y
+    se suman los "coros" (modelo karaoke); en el básico, "vocals" son todas las voces."""
+    stems = separate_stereo(stereo, sr, OVERLAP[mode])
+    if mode == "basic":
+        return stems
     lead, coros = split_vocals(stems["vocals"], sr)
     stems["vocals"], stems["coros"] = lead, coros
     return stems
 
 
-def analyze_instruments(wav: Path) -> InstrumentsResponse:
+def analyze_instruments(wav: Path, mode: SeparationMode = "deep") -> InstrumentsResponse:
     audio, sr = sf.read(str(wav), dtype="float32", always_2d=True)  # (n, canales)
     # Estéreo de verdad: el modelo karaoke separa los coros por su imagen estéreo.
     stereo = audio.T if audio.shape[1] == 2 else np.repeat(audio.T[:1], 2, axis=0)
@@ -267,10 +280,11 @@ def analyze_instruments(wav: Path) -> InstrumentsResponse:
     if duration_sec > MAX_DURATION_SEC:
         raise AudioError("El audio supera la duración máxima de 10 minutos.")
 
-    stems = separate_all(np.ascontiguousarray(stereo), sr)
+    stems = separate_all(np.ascontiguousarray(stereo), sr, mode)
     return InstrumentsResponse(
         analyzerVersion=ANALYZER_VERSION,
+        mode=mode,
         durationMs=round(duration_sec * 1000),
         stepMs=STEP_MS,
-        tracks=activity(y, sr, {name: x.mean(0) for name, x in stems.items()}),
+        tracks=activity(y, sr, {name: x.mean(0) for name, x in stems.items()}, mode),
     )

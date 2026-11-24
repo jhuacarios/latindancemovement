@@ -10,7 +10,13 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { DANCE_STYLES, STUDIO_AUDIO_MIME_TYPES, type DanceStyle } from '@baile-latino/types';
+import {
+  DANCE_STYLES,
+  SEPARATION_MODES,
+  STUDIO_AUDIO_MIME_TYPES,
+  type DanceStyle,
+  type SeparationMode,
+} from '@baile-latino/types';
 
 export class CreateUploadDto {
   @IsString()
@@ -38,6 +44,13 @@ export class CreateUploadDto {
   @IsBoolean()
   @Equals(true, { message: 'Debes declarar que tienes derecho a usar este archivo.' })
   rightsAccepted!: boolean;
+}
+
+export class RequestStemsDto {
+  /** BASIC = rápida (6 pistas), DEEP = completa (por defecto). */
+  @IsOptional()
+  @IsIn(SEPARATION_MODES)
+  mode?: SeparationMode;
 }
 
 export class SetFirstBeatDto {
