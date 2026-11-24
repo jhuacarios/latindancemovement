@@ -43,7 +43,15 @@
         {
           "locationWhenInUsePermission": "Nectason usa tu ubicación para mostrarte primero los sociales, eventos y academias de tu región."
         }
-      ]
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -255,6 +255,21 @@ export default function ProfileScreen() {
             </View>
           </View>
 
+          <Pressable
+            onPress={() => router.push('/studio')}
+            style={({ pressed }) => [ui.card, styles.studio, pressed && { opacity: 0.8 }]}
+            accessibilityRole="button"
+          >
+            <Text style={{ fontSize: 30 }}>🎚️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={ui.h2}>Estudio</Text>
+              <Text style={ui.small}>
+                Analiza tus bachatas y salsas: el 1 de cada frase, secciones, instrumentos y mezclador.
+              </Text>
+            </View>
+            <Text style={{ color: colors.clave, fontSize: 20 }}>›</Text>
+          </Pressable>
+
           <MyClasses />
 
           <PersonalData user={user} />
@@ -276,6 +291,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  studio: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   months: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   classRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
