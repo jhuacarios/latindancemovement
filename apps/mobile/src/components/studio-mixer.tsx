@@ -4,13 +4,14 @@ import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SeparationMode, SongStudy, StemKey, StemUrls } from '@baile-latino/types';
 import { Button } from '@/components/button';
-import { studioApi } from '@/lib/studio';
+import { downloadStems, studioApi } from '@/lib/studio';
 import { colors, radius, space, ui } from '@/lib/theme';
 
 /**
  * Mezclador en el teléfono: cada pista separada suena en su propio reproductor y
  * sigue al reproductor principal (el reloj, que queda en silencio): mismo play,
- * pausa, velocidad y posición, corrigiendo si una pista se desfasa.
+ * pausa, velocidad y posición, corrigiendo si una pista se desfasa. Las pistas se
+ * bajan antes al teléfono para que la red no las corte ni las atrase.
  *
  * A diferencia de la web no hay filtros por banda: la percusión es un solo canal
  * (y la campana aparte en la separación completa).
@@ -83,12 +84,25 @@ const LEVELS = [0, 0.25, 0.5, 0.75, 1];
 const MAX_DRIFT_SEC = 0.12;
 const SYNC_EVERY_MS = 250;
 /** Tras corregir una pista, se le da este margen antes de volver a medirla. */
-const RESEEK_COOLDOWN_MS = 1200;
+const RESEEK_COOLDOWN_MS = 1500;
+/** Mediciones seguidas fuera de rango antes de corregir (una lectura suelta no basta). */
+const DRIFT_STRIKES = 2;
+/** Si el principal se mueve más que esto respecto de lo esperado, es un salto (tocar la línea, repetir). */
+const JUMP_SEC = 0.3;
+
+/**
+ * Salto exacto. En iOS, sin tolerancia explícita AVPlayer cae "cerca" (a veces
+ * cientos de ms en un m4a): la pista nunca quedaba en sincronía y se corregía
+ * una y otra vez, cortando el sonido cada ~1 s.
+ */
+export const seekExact = (p: AudioPlayer, sec: number) => p.seekTo(Math.max(0, sec), 0, 0);
 
 /** Reproductores de las pistas, sincronizados con `master`. */
-function useStemPlayers(master: AudioPlayer, urls: StemUrls | undefined, active: boolean) {
+function useStemPlayers(master: AudioPlayer, urls: StemUrls | undefined, active: boolean, rate: number) {
   const playersRef = useRef<Partial<Record<StemKey, AudioPlayer>>>({});
   const [ready, setReady] = useState(false);
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
 
   useEffect(() => {
     if (!active || !urls) return;
@@ -99,27 +113,61 @@ function useStemPlayers(master: AudioPlayer, urls: StemUrls | undefined, active:
     playersRef.current = players;
     const list = Object.values(players) as AudioPlayer[];
     const cooldown = new Map<AudioPlayer, number>();
+    const strikes = new Map<AudioPlayer, number>();
+    const seeking = new Set<AudioPlayer>();
+    // Lo que tarda en hacerse efectivo un salto: se salta "adelantado" esa cantidad.
+    const lead = new Map<AudioPlayer, number>();
     let isReady = false;
+    let lastMaster = master.currentTime;
+    let lastTick = Date.now();
     setReady(false);
     master.muted = true;
 
+    const resync = (p: AudioPlayer) => {
+      if (seeking.has(p)) return;
+      seeking.add(p);
+      strikes.set(p, 0);
+      const playing = master.playing;
+      const ahead = playing ? (lead.get(p) ?? 0.08) * rateRef.current : 0;
+      const t0 = Date.now();
+      void seekExact(p, master.currentTime + ahead).finally(() => {
+        seeking.delete(p);
+        if (playing) lead.set(p, Math.min(0.4, Math.max(0, (Date.now() - t0) / 1000)));
+        cooldown.set(p, Date.now() + RESEEK_COOLDOWN_MS);
+      });
+    };
+
     const timer = setInterval(() => {
+      const now = Date.now();
+      const masterNow = master.currentTime;
+      const expected = lastMaster + (master.playing ? ((now - lastTick) / 1000) * rateRef.current : 0);
+      const jumped = Math.abs(masterNow - expected) > JUMP_SEC;
+      lastMaster = masterNow;
+      lastTick = now;
+
       if (!isReady) {
         if (!list.every((p) => p.isLoaded)) return;
         isReady = true;
         setReady(true);
-        for (const p of list) void p.seekTo(master.currentTime);
+        for (const p of list) {
+          p.setPlaybackRate(rateRef.current, 'high');
+          resync(p);
+        }
       }
-      const now = Date.now();
       for (const p of list) {
-        if (p.playbackRate !== master.playbackRate) p.setPlaybackRate(master.playbackRate, 'high');
         if (master.playing && !p.playing) p.play();
         if (!master.playing && p.playing) p.pause();
-        if ((cooldown.get(p) ?? 0) > now) continue;
-        if (Math.abs(p.currentTime - master.currentTime) > MAX_DRIFT_SEC) {
-          void p.seekTo(master.currentTime);
-          cooldown.set(p, now + RESEEK_COOLDOWN_MS);
+        if (seeking.has(p)) continue;
+        if (jumped) {
+          resync(p);
+          continue;
         }
+        if ((cooldown.get(p) ?? 0) > now) continue;
+        if (Math.abs(p.currentTime - masterNow) > MAX_DRIFT_SEC) {
+          const n = (strikes.get(p) ?? 0) + 1;
+          strikes.set(p, n);
+          if (n >= DRIFT_STRIKES) resync(p);
+        } else strikes.set(p, 0);
       }
     }, SYNC_EVERY_MS);
 
@@ -135,17 +183,27 @@ function useStemPlayers(master: AudioPlayer, urls: StemUrls | undefined, active:
     };
   }, [active, urls, master]);
 
+  // La velocidad se aplica solo cuando cambia: en iOS, cada llamada reinicia el
+  // algoritmo de tono de la pista (y se oye un corte).
+  useEffect(() => {
+    if (!ready) return;
+    for (const p of Object.values(playersRef.current)) p?.setPlaybackRate(rate, 'high');
+  }, [ready, rate]);
+
   return { playersRef, ready };
 }
 
 export function StudioMixer({
   master,
+  rate,
   study,
   onRequestStems,
   requesting,
   requestError,
 }: {
   master: AudioPlayer;
+  /** Velocidad elegida en el reproductor (las pistas la siguen). */
+  rate: number;
   study: SongStudy;
   onRequestStems: (mode: SeparationMode) => void;
   requesting: boolean;
@@ -173,13 +231,24 @@ export function StudioMixer({
     enabled: enabled && status === 'DONE',
     staleTime: 50 * 60 * 1000,
   });
+  // Se bajan al teléfono (si ya están en el caché, no se vuelven a bajar).
+  const [downloaded, setDownloaded] = useState<{ done: number; total: number } | null>(null);
+  const files = useQuery({
+    queryKey: ['studio', 'stem-files', study.id, mode],
+    queryFn: () => downloadStems(study.id, mode, urls.data!, (done, total) => setDownloaded({ done, total })),
+    enabled: enabled && !!urls.data,
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+    retry: 1,
+  });
   useEffect(() => {
-    if (!urls.isError) return;
+    if (!urls.isError && !files.isError) return;
     setEnabled(false);
     void qc.invalidateQueries({ queryKey: ['studio', 'audio-file', study.id] });
-  }, [urls.isError, qc, study.id]);
+    void qc.removeQueries({ queryKey: ['studio', 'stem-urls', study.id] });
+  }, [urls.isError, files.isError, qc, study.id]);
 
-  const { playersRef, ready } = useStemPlayers(master, urls.data, enabled && status === 'DONE');
+  const { playersRef, ready } = useStemPlayers(master, files.data, enabled && status === 'DONE', rate);
 
   // Volumen de cada pista: nivel × silencio × solo.
   useEffect(() => {
@@ -262,11 +331,16 @@ export function StudioMixer({
         </View>
       )}
       {requestError ? <Text style={[ui.small, { color: colors.bachata }]}>{requestError}</Text> : null}
+      {files.isError && <Text style={ui.error}>No se pudieron bajar las pistas al teléfono. Revisa la conexión.</Text>}
 
       {enabled && !ready && (
         <View style={styles.rowCenter}>
           <ActivityIndicator color={colors.clave} />
-          <Text style={ui.muted}>Cargando pistas…</Text>
+          <Text style={ui.muted}>
+            {!files.data && downloaded && downloaded.total > 0
+              ? `Bajando las pistas al teléfono… ${downloaded.done} de ${downloaded.total}`
+              : 'Cargando pistas…'}
+          </Text>
         </View>
       )}
 

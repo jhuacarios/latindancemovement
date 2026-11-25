@@ -1,4 +1,4 @@
-import { File, UploadTask, UploadType } from 'expo-file-system';
+import { Directory, File, Paths, UploadTask, UploadType } from 'expo-file-system';
 import type * as DocumentPicker from 'expo-document-picker';
 import {
   STUDIO_AUDIO_MIME_TYPES,
@@ -6,6 +6,7 @@ import {
   type DanceStyle,
   type SeparationMode,
   type SongStudy,
+  type StemKey,
   type StemUrls,
   type StudioUploadTicket,
 } from '@baile-latino/types';
@@ -111,4 +112,33 @@ export function indexAt(sortedMs: number[], ms: number): number {
     } else hi = mid - 1;
   }
   return ans;
+}
+
+/**
+ * Baja las pistas del mezclador al caché del teléfono (una vez por canción y modo)
+ * y devuelve sus rutas locales. Reproducir desde el teléfono evita que una pista
+ * se corte o se atrase esperando a la red. iOS puede vaciar el caché si falta espacio;
+ * en ese caso se vuelven a bajar.
+ */
+export async function downloadStems(
+  audioFileId: string,
+  mode: SeparationMode,
+  urls: StemUrls,
+  onProgress?: (done: number, total: number) => void,
+): Promise<StemUrls> {
+  const dir = new Directory(Paths.cache, 'studio-stems', `${audioFileId}-${mode}`);
+  dir.create({ intermediates: true, idempotent: true });
+  const entries = Object.entries(urls).filter((e): e is [StemKey, string] => !!e[1]);
+  let done = 0;
+  onProgress?.(0, entries.length);
+  const local: StemUrls = {};
+  await Promise.all(
+    entries.map(async ([key, url]) => {
+      const file = new File(dir, `${key}.m4a`);
+      if (!file.exists || file.size === 0) await File.downloadFileAsync(url, file, { idempotent: true });
+      local[key] = file.uri;
+      onProgress?.(++done, entries.length);
+    }),
+  );
+  return local;
 }

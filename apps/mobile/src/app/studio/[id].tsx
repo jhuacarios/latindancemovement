@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { countOfBeat, type SeparationMode, type SongStudy } from '@baile-latino/types';
 import { Button } from '@/components/button';
-import { StudioMixer } from '@/components/studio-mixer';
+import { StudioMixer, seekExact } from '@/components/studio-mixer';
 import { SECTION_LABEL, StudioTimeline } from '@/components/studio-timeline';
 import { ApiError } from '@/lib/api';
 import { IN_PROGRESS, SEPARATION_IN_PROGRESS, formatDuration, indexAt, studioApi } from '@/lib/studio';
@@ -143,11 +143,17 @@ function Player({
   const phraseMs = useMemo(() => phraseStarts.map((i) => beats[i]), [beats, phraseStarts]);
 
   // Repetición: al pasar el final del tramo vuelve al inicio.
+  // (un salto a la vez: el estado llega cada 50 ms y el salto exacto tarda un poco más)
+  const loopSeeking = useRef(false);
   useEffect(() => {
-    if (loop && status.playing && currentMs >= loop.end) void player.seekTo(loop.start / 1000);
+    if (!loop || !status.playing || currentMs < loop.end || loopSeeking.current) return;
+    loopSeeking.current = true;
+    void seekExact(player, loop.start / 1000).finally(() => {
+      loopSeeking.current = false;
+    });
   }, [loop, currentMs, status.playing, player]);
 
-  const seek = useCallback((ms: number) => void player.seekTo(ms / 1000), [player]);
+  const seek = useCallback((ms: number) => void seekExact(player, ms / 1000), [player]);
 
   const beatIdx = indexAt(beats, currentMs);
   const count = beatIdx >= 0 ? countOfBeat(beatIdx, phraseStarts[0] ?? 0) : null;
@@ -285,6 +291,7 @@ function Player({
 
       <StudioMixer
         master={player}
+        rate={rate}
         study={study}
         onRequestStems={onRequestStems}
         requesting={requestingStems}

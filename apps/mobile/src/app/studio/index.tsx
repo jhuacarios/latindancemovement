@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AudioFileStatus, AudioFileSummary, DanceStyle } from '@baile-latino/types';
@@ -25,7 +25,8 @@ const DESCRIPTION: Record<string, string> = {
 
 /** Estudio → Analizador: elegir estilo, subir una canción y la lista de "Mis canciones". */
 export default function StudioLibraryScreen() {
-  const [style, setStyle] = useState<DanceStyle>('BACHATA');
+  const params = useLocalSearchParams<{ style?: string }>();
+  const [style, setStyle] = useState<DanceStyle>(params.style === 'SALSA' ? 'SALSA' : 'BACHATA');
   const qc = useQueryClient();
   const queryKey = ['studio', 'audio-files', style];
   const list = useQuery({
