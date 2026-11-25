@@ -438,6 +438,29 @@ describe('Estudio (e2e)', () => {
     expect(otherView.json<SongStudy>().firstBeatOffsetMs).toBe(400);
   });
 
+  it('"Marcar el 1 acá": redondea al 1 o al 5, corre desde ahí y es compartido con quien suba la canción', async () => {
+    const mine = await uploadAndAnalyze(owner().token);
+    const theirs = await uploadAndAnalyze(other().token, 'misma-cancion-2.mp3');
+    // Beats cada 500 ms desde 400; frases en 0, 8, 16… Tocar en el 6 (beat 13) → al 5 (beat 12 = 6400 ms).
+    const res = await call('POST', `/audio-files/${mine.id}/phrase-changes`, owner().token, { timeMs: 6900 });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<SongStudy>();
+    expect(body.phraseChangesMs).toEqual([6400]);
+    expect(body.phraseStartIndexes.slice(0, 4)).toEqual([0, 8, 12, 20]);
+
+    // Tocar en el 8 de una frase (ya cae en el 1 siguiente): no cambia nada.
+    const same = await call('POST', `/audio-files/${mine.id}/phrase-changes`, owner().token, { timeMs: 13400 });
+    expect(same.json<SongStudy>().phraseChangesMs).toEqual([6400]);
+
+    // El otro usuario, con la misma grabación, ya lo ve corregido y lo puede quitar.
+    const otherView = await call('GET', `/audio-files/${theirs.id}`, other().token);
+    expect(otherView.json<SongStudy>().phraseChangesMs).toEqual([6400]);
+    const removed = await call('DELETE', `/audio-files/${theirs.id}/phrase-changes/6400`, other().token);
+    expect(removed.statusCode).toBe(200);
+    expect(removed.json<SongStudy>().phraseStartIndexes.slice(0, 3)).toEqual([0, 8, 16]);
+    expect((await call('DELETE', `/audio-files/${theirs.id}/phrase-changes/6400`, other().token)).statusCode).toBe(404);
+  });
+
   it('borra todo: audio en el storage, archivo y la grabación cuando queda sin archivos', async () => {
     const before = await prisma.recordingAnalysis.count();
     analyzer.next = () => analyzerResult({ fingerprint: fingerprint.map((v) => ~v >>> 0) }); // otra canción

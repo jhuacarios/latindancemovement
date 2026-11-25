@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin, { type Region } from 'wavesurfer.js/dist/plugins/regions.esm.js';
-import { countOfBeat, type SeparationMode, type SongEnergy, type SongStudy } from '@baile-latino/types';
+import { countInPhrases, type SeparationMode, type SongEnergy, type SongStudy } from '@baile-latino/types';
+import { formatDuration } from '@/lib/studio';
 import { Button } from './ui';
 import { clsx } from './clsx';
 import { InstrumentLanes, SECTION_LABEL, SectionBar } from './studio-instruments';
@@ -60,6 +61,10 @@ export function StudioPlayer({
   audioUrl,
   onSetFirstBeat,
   savingFirstBeat,
+  onMarkOne,
+  markingOne,
+  onRemoveChange,
+  removingChange,
   onRequestStems,
   requestingStems,
   requestStemsError,
@@ -69,6 +74,11 @@ export function StudioPlayer({
   /** null = volver al "1" automático. */
   onSetFirstBeat: (timeMs: number | null) => void;
   savingFirstBeat: boolean;
+  /** "Marcar el 1 acá": se redondea al 1 o al 5 y desde ahí la cuenta parte en 1. */
+  onMarkOne: (timeMs: number) => void;
+  markingOne: boolean;
+  onRemoveChange: (timeMs: number) => void;
+  removingChange: boolean;
   onRequestStems: (mode: SeparationMode) => void;
   requestingStems: boolean;
   requestStemsError: string | null;
@@ -90,7 +100,6 @@ export function StudioPlayer({
 
   const beats = study.beatsMs;
   const phraseStarts = study.phraseStartIndexes;
-  const anchor = phraseStarts[0] ?? 0;
 
   const setLoop = useCallback((next: { start: number; end: number } | null) => {
     loopRef.current = next;
@@ -199,7 +208,7 @@ export function StudioPlayer({
 
   // Posición musical actual.
   const beatIdx = beatAt(beats, currentMs);
-  const count = beatIdx >= 0 ? countOfBeat(beatIdx, anchor) : null;
+  const count = countInPhrases(beatIdx, phraseStarts);
   const phraseIdx = beatAt(
     phraseStarts.map((i) => beats[i]),
     currentMs,
@@ -399,18 +408,39 @@ export function StudioPlayer({
       {/* Corregir el "1" */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-800 px-4 py-3 text-sm">
         <span className="text-neutral-300">
-          ¿El 1 está corrido? Pon la canción en el 1 real y toca:
+          ¿Se corrió el tiempo? Toca en el 1 real: se ajusta al 1 o al 5 más cercano y desde ahí la cuenta
+          parte en 1 (se comparte con quien tenga esta canción).
         </span>
         <Button
           size="sm"
-          onClick={() => onSetFirstBeat(Math.round((wsRef.current?.getCurrentTime() ?? 0) * 1000))}
-          disabled={!ready || savingFirstBeat}
+          onClick={() => onMarkOne(Math.round((wsRef.current?.getCurrentTime() ?? 0) * 1000))}
+          disabled={!ready || markingOne || beats.length === 0}
         >
           Marcar el 1 acá
         </Button>
+        {study.phraseChangesMs.map((ms) => (
+          <span key={ms} className="flex items-center gap-1 rounded-full border border-amber-500/40 px-2 py-0.5">
+            <button
+              type="button"
+              className="text-amber-300 hover:underline"
+              onClick={() => wsRef.current?.setTime(ms / 1000)}
+            >
+              ⤷ {formatDuration(ms)}
+            </button>
+            <button
+              type="button"
+              className="text-neutral-500 hover:text-neutral-200"
+              onClick={() => onRemoveChange(ms)}
+              disabled={removingChange}
+              aria-label={`Quitar el cambio de ${formatDuration(ms)}`}
+            >
+              ✕
+            </button>
+          </span>
+        ))}
         {study.firstBeatCorrected && (
           <Button size="sm" variant="ghost" onClick={() => onSetFirstBeat(null)} disabled={savingFirstBeat}>
-            Volver al automático
+            Volver al 1 automático del inicio
           </Button>
         )}
       </div>

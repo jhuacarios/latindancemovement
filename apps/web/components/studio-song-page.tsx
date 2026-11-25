@@ -1,9 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SeparationMode } from '@baile-latino/types';
+import type { SeparationMode, SongStudy } from '@baile-latino/types';
 import { ApiError } from '@/lib/api';
 import { INSTRUMENTS_IN_PROGRESS, IN_PROGRESS, formatDuration, studioApi } from '@/lib/studio';
 import { Button, Card, Spinner } from '@/components/ui';
@@ -41,6 +42,26 @@ export function StudioSongPage({ backHref, backLabel }: { backHref: string; back
 
   const firstBeat = useMutation({
     mutationFn: (timeMs: number | null) => studioApi.setFirstBeat(id, timeMs),
+    onSuccess: (updated) => qc.setQueryData(['studio', 'audio-file', id], updated),
+  });
+
+  const [notice, setNotice] = useState<string | null>(null);
+  const markOne = useMutation({
+    mutationFn: (timeMs: number) => studioApi.addPhraseChange(id, timeMs),
+    onMutate: () => setNotice(null),
+    onSuccess: (updated) => {
+      const before = qc.getQueryData<SongStudy>(['studio', 'audio-file', id])?.phraseChangesMs ?? [];
+      setNotice(
+        updated.phraseChangesMs.join() === before.join()
+          ? 'Ya caía en el 1: no se corrió nada.'
+          : 'Listo: desde ahí la cuenta parte en 1 (para todos los que tengan esta canción).',
+      );
+      qc.setQueryData(['studio', 'audio-file', id], updated);
+    },
+  });
+  const removeChange = useMutation({
+    mutationFn: (timeMs: number) => studioApi.removePhraseChange(id, timeMs),
+    onMutate: () => setNotice(null),
     onSuccess: (updated) => qc.setQueryData(['studio', 'audio-file', id], updated),
   });
 
@@ -86,6 +107,14 @@ export function StudioSongPage({ backHref, backLabel }: { backHref: string; back
       )}
       {s && IN_PROGRESS.has(s.status) && <Spinner label="Analizando la canción… (menos de un minuto)" />}
       {s?.status === 'ERROR' && <Card className="text-sm text-red-300">{s.error}</Card>}
+      {[markOne.error, removeChange.error].map((e, i) =>
+        e ? (
+          <p key={i} className="text-sm text-red-300">
+            {e instanceof ApiError ? e.message : 'No se pudo guardar el cambio de tiempo.'}
+          </p>
+        ) : null,
+      )}
+      {notice && <p className="text-sm text-emerald-300">{notice}</p>}
       {firstBeat.isError && (
         <p className="text-sm text-red-300">
           {firstBeat.error instanceof ApiError ? firstBeat.error.message : 'No se pudo guardar el 1.'}
@@ -98,6 +127,10 @@ export function StudioSongPage({ backHref, backLabel }: { backHref: string; back
           audioUrl={audio.data.url}
           onSetFirstBeat={(t) => firstBeat.mutate(t)}
           savingFirstBeat={firstBeat.isPending}
+          onMarkOne={(t) => markOne.mutate(t)}
+          markingOne={markOne.isPending}
+          onRemoveChange={(t) => removeChange.mutate(t)}
+          removingChange={removeChange.isPending}
           onRequestStems={(mode) => stems.mutate(mode)}
           requestingStems={stems.isPending}
           requestStemsError={stems.error?.message ?? null}

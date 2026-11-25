@@ -1,10 +1,10 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/auth.types';
 import { StudioService } from './studio.service';
 import { StudioEnabledGuard } from './studio-enabled.guard';
-import { CreateUploadDto, ListAudioFilesQueryDto, RequestStemsDto, SetFirstBeatDto } from './dto/studio.dto';
+import { CreateUploadDto, ListAudioFilesQueryDto, PhraseChangeDto, RequestStemsDto, SetFirstBeatDto } from './dto/studio.dto';
 
 /**
  * Módulo Estudio: el usuario sube su audio y estudia la canción (grilla de
@@ -71,6 +71,22 @@ export class StudioController {
     @Body() dto: SetFirstBeatDto,
   ) {
     return this.studio.setFirstBeat(user, id, dto);
+  }
+
+  /** "Marcar el 1 acá": desde ese punto la cuenta de 8 vuelve a empezar (compartido). */
+  @Post('audio-files/:id/phrase-changes')
+  addPhraseChange(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: PhraseChangeDto) {
+    return this.studio.addPhraseChange(user, id, dto.timeMs);
+  }
+
+  /** Quita el cambio de tiempo que está en `timeMs`. */
+  @Delete('audio-files/:id/phrase-changes/:timeMs')
+  removePhraseChange(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('timeMs', ParseIntPipe) timeMs: number,
+  ) {
+    return this.studio.removePhraseChange(user, id, timeMs);
   }
 
   /** Borra el audio, su análisis y sus notas. */

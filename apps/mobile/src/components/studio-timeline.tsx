@@ -197,6 +197,7 @@ export function StudioTimeline({
   currentMs,
   energy,
   phraseMs,
+  changesMs = [],
   sections,
   markers,
   instruments,
@@ -208,6 +209,8 @@ export function StudioTimeline({
   currentMs: number;
   energy: SongEnergy | null;
   phraseMs: number[];
+  /** Cambios de tiempo ("desde acá el 1 es este"): se marcan en otro color. */
+  changesMs?: number[];
   sections: SongSectionDto[];
   markers: SongMarkerDto[];
   instruments: SongInstruments | null;
@@ -276,6 +279,9 @@ export function StudioTimeline({
         <View pointerEvents="none">
           <EnergyStrip energy={energy} durationMs={durationMs} width={width} height={56} phraseMs={phraseMs} />
         </View>
+        {changesMs.map((ms) => (
+          <View key={ms} pointerEvents="none" style={[styles.change, { left: pct(ms) }]} />
+        ))}
         {loop && (
           <View
             pointerEvents="none"
@@ -317,6 +323,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   loop: { position: 'absolute', top: 0, bottom: 0, backgroundColor: '#b6f0d02e' },
+  change: { position: 'absolute', top: 0, bottom: 0, width: 3, marginLeft: -1.5, backgroundColor: '#fbbf24' },
   cursor: { position: 'absolute', top: 0, bottom: 0, width: 2, marginLeft: -1, backgroundColor: colors.text },
   laneLabel: {
     position: 'absolute',

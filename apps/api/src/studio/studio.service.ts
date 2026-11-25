@@ -7,10 +7,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { AudioFile, RecordingAnalysis, SongMarker, SongSection } from '@prisma/client';
+import type { AudioFile, Prisma, RecordingAnalysis, SongMarker, SongSection } from '@prisma/client';
 import {
   nearestBeatIndex,
   phraseStartIndexes,
+  snapPhraseChange,
   type AnalysisStatus,
   type AudioFileStatus,
   type AudioFileSummary,
@@ -49,6 +50,25 @@ const FILE_FULL = {
   sections: { orderBy: { startMs: 'asc' } },
   markers: { orderBy: { timeMs: 'asc' } },
 } as const;
+
+/** Dos cambios de tiempo a menos de esto (ms) son el mismo. */
+const PHRASE_CHANGE_SAME_MS = 150;
+
+interface PhraseChange {
+  ms: number;
+  userId: string;
+  at: string;
+}
+
+/** Cambios de tiempo guardados en el análisis compartido (tolera datos viejos o dañados). */
+function phraseChangesOf(rec: Pick<RecordingAnalysis, 'phraseChanges'>): PhraseChange[] {
+  const raw = rec.phraseChanges;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (c): c is PhraseChange & Prisma.JsonObject =>
+      typeof c === 'object' && c !== null && typeof (c as Prisma.JsonObject).ms === 'number',
+  ).map((c) => ({ ms: c.ms, userId: String(c.userId ?? ''), at: String(c.at ?? '') }));
+}
 
 /** Reglas de secciones automáticas por estilo. */
 const SECTION_RULES: Record<string, typeof deriveBachataSections | undefined> = {
@@ -235,6 +255,47 @@ export class StudioService {
     return this.toStudy(updated);
   }
 
+  /**
+   * "Marcar el 1 acá": se redondea al 1 o al 5 más cercano de la cuenta actual y,
+   * si eso corre la cuenta, desde ahí vuelve a empezar. Se guarda en el análisis
+   * COMPARTIDO de la canción (lo ve cualquiera que la suba); gana el último.
+   */
+  async addPhraseChange(user: AuthUser, id: string, timeMs: number): Promise<SongStudy> {
+    const file = await this.ownedFull(user, id);
+    const rec = file.recording;
+    const beats = this.fileBeats(file);
+    if (!rec || beats.length === 0) throw new ConflictException('Este audio todavía no tiene análisis.');
+    const study = this.toStudy(file);
+    const target = snapPhraseChange(beats, study.phraseStartIndexes, timeMs);
+    if (target === null) return study; // ya caía en un 1: no hay nada que correr
+
+    const recMs = beats[target] - file.alignOffsetMs;
+    const changes = phraseChangesOf(rec).filter((c) => Math.abs(c.ms - recMs) > PHRASE_CHANGE_SAME_MS);
+    changes.push({ ms: recMs, userId: user.id, at: new Date().toISOString() });
+    changes.sort((a, b) => a.ms - b.ms);
+    await this.prisma.recordingAnalysis.update({
+      where: { id: rec.id },
+      data: { phraseChanges: changes as unknown as Prisma.InputJsonValue },
+    });
+    return this.toStudy(await this.ownedFull(user, id));
+  }
+
+  /** Quita un cambio de tiempo (el más cercano a `timeMs`, dentro de medio tiempo). */
+  async removePhraseChange(user: AuthUser, id: string, timeMs: number): Promise<SongStudy> {
+    const file = await this.ownedFull(user, id);
+    const rec = file.recording;
+    if (!rec) throw new ConflictException('Este audio todavía no tiene análisis.');
+    const recMs = timeMs - file.alignOffsetMs;
+    const changes = phraseChangesOf(rec);
+    const kept = changes.filter((c) => Math.abs(c.ms - recMs) > PHRASE_CHANGE_SAME_MS);
+    if (kept.length === changes.length) throw new NotFoundException('No hay un cambio de tiempo ahí.');
+    await this.prisma.recordingAnalysis.update({
+      where: { id: rec.id },
+      data: { phraseChanges: kept as unknown as Prisma.InputJsonValue },
+    });
+    return this.toStudy(await this.ownedFull(user, id));
+  }
+
   /** Borrado completo (Ley 21.719): audio en el storage, archivo, secciones, marcas y, si queda sola, la grabación. */
   async remove(user: AuthUser, id: string): Promise<{ id: string; deleted: true }> {
     const file = await this.owned(user, id);
@@ -314,7 +375,13 @@ export class StudioService {
     const autoFirst = rec?.firstBeatOffsetMs != null ? rec.firstBeatOffsetMs + align : null;
     const firstBeatOffsetMs = file.firstBeatOffsetMs ?? autoFirst;
     const energy = rec?.energy ? shiftEnergy(rec.energy as unknown as SongEnergy, align) : null;
-    const phraseStarts = phraseStartIndexes(beatsMs, firstBeatOffsetMs);
+    const end = file.durationMs ?? Infinity;
+    const phraseChangesMs = rec
+      ? phraseChangesOf(rec)
+          .map((c) => c.ms + align)
+          .filter((ms) => ms >= 0 && ms <= end)
+      : [];
+    const phraseStarts = phraseStartIndexes(beatsMs, firstBeatOffsetMs, phraseChangesMs);
 
     // Instrumentos: los estilos con reglas de secciones propias (bachata, salsa).
     const deriveSections = SECTION_RULES[file.style];
@@ -362,6 +429,7 @@ export class StudioService {
       downbeatsMs,
       firstBeatOffsetMs,
       firstBeatCorrected: file.firstBeatOffsetMs !== null,
+      phraseChangesMs,
       phraseStartIndexes: phraseStarts,
       energy,
       instrumentsStatus: usesInstruments ? (rec.instrumentsStatus as AnalysisStatus) : null,

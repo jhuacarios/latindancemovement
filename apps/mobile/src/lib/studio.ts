@@ -85,6 +85,11 @@ export const studioApi = {
   playbackUrl: (id: string) => api<{ url: string }>(`/studio/audio-files/${id}/url`),
   setFirstBeat: (id: string, timeMs: number | null) =>
     api<SongStudy>(`/studio/audio-files/${id}/first-beat`, { method: 'PATCH', body: { timeMs } }),
+  /** "Marcar el 1 acá" (se redondea al 1 o al 5; compartido con quien suba la canción). */
+  addPhraseChange: (id: string, timeMs: number) =>
+    api<SongStudy>(`/studio/audio-files/${id}/phrase-changes`, { method: 'POST', body: { timeMs } }),
+  removePhraseChange: (id: string, timeMs: number) =>
+    api<SongStudy>(`/studio/audio-files/${id}/phrase-changes/${timeMs}`, { method: 'DELETE' }),
   reanalyze: (id: string) => api<AudioFileSummary>(`/studio/audio-files/${id}/reanalyze`, { method: 'POST' }),
   requestStems: (id: string, mode: SeparationMode) =>
     api<SongStudy>(`/studio/audio-files/${id}/stems`, { method: 'POST', body: { mode } }),

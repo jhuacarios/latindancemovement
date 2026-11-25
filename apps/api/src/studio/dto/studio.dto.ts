@@ -61,6 +61,13 @@ export class SetFirstBeatDto {
   timeMs!: number | null;
 }
 
+export class PhraseChangeDto {
+  /** Momento donde el usuario toca "Marcar el 1 acá" (se redondea al 1 o al 5 más cercano). */
+  @IsInt()
+  @Min(0)
+  timeMs!: number;
+}
+
 export class ListAudioFilesQueryDto {
   @IsOptional()
   @IsIn(DANCE_STYLES)

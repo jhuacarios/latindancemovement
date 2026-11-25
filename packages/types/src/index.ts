@@ -1308,6 +1308,12 @@ export interface SongStudy extends AudioFileSummary {
   firstBeatOffsetMs: number | null;
   /** true si el "1" lo corrigió el usuario. */
   firstBeatCorrected: boolean;
+  /**
+   * Cambios de tiempo marcados con "Marcar el 1 acá" (ms, ordenados): desde cada
+   * uno la cuenta de 8 vuelve a empezar. Son del análisis compartido de la
+   * canción: los ve cualquiera que la suba.
+   */
+  phraseChangesMs: number[];
   /** Índice en `beatsMs` del "1" de cada frase de 8. */
   phraseStartIndexes: number[];
   energy: SongEnergy | null;

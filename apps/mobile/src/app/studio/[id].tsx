@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { countOfBeat, type SeparationMode, type SongStudy } from '@baile-latino/types';
+import { countInPhrases, type SeparationMode, type SongStudy } from '@baile-latino/types';
 import { Button } from '@/components/button';
 import { StudioMixer, seekExact } from '@/components/studio-mixer';
 import { SECTION_LABEL, StudioTimeline } from '@/components/studio-timeline';
@@ -48,6 +48,22 @@ export default function StudioSongScreen() {
     mutationFn: (timeMs: number | null) => studioApi.setFirstBeat(id, timeMs),
     onSuccess: (updated) => qc.setQueryData(key, updated),
   });
+  const [notice, setNotice] = useState<string | null>(null);
+  const markOne = useMutation({
+    mutationFn: (timeMs: number) => studioApi.addPhraseChange(id, timeMs),
+    onMutate: () => setNotice(null),
+    onSuccess: (updated) => {
+      const before = qc.getQueryData<SongStudy>(key)?.phraseChangesMs ?? [];
+      if (updated.phraseChangesMs.join() === before.join()) setNotice('Ya caía en el 1: no se corrió nada.');
+      else setNotice('Listo: desde ahí la cuenta parte en 1 (para todos los que tengan esta canción).');
+      qc.setQueryData(key, updated);
+    },
+  });
+  const removeChange = useMutation({
+    mutationFn: (timeMs: number) => studioApi.removePhraseChange(id, timeMs),
+    onMutate: () => setNotice(null),
+    onSuccess: (updated) => qc.setQueryData(key, updated),
+  });
   const stems = useMutation({
     mutationFn: (mode: SeparationMode) => studioApi.requestStems(id, mode),
     onSuccess: (updated) => qc.setQueryData(key, updated),
@@ -86,6 +102,14 @@ export default function StudioSongScreen() {
           </View>
         )}
         {s?.status === 'ERROR' && <Text style={ui.error}>{s.error}</Text>}
+        {[markOne.error, removeChange.error].map((e, i) =>
+          e ? (
+            <Text key={i} style={ui.error}>
+              {e instanceof ApiError ? e.message : 'No se pudo guardar el cambio de tiempo.'}
+            </Text>
+          ) : null,
+        )}
+        {notice ? <Text style={[ui.small, { color: colors.nectar }]}>{notice}</Text> : null}
         {firstBeat.isError && (
           <Text style={ui.error}>{firstBeat.error instanceof ApiError ? firstBeat.error.message : 'No se pudo guardar el 1.'}</Text>
         )}
@@ -95,6 +119,10 @@ export default function StudioSongScreen() {
             audioUrl={audio.data.url}
             onSetFirstBeat={(t) => firstBeat.mutate(t)}
             savingFirstBeat={firstBeat.isPending}
+            onMarkOne={(t) => markOne.mutate(t)}
+            markingOne={markOne.isPending}
+            onRemoveChange={(t) => removeChange.mutate(t)}
+            removingChange={removeChange.isPending}
             onRequestStems={(m) => stems.mutate(m)}
             requestingStems={stems.isPending}
             requestStemsError={stems.error instanceof Error ? stems.error.message : null}
@@ -110,6 +138,10 @@ function Player({
   audioUrl,
   onSetFirstBeat,
   savingFirstBeat,
+  onMarkOne,
+  markingOne,
+  onRemoveChange,
+  removingChange,
   onRequestStems,
   requestingStems,
   requestStemsError,
@@ -118,6 +150,10 @@ function Player({
   audioUrl: string;
   onSetFirstBeat: (timeMs: number | null) => void;
   savingFirstBeat: boolean;
+  onMarkOne: (timeMs: number) => void;
+  markingOne: boolean;
+  onRemoveChange: (timeMs: number) => void;
+  removingChange: boolean;
   onRequestStems: (mode: SeparationMode) => void;
   requestingStems: boolean;
   requestStemsError: string | null;
@@ -156,7 +192,7 @@ function Player({
   const seek = useCallback((ms: number) => void seekExact(player, ms / 1000), [player]);
 
   const beatIdx = indexAt(beats, currentMs);
-  const count = beatIdx >= 0 ? countOfBeat(beatIdx, phraseStarts[0] ?? 0) : null;
+  const count = countInPhrases(beatIdx, phraseStarts);
   const phraseIdx = indexAt(phraseMs, currentMs);
   const section = study.sections.find((x) => currentMs >= x.startMs && currentMs < x.endMs);
 
@@ -193,6 +229,24 @@ function Player({
             <Text style={styles.countOf}>/8</Text>
           </Text>
         </View>
+        {/* Se redondea al 1 o al 5 más cercano; desde ahí la cuenta parte en 1. */}
+        <Pressable
+          onPress={() => onMarkOne(Math.round(player.currentTime * 1000))}
+          disabled={!status.isLoaded || markingOne || beats.length === 0}
+          style={({ pressed }) => [styles.markOne, (pressed || markingOne) && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Marcar el 1 acá"
+          accessibilityHint="Se ajusta al 1 o al 5 más cercano y desde ahí la cuenta parte en 1"
+        >
+          {markingOne ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <>
+              <Text style={styles.markOneBig}>1</Text>
+              <Text style={styles.markOneText}>{'Marcar\nel 1 acá'}</Text>
+            </>
+          )}
+        </Pressable>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.caption}>Frase</Text>
           <Text style={styles.phrase}>
@@ -221,6 +275,7 @@ function Player({
               currentMs={currentMs}
               energy={study.energy}
               phraseMs={phraseMs}
+              changesMs={study.phraseChangesMs}
               sections={study.sections}
               markers={study.markers}
               instruments={study.instruments}
@@ -298,19 +353,38 @@ function Player({
         requestError={requestStemsError}
       />
 
-      {/* Corregir el "1" */}
-      <View style={ui.card}>
-        <Text style={ui.muted}>¿El 1 está corrido? Pon la canción en el 1 real y toca:</Text>
-        <Button
-          title="Marcar el 1 acá"
-          onPress={() => onSetFirstBeat(Math.round(player.currentTime * 1000))}
-          disabled={!status.isLoaded}
-          loading={savingFirstBeat}
-        />
-        {study.firstBeatCorrected && (
-          <Button title="Volver al automático" variant="ghost" onPress={() => onSetFirstBeat(null)} disabled={savingFirstBeat} />
-        )}
-      </View>
+      {/* Cambios de tiempo (compartidos) y el "1" privado de antes */}
+      {(study.phraseChangesMs.length > 0 || study.firstBeatCorrected) && (
+        <View style={ui.card}>
+          <Text style={ui.body}>Cambios de tiempo</Text>
+          <Text style={ui.small}>
+            Desde cada uno la cuenta vuelve a partir en 1. Se comparten con quien tenga esta canción.
+          </Text>
+          {study.phraseChangesMs.map((ms) => (
+            <View key={ms} style={styles.rowBetween}>
+              <Pressable onPress={() => seek(ms)} hitSlop={6} accessibilityLabel={`Ir a ${formatDuration(ms)}`}>
+                <Text style={{ color: colors.clave, fontWeight: '600' }}>⤷ {formatDuration(ms)}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onRemoveChange(ms)}
+                disabled={removingChange}
+                hitSlop={8}
+                accessibilityLabel={`Quitar el cambio de ${formatDuration(ms)}`}
+              >
+                <Text style={{ color: colors.textFaint }}>Quitar ✕</Text>
+              </Pressable>
+            </View>
+          ))}
+          {study.firstBeatCorrected && (
+            <Button
+              title="Volver al 1 automático del inicio"
+              variant="ghost"
+              onPress={() => onSetFirstBeat(null)}
+              disabled={savingFirstBeat}
+            />
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -346,6 +420,19 @@ const styles = StyleSheet.create({
   caption: { color: colors.textFaint, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
   count: { color: colors.text, fontSize: 72, fontWeight: '800', fontVariant: ['tabular-nums'], lineHeight: 80 },
   countOf: { color: colors.textFaint, fontSize: 24, fontWeight: '600' },
+  markOne: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: colors.clave,
+  },
+  markOneBig: { color: colors.white, fontSize: 26, fontWeight: '800', lineHeight: 28 },
+  markOneText: { color: colors.white, fontSize: 10, fontWeight: '700', textAlign: 'center' },
   phrase: { color: colors.text, fontSize: 32, fontWeight: '700', fontVariant: ['tabular-nums'] },
   section: { color: colors.nectar, fontSize: 15, fontWeight: '700', marginTop: 2 },
   controls: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: space.xl },

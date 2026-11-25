@@ -75,6 +75,11 @@ export const studioApi = {
   list: (style: DanceStyle) => api<AudioFileSummary[]>(`/studio/audio-files?style=${style}`),
   get: (id: string) => api<SongStudy>(`/studio/audio-files/${id}`),
   playbackUrl: (id: string) => api<{ url: string }>(`/studio/audio-files/${id}/url`),
+  /** "Marcar el 1 acá" (se redondea al 1 o al 5; compartido con quien suba la canción). */
+  addPhraseChange: (id: string, timeMs: number) =>
+    api<SongStudy>(`/studio/audio-files/${id}/phrase-changes`, { method: 'POST', body: { timeMs } }),
+  removePhraseChange: (id: string, timeMs: number) =>
+    api<SongStudy>(`/studio/audio-files/${id}/phrase-changes/${timeMs}`, { method: 'DELETE' }),
   setFirstBeat: (id: string, timeMs: number | null) =>
     api<SongStudy>(`/studio/audio-files/${id}/first-beat`, {
       method: 'PATCH',

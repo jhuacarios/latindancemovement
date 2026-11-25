@@ -602,6 +602,7 @@ model RecordingAnalysis {
   fingerprint        Json? // number[] (Chromaprint crudo)
   bpm                Float?
   firstBeatOffsetMs  Int? // el "1" automático de la frase de 8
+  phraseChanges      Json? // cambios de tiempo marcados por usuarios: [{ ms, userId, at }] (ms en la grabación; compartidos)
   beatsMs            Json? // number[]
   downbeatsMs        Json? // number[]
   energy             Json? // { stepMs, values }
