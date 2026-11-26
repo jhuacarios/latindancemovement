@@ -87,6 +87,7 @@ export function MoreMenu({
   const [radial, setRadial] = useState<{
     x: number;
     y: number;
+    rowKey: string;
     options: RadialOption[];
   } | null>(null);
   const [hot, setHot] = useState<number | null>(null);
@@ -190,7 +191,7 @@ export function MoreMenu({
       const options = row.radial;
       holdTimer.current = setTimeout(() => {
         holdTimer.current = null;
-        radialRef.current = { x: pageX, y: pageY, options };
+        radialRef.current = { x: pageX, y: pageY, rowKey: row.key, options };
         setRadial(radialRef.current);
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }, HOLD_MS);
@@ -205,15 +206,13 @@ export function MoreMenu({
       }
     },
     onResponderRelease: () => {
-      if (holdTimer.current) {
-        clearTimeout(holdTimer.current);
-        holdTimer.current = null;
-        return row.onPress(); // toque corto
-      }
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+      holdTimer.current = null;
       const r = radialRef.current;
+      if (!r) return row.onPress(); // toque corto (o una opción sin submenú)
       const picked = hotRef.current;
       closeRadial();
-      if (r && picked !== null) {
+      if (picked !== null) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         go(r.options[picked].href);
       }
@@ -262,7 +261,12 @@ export function MoreMenu({
             >
               <View
                 {...responders(row)}
-                style={[styles.row, radial && row.radial && styles.rowHeld]}
+                style={[
+                  styles.row,
+                  radial?.rowKey === row.key && styles.rowHeld,
+                  // Con un radial abierto, lo demás queda atrás para que se vea solo el submenú.
+                  radial && radial.rowKey !== row.key && styles.rowDimmed,
+                ]}
                 accessible
                 accessibilityRole="button"
                 accessibilityLabel={row.label}
@@ -324,6 +328,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   rowHeld: { borderColor: colors.clave },
+  rowDimmed: { opacity: 0.25 },
   label: { color: colors.text, fontSize: 15, fontWeight: '600' },
   hint: { color: colors.textFaint, fontSize: 10 },
   icon: {
